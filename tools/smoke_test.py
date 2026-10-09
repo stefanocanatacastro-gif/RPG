@@ -45,6 +45,36 @@ def press(page, key, wait=120):
     page.wait_for_timeout(wait)
 
 
+def wait_battle_input(page, state, timeout=20000):
+    page.wait_for_function(
+        f"window.__game.scene.isActive('battle') && window.__game.scene.getScene('battle').inputState === '{state}'",
+        timeout=timeout,
+    )
+    page.wait_for_timeout(160)
+
+
+def fight(page, out, shot_prefix):
+    """Picks the highlighted command and the first target until the battle ends. Returns the final phase."""
+    shots = 0
+    for _ in range(400):
+        if not active(page, "battle"):
+            break
+        st = page.evaluate("(() => { const s = window.__game.scene.getScene('battle'); return [s.inputState, s.engine.phase]; })()")
+        if st[1] in ("victory", "defeat", "fled"):
+            if shots == 0:
+                page.wait_for_timeout(500)
+                page.screenshot(path=f"{out}/{shot_prefix}_{st[1]}.png")
+                shots = 1
+            page.wait_for_timeout(200)
+            continue
+        if st[0] in ("menu", "target"):
+            page.wait_for_timeout(160)
+            press(page, "Enter", 120)
+        else:
+            page.wait_for_timeout(150)
+    return page.evaluate("window.__game.scene.getScene('battle').engine.phase")
+
+
 with sync_playwright() as p:
     b = p.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
 
@@ -84,23 +114,23 @@ with sync_playwright() as p:
     x1 = page.evaluate("window.__game.scene.getScene('field_test').player.body.x")
     check(x1 > x0 + 1, f"player walks right in world units ({x0:.1f} -> {x1:.1f})")
 
-    coins_before = page.evaluate("window.__game.scene.getScene('field_test').registry && 0")
     # put the player next to enemy a1 so they touch
     bx = page.evaluate(
         """() => { const s = window.__game.scene.getScene('field_test');
         const e = s.enemies.find(e => e.id === 'a1'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; return s.player.body.x; }"""
     )
-    wait_scene(page, "battle_test")
+    wait_scene(page, "battle")
     st = page.evaluate("window.__game.scene.getScene('field_test').sys.settings.status")
     check(st == 7, f"field sleeps during the battle (status {st})")
-    page.wait_for_timeout(400)
-    page.screenshot(path=f"{out}/04_battle.png")
-
-    press(page, "ArrowDown")  # Take 2 damage
-    press(page, "Enter", 500)
-    page.screenshot(path=f"{out}/05_battle_hurt.png")
-    press(page, "ArrowUp")
-    press(page, "Enter")  # Win
+    wait_battle_input(page, "menu")
+    page.screenshot(path=f"{out}/04_battle_menu.png")
+    press(page, "Enter", 300)  # Chop
+    wait_battle_input(page, "target")
+    page.screenshot(path=f"{out}/05_battle_target.png")
+    press(page, "Enter", 450)
+    page.screenshot(path=f"{out}/05b_battle_hit.png")
+    result = fight(page, out, "05c")
+    check(result == "victory", f"a real fight against two goons is won ({result})")
     wait_scene(page, "field_test", 10000)
     page.wait_for_timeout(500)
     state = page.evaluate(
@@ -109,6 +139,8 @@ with sync_playwright() as p:
     )
     check("a1" not in state["ids"] and "a2" in state["ids"], f"won enemy removed, others kept ({state['ids']})")
     check(abs(state["x"] - bx) < 1, f"player is where the battle started (x {state['x']:.1f})")
+    gs = page.evaluate("(() => { const s = window.__game.scene.getScene('battle').engine; return s.log; })()")
+    check(any("hero chop" in l for l in gs) and any("goon_shove hero" in l for l in gs), "both sides attacked during the fight")
     page.screenshot(path=f"{out}/06_field_after.png")
 
     # run away from a2, then stand right on it: no battle during the grace period
@@ -116,11 +148,17 @@ with sync_playwright() as p:
         """() => { const s = window.__game.scene.getScene('field_test');
         const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; }"""
     )
-    wait_scene(page, "battle_test")
-    page.wait_for_timeout(300)
-    for _ in range(4):
-        press(page, "ArrowDown")
-    press(page, "Enter")  # Run away
+    wait_scene(page, "battle")
+    for _ in range(12):
+        wait_battle_input(page, "menu")
+        page.evaluate("(() => { const m = window.__game.scene.getScene('battle').menu; m.setCursor(m.items.length - 1); })()")
+        press(page, "Enter", 300)  # Run away
+        page.wait_for_function(
+            "!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').inputState === 'menu' || window.__game.scene.getScene('battle').engine.phase === 'fled'",
+            timeout=20000,
+        )
+        if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
+            break
     wait_scene(page, "field_test", 10000)
     page.evaluate(
         """() => { const s = window.__game.scene.getScene('field_test');
@@ -129,11 +167,11 @@ with sync_playwright() as p:
     page.wait_for_timeout(1500)
     page.screenshot(path=f"{out}/06b_grace.png")
     grace = page.evaluate("window.__game.scene.getScene('field_test').graceMs")
-    check(not active(page, "battle_test") and grace > 0, f"no battle while protected after running (grace left {grace:.0f} ms)")
-    page.wait_for_function("window.__game.scene.isActive('battle_test')", timeout=5000)
+    check(not active(page, "battle") and grace > 0, f"no battle while protected after running (grace left {grace:.0f} ms)")
+    page.wait_for_function("window.__game.scene.isActive('battle')", timeout=5000)
     check(True, "enemy can engage again once the grace period ends")
-    page.wait_for_timeout(300)
-    press(page, "Enter")  # Win
+    result = fight(page, out, "06c")
+    check(result in ("victory", "defeat"), f"the mixed fight (spiky, flyer, goon) ends ({result})")
     wait_scene(page, "field_test", 10000)
     page.wait_for_timeout(300)
 

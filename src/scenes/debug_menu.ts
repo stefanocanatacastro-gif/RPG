@@ -197,7 +197,7 @@ export class DebugMenuScene extends Phaser.Scene {
         if (!host) return this.flash('no scene to return to');
         this.ensureGame();
         this.close();
-        SceneLoader.startBattle(host, 'battle_test', {
+        SceneLoader.startBattle(host, 'battle', {
           formation: item.value,
           firstStrike: null,
           returnTo: host.scene.key,

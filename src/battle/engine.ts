@@ -1,0 +1,309 @@
+// Battle engine: the rules of a fight, with no drawing. The battle scene asks
+// it what the player may do, tells it what was chosen, and plays animations
+// while the engine applies each hit. Because it's pure logic, whole fights can
+// be simulated in unit tests.
+
+import type { CharacterDef, EnemyDef, FormationDef, FormationSlot, ItemDef, MoveDef } from '../types/data';
+import { Rng } from '../systems/rng';
+import rules from '../data/battle_rules.json';
+
+export type Side = 'hero' | 'enemy';
+
+export interface Fighter {
+  id: string;
+  side: Side;
+  /** Character or enemy id in the Database. */
+  defId: string;
+  name: string;
+  sprite: string;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  defence: number;
+  moves: string[];
+  slot: FormationSlot;
+  /** Order within its side, front (0) to back. */
+  order: number;
+  airborne: boolean;
+  spiky: boolean;
+  /** Damage taken is reduced by this until the fighter's next turn. */
+  guard: number;
+  xp: number;
+  coins: number;
+}
+
+export type Phase = 'intro' | 'command' | 'acting' | 'enemy' | 'victory' | 'defeat' | 'fled';
+
+export interface Lookup {
+  move(id: string): MoveDef;
+  enemy(id: string): EnemyDef;
+  item(id: string): ItemDef;
+}
+
+export interface TargetCheck {
+  ok: boolean;
+  reason?: string;
+}
+
+export interface HitResult {
+  target: string;
+  damage: number;
+  ko: boolean;
+  guarded: boolean;
+}
+
+export interface EnemyPlan {
+  actor: string;
+  move: string;
+  target: string;
+}
+
+export interface Rewards {
+  xp: number;
+  coins: number;
+}
+
+/** Damage = move power + attacker's attack − defender's defence (unless piercing), × multiplier, minus guard. */
+export function computeDamage(
+  power: number,
+  attack: number,
+  defence: number,
+  opts: { mult?: number; piercing?: boolean; guard?: number } = {},
+): number {
+  const base = power + attack - (opts.piercing ? 0 : defence);
+  const raw = Math.max(0, Math.floor(base * (opts.mult ?? 1)));
+  return Math.max(0, raw - (opts.guard ?? 0));
+}
+
+export class BattleEngine {
+  readonly fighters: Fighter[] = [];
+  phase: Phase = 'intro';
+  round = 0;
+  readonly rng: Rng;
+  /** Enemy turns still to run this round. */
+  private enemyQueue: string[] = [];
+  /** Log of what happened, for tests and crash reports. */
+  readonly log: string[] = [];
+
+  constructor(
+    private db: Lookup,
+    hero: CharacterDef,
+    heroState: { hp: number; maxHp: number },
+    formation: FormationDef,
+    seed?: number,
+  ) {
+    this.rng = new Rng(seed);
+    this.fighters.push({
+      id: 'hero',
+      side: 'hero',
+      defId: hero.id,
+      name: hero.name,
+      sprite: hero.sprite,
+      hp: heroState.hp,
+      maxHp: heroState.maxHp,
+      attack: hero.attack,
+      defence: hero.defence,
+      moves: hero.moves,
+      slot: 'front',
+      order: 0,
+      airborne: false,
+      spiky: false,
+      guard: 0,
+      xp: 0,
+      coins: 0,
+    });
+    // enemies are ordered front to back: front slots, then back, with flyers by their x
+    const slotRank: Record<FormationSlot, number> = { front: 0, air: 1, back: 2 };
+    formation.enemies
+      .map((e, i) => ({ ...e, i }))
+      .sort((a, b) => slotRank[a.slot] - slotRank[b.slot] || a.i - b.i)
+      .forEach((e, order) => {
+        const def = db.enemy(e.enemy);
+        this.fighters.push({
+          id: `e${order}`,
+          side: 'enemy',
+          defId: def.id,
+          name: def.name,
+          sprite: def.sprite,
+          hp: def.hp,
+          maxHp: def.hp,
+          attack: def.attack,
+          defence: def.defence,
+          moves: def.moves,
+          slot: e.slot,
+          order,
+          airborne: def.props.includes('airborne') || e.slot === 'air',
+          spiky: def.props.includes('spiky'),
+          guard: 0,
+          xp: def.xp,
+          coins: def.coins,
+        });
+      });
+  }
+
+  get hero(): Fighter {
+    return this.fighters[0];
+  }
+
+  get(id: string): Fighter {
+    const f = this.fighters.find((x) => x.id === id);
+    if (!f) throw new Error(`No fighter "${id}" in this battle`);
+    return f;
+  }
+
+  enemies(aliveOnly = true): Fighter[] {
+    return this.fighters.filter((f) => f.side === 'enemy' && (!aliveOnly || f.hp > 0));
+  }
+
+  /** Starts the fight. With enemy First Strike, the enemies act before the first command. */
+  begin(firstStrike: 'player' | 'enemy' | null): void {
+    this.round = 1;
+    this.log.push(`begin ${firstStrike ?? 'normal'}`);
+    if (firstStrike === 'enemy') this.startEnemyTurns();
+    else this.phase = 'command';
+  }
+
+  // ── Player choices ──────────────────────────────────────────────────
+
+  /** Can the hero use this move right now (enough Grit, any valid target)? */
+  canUseMove(moveId: string, grit: number): TargetCheck {
+    const m = this.db.move(moveId);
+    if (m.gritCost > grit) return { ok: false, reason: 'notEnoughGrit' };
+    if (!this.enemies().some((e) => this.canTarget(moveId, e.id).ok))
+      return { ok: false, reason: 'noTarget' };
+    return { ok: true };
+  }
+
+  /** Whether a move can be aimed at a particular fighter, and why not if it can't. */
+  canTarget(moveId: string, targetId: string): TargetCheck {
+    const m = this.db.move(moveId);
+    const t = this.get(targetId);
+    if (t.hp <= 0) return { ok: false, reason: 'down' };
+    if (m.target === 'self') return t.id === 'hero' ? { ok: true } : { ok: false, reason: 'selfOnly' };
+    if (t.side === 'hero') return { ok: false, reason: 'ally' };
+    if (t.airborne && !m.reaches.airborne) return { ok: false, reason: 'airborne' };
+    if (t.spiky && !m.reaches.spiky) return { ok: false, reason: 'spiky' };
+    if (m.target === 'front') {
+      const front = this.frontGround();
+      if (front && front.id !== t.id) return { ok: false, reason: 'notFront' };
+    }
+    return { ok: true };
+  }
+
+  /** The nearest standing (not flying) enemy, which "front" moves must target. */
+  frontGround(): Fighter | undefined {
+    return this.enemies().filter((e) => !e.airborne)[0];
+  }
+
+  /** Valid targets for a move, front to back. */
+  targetsFor(moveId: string): Fighter[] {
+    return this.enemies().filter((e) => this.canTarget(moveId, e.id).ok);
+  }
+
+  /** Called when the hero commits to an action (Grit is spent by the caller's GameState). */
+  beginHeroAction(): void {
+    this.hero.guard = 0;
+    this.phase = 'acting';
+  }
+
+  /** Applies one hit of a move. Moves with several "hit" steps call this once per step. */
+  hit(attackerId: string, targetId: string, moveId: string, mult = 1): HitResult {
+    const a = this.get(attackerId);
+    const t = this.get(targetId);
+    const m = this.db.move(moveId);
+    const damage = computeDamage(m.power, a.attack, t.defence, {
+      mult,
+      piercing: m.piercing,
+      guard: t.guard,
+    });
+    t.hp = Math.max(0, t.hp - damage);
+    this.log.push(`${a.id} ${m.id} ${t.id} -${damage}${t.hp === 0 ? ' KO' : ''}`);
+    return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard > 0 };
+  }
+
+  /** Direct damage that isn't a move (items, First Strike bonus). */
+  damage(targetId: string, amount: number): HitResult {
+    const t = this.get(targetId);
+    const damage = Math.max(0, amount - t.guard);
+    t.hp = Math.max(0, t.hp - damage);
+    this.log.push(`dmg ${t.id} -${damage}`);
+    return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard > 0 };
+  }
+
+  healHero(amount: number): number {
+    const before = this.hero.hp;
+    this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + amount);
+    return this.hero.hp - before;
+  }
+
+  defend(): void {
+    this.hero.guard = rules.defendGuard;
+    this.phase = 'acting';
+    this.log.push('hero defends');
+  }
+
+  /** Running away: a roll against the run chance. Fleeing ends the fight. */
+  tryRun(): boolean {
+    this.phase = 'acting';
+    const ok = this.rng.chance(rules.runChance);
+    this.log.push(ok ? 'hero ran' : 'run failed');
+    if (ok) this.phase = 'fled';
+    return ok;
+  }
+
+  /** After the hero's action finishes: victory, or the enemies' turns. */
+  endHeroAction(): void {
+    if (this.phase === 'fled') return;
+    if (this.enemies().length === 0) {
+      this.phase = 'victory';
+      return;
+    }
+    this.startEnemyTurns();
+  }
+
+  // ── Enemy turns ─────────────────────────────────────────────────────
+
+  private startEnemyTurns(): void {
+    this.phase = 'enemy';
+    this.enemyQueue = this.enemies().map((e) => e.id);
+  }
+
+  /** The next enemy's planned action, or null when every enemy has acted this round. */
+  nextEnemyPlan(): EnemyPlan | null {
+    while (this.enemyQueue.length) {
+      const id = this.enemyQueue.shift()!;
+      const e = this.get(id);
+      if (e.hp <= 0) continue;
+      e.guard = 0;
+      return { actor: id, move: this.chooseEnemyMove(e), target: 'hero' };
+    }
+    return null;
+  }
+
+  /** Weighted pick among the AI rules whose conditions hold. */
+  chooseEnemyMove(e: Fighter): string {
+    const def = this.db.enemy(e.defId);
+    const hpFrac = e.hp / e.maxHp;
+    const options = def.ai
+      .filter((r) => r.whenHpBelow === undefined || hpFrac <= r.whenHpBelow)
+      .map((r) => ({ value: r.move, weight: r.weight }));
+    return options.length ? this.rng.weighted(options) : def.ai[0].move;
+  }
+
+  /** After an enemy finishes acting: defeat, or keep going, or a new round. */
+  endEnemyAction(): void {
+    if (this.hero.hp <= 0) {
+      this.phase = 'defeat';
+      return;
+    }
+    if (this.enemyQueue.length === 0) {
+      this.round++;
+      this.phase = 'command';
+    }
+  }
+
+  rewards(): Rewards {
+    const all = this.enemies(false);
+    return { xp: all.reduce((s, e) => s + e.xp, 0), coins: all.reduce((s, e) => s + e.coins, 0) };
+  }
+}

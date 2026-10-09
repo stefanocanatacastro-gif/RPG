@@ -174,7 +174,7 @@ export class FieldTestScene extends Phaser.Scene {
     this.leaving = true;
     const b = this.player.body;
     SceneLoader.rememberPosition(this.roomId, b.x, b.z, this.facing);
-    SceneLoader.startBattle(this, 'battle_test', {
+    SceneLoader.startBattle(this, 'battle', {
       formation: fe.formation,
       firstStrike,
       returnTo: 'field_test',

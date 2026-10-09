@@ -113,6 +113,10 @@ export class GameState {
     return true;
   }
 
+  addXp(amount: number): void {
+    this.d.xp += Math.max(0, Math.round(amount));
+  }
+
   // ── Coins and items ────────────────────────────────────────────────
   addCoins(delta: number): void {
     const before = this.d.coins;

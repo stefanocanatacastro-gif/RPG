@@ -9,7 +9,7 @@ import { PreloadScene } from './scenes/preload';
 import { TitleScene } from './scenes/title';
 import { DevHubScene } from './scenes/dev_hub';
 import { FieldTestScene } from './scenes/field_test';
-import { BattleTestScene } from './scenes/battle_test';
+import { BattleScene } from './scenes/battle';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
 import { TouchControlsScene } from './scenes/touch_controls';
 import { DebugMenuScene } from './scenes/debug_menu';
@@ -44,7 +44,7 @@ function startGame(): void {
       TitleScene,
       DevHubScene,
       FieldTestScene,
-      BattleTestScene,
+      BattleScene,
       InputTestScene,
       UiKitScene,
       AnimTestScene,
