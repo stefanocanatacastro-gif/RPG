@@ -1,0 +1,12 @@
+[
+  {
+    "id": "chispa",
+    "name": "char.chispa",
+    "sprite": "spr_chispa",
+    "hp": 10,
+    "grit": 5,
+    "attack": 1,
+    "defence": 0,
+    "moves": ["chop", "elbow_drop", "body_slam"]
+  }
+]

@@ -1,0 +1,5 @@
+{
+  "fleeGraceMs": 3000,
+  "fieldNoticeRange": 3.5,
+  "fieldGiveUpRange": 6
+}

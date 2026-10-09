@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Kid Chispa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+    />
+    <style>
+      /* Layout: one centred integer-scaled 640×360 canvas, letterboxed in arena black. */
+      :root {
+        --void: #0b0910;
+        --ink: #f4ead2;
+        --spark: #ffb238;
+        --rope: #d8314b;
+        --dim: #8a7f99;
+        --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+        color-scheme: dark;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--void);
+        color: var(--ink);
+        overflow: hidden;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #game {
+        image-rendering: pixelated;
+        line-height: 0;
+      }
+      #game canvas {
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      #rotate {
+        position: fixed;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding-inline: 24px;
+        background: var(--void);
+        font-family: var(--font-pixel);
+        font-size: 12px;
+        line-height: 1.8;
+        text-align: center;
+        z-index: 10;
+      }
+      #rotate .phone {
+        width: 28px;
+        height: 46px;
+        border: 4px solid var(--spark);
+        border-radius: 4px;
+        animation: tilt 2s steps(4) infinite;
+      }
+      @keyframes tilt {
+        0%,
+        40% {
+          transform: rotate(0deg);
+        }
+        60%,
+        100% {
+          transform: rotate(-90deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #rotate .phone {
+          animation: none;
+          transform: rotate(-90deg);
+        }
+      }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate {
+          display: flex;
+        }
+      }
+      #boot-note {
+        position: fixed;
+        font-family: var(--font-pixel);
+        font-size: 10px;
+        color: var(--dim);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game"></div>
+    <div id="boot-note">LOADING…</div>
+    <div id="rotate" role="alert">
+      <div class="phone" aria-hidden="true"></div>
+      <div>Turn your phone sideways to play</div>
+      <div lang="es" style="color: var(--dim)">Gira tu teléfono para jugar</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

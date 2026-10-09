@@ -1,0 +1,6 @@
+{
+  "id": "core",
+  "note": "Always loaded: title screen and anything shared by every chapter.",
+  "images": [{ "key": "spr_chispa", "w": 48, "h": 64 }],
+  "audio": []
+}

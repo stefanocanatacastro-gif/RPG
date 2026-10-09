@@ -1,0 +1,92 @@
+[
+  {
+    "id": "chop",
+    "name": "move.chop",
+    "category": "strike",
+    "gritCost": 0,
+    "power": 1,
+    "target": "front",
+    "command": "timed_press",
+    "reaches": { "airborne": false, "spiky": true },
+    "steps": [
+      { "do": "walk_to_target" },
+      { "do": "anim", "anim": "chop" },
+      { "do": "command" },
+      { "do": "hit" },
+      { "do": "return" }
+    ]
+  },
+  {
+    "id": "elbow_drop",
+    "name": "move.elbow_drop",
+    "category": "aerial",
+    "gritCost": 0,
+    "power": 1,
+    "target": "single",
+    "command": "timed_press",
+    "reaches": { "airborne": true, "spiky": false },
+    "steps": [
+      { "do": "jump_to_target" },
+      { "do": "command" },
+      { "do": "hit" },
+      { "do": "command" },
+      { "do": "hit" },
+      { "do": "return" }
+    ]
+  },
+  {
+    "id": "body_slam",
+    "name": "move.body_slam",
+    "category": "grapple",
+    "gritCost": 2,
+    "power": 3,
+    "target": "front",
+    "command": "hold_release",
+    "reaches": { "airborne": false, "spiky": false },
+    "steps": [
+      { "do": "walk_to_target" },
+      { "do": "command" },
+      { "do": "anim", "anim": "slam" },
+      { "do": "hit" },
+      { "do": "return" }
+    ]
+  },
+  {
+    "id": "goon_shove",
+    "name": "move.goon_shove",
+    "category": "enemy",
+    "gritCost": 0,
+    "power": 1,
+    "target": "single",
+    "command": "none",
+    "reaches": { "airborne": false, "spiky": false },
+    "steps": [
+      { "do": "walk_to_target" },
+      { "do": "anim", "anim": "attack" },
+      { "do": "hit" },
+      { "do": "return" }
+    ]
+  },
+  {
+    "id": "spike_charge",
+    "name": "move.spike_charge",
+    "category": "enemy",
+    "gritCost": 0,
+    "power": 2,
+    "target": "single",
+    "command": "none",
+    "reaches": { "airborne": false, "spiky": false },
+    "steps": [{ "do": "walk_to_target" }, { "do": "hit" }, { "do": "return" }]
+  },
+  {
+    "id": "dive_peck",
+    "name": "move.dive_peck",
+    "category": "enemy",
+    "gritCost": 0,
+    "power": 1,
+    "target": "single",
+    "command": "none",
+    "reaches": { "airborne": false, "spiky": false },
+    "steps": [{ "do": "jump_to_target" }, { "do": "hit" }, { "do": "return" }]
+  }
+]

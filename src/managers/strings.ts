@@ -1,0 +1,31 @@
+// Minimal EN/ES lookup for M0. The full Strings manager (variables, runtime
+// language switch, missing-key warnings) is an M2 task.
+
+import en from '../strings/en.json';
+import es from '../strings/es.json';
+
+type Table = Record<string, string>;
+const TABLES: Record<string, Table> = { en, es };
+
+let lang: 'en' | 'es' = navigator.language?.toLowerCase().startsWith('es') ? 'es' : 'en';
+
+export function setLanguage(l: 'en' | 'es'): void {
+  lang = l;
+}
+
+export function language(): 'en' | 'es' {
+  return lang;
+}
+
+export function t(key: string): string {
+  return TABLES[lang][key] ?? TABLES.en[key] ?? key;
+}
+
+export function englishKeys(): Set<string> {
+  return new Set(Object.keys(TABLES.en));
+}
+
+/** Text with {name}-style variables filled in. */
+export function tf(key: string, vars: Record<string, string | number>): string {
+  return t(key).replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "steel_chair",
+    "name": "item.steel_chair",
+    "desc": "item.steel_chair.desc",
+    "icon": "item_steel_chair",
+    "category": "damage",
+    "target": "single",
+    "effect": { "damage": 3 },
+    "price": 8
+  },
+  {
+    "id": "water_bottle",
+    "name": "item.water_bottle",
+    "desc": "item.water_bottle.desc",
+    "icon": "item_water_bottle",
+    "category": "heal",
+    "target": "self",
+    "effect": { "heal": 5 },
+    "price": 4
+  },
+  {
+    "id": "protein_shake",
+    "name": "item.protein_shake",
+    "desc": "item.protein_shake.desc",
+    "icon": "item_protein_shake",
+    "category": "heal",
+    "target": "self",
+    "effect": { "grit": 5 },
+    "price": 6
+  }
+]

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "test_goons",
+    "enemies": [
+      { "enemy": "dock_goon", "slot": "front" },
+      { "enemy": "dock_goon", "slot": "back" }
+    ],
+    "stage": "dockside"
+  },
+  {
+    "id": "test_mixed",
+    "enemies": [
+      { "enemy": "spiky_bouncer", "slot": "front" },
+      { "enemy": "gull_flyer", "slot": "air" },
+      { "enemy": "dock_goon", "slot": "back" }
+    ],
+    "stage": "dockside"
+  }
+]

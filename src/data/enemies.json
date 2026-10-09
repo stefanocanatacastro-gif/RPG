@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dock_goon",
+    "name": "enemy.dock_goon",
+    "sprite": "spr_c0_dock_goon",
+    "level": 2,
+    "hp": 4,
+    "attack": 1,
+    "defence": 0,
+    "xp": 2,
+    "coins": 2,
+    "props": [],
+    "moves": ["goon_shove"],
+    "ai": [{ "move": "goon_shove", "weight": 1 }],
+    "scout": "scout.dock_goon"
+  },
+  {
+    "id": "spiky_bouncer",
+    "name": "enemy.spiky_bouncer",
+    "sprite": "spr_c0_spiky_bouncer",
+    "level": 3,
+    "hp": 5,
+    "attack": 2,
+    "defence": 0,
+    "xp": 3,
+    "coins": 3,
+    "props": ["spiky"],
+    "moves": ["goon_shove", "spike_charge"],
+    "ai": [
+      { "move": "goon_shove", "weight": 2 },
+      { "move": "spike_charge", "weight": 1 }
+    ],
+    "scout": "scout.spiky_bouncer"
+  },
+  {
+    "id": "gull_flyer",
+    "name": "enemy.gull_flyer",
+    "sprite": "spr_c0_gull_flyer",
+    "level": 3,
+    "hp": 3,
+    "attack": 1,
+    "defence": 0,
+    "xp": 3,
+    "coins": 2,
+    "props": ["airborne"],
+    "moves": ["dive_peck"],
+    "ai": [{ "move": "dive_peck", "weight": 1 }],
+    "scout": "scout.gull_flyer"
+  }
+]
