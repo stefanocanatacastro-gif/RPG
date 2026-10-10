@@ -7,13 +7,27 @@
     "power": 1,
     "target": "front",
     "command": "timed_press",
-    "reaches": { "airborne": false, "spiky": true },
+    "reaches": {
+      "airborne": false,
+      "spiky": true
+    },
     "steps": [
-      { "do": "walk_to_target" },
-      { "do": "anim", "anim": "chop" },
-      { "do": "command" },
-      { "do": "hit" },
-      { "do": "return" }
+      {
+        "do": "walk_to_target"
+      },
+      {
+        "do": "command"
+      },
+      {
+        "do": "anim",
+        "anim": "chop"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
     ]
   },
   {
@@ -23,15 +37,30 @@
     "gritCost": 0,
     "power": 1,
     "target": "single",
-    "command": "timed_press",
-    "reaches": { "airborne": true, "spiky": false },
+    "command": "stomp",
+    "reaches": {
+      "airborne": true,
+      "spiky": false
+    },
     "steps": [
-      { "do": "jump_to_target" },
-      { "do": "command" },
-      { "do": "hit" },
-      { "do": "command" },
-      { "do": "hit" },
-      { "do": "return" }
+      {
+        "do": "jump_to_target"
+      },
+      {
+        "do": "command"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "command"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
     ]
   },
   {
@@ -42,13 +71,27 @@
     "power": 3,
     "target": "front",
     "command": "hold_release",
-    "reaches": { "airborne": false, "spiky": false },
+    "reaches": {
+      "airborne": false,
+      "spiky": false
+    },
     "steps": [
-      { "do": "walk_to_target" },
-      { "do": "command" },
-      { "do": "anim", "anim": "slam" },
-      { "do": "hit" },
-      { "do": "return" }
+      {
+        "do": "walk_to_target"
+      },
+      {
+        "do": "command"
+      },
+      {
+        "do": "anim",
+        "anim": "slam"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
     ]
   },
   {
@@ -59,12 +102,24 @@
     "power": 1,
     "target": "single",
     "command": "none",
-    "reaches": { "airborne": false, "spiky": false },
+    "reaches": {
+      "airborne": false,
+      "spiky": false
+    },
     "steps": [
-      { "do": "walk_to_target" },
-      { "do": "anim", "anim": "attack" },
-      { "do": "hit" },
-      { "do": "return" }
+      {
+        "do": "walk_to_target"
+      },
+      {
+        "do": "anim",
+        "anim": "attack"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
     ]
   },
   {
@@ -75,8 +130,21 @@
     "power": 2,
     "target": "single",
     "command": "none",
-    "reaches": { "airborne": false, "spiky": false },
-    "steps": [{ "do": "walk_to_target" }, { "do": "hit" }, { "do": "return" }]
+    "reaches": {
+      "airborne": false,
+      "spiky": false
+    },
+    "steps": [
+      {
+        "do": "walk_to_target"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
+    ]
   },
   {
     "id": "dive_peck",
@@ -86,7 +154,20 @@
     "power": 1,
     "target": "single",
     "command": "none",
-    "reaches": { "airborne": false, "spiky": false },
-    "steps": [{ "do": "jump_to_target" }, { "do": "hit" }, { "do": "return" }]
+    "reaches": {
+      "airborne": false,
+      "spiky": false
+    },
+    "steps": [
+      {
+        "do": "jump_to_target"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
+    ]
   }
 ]

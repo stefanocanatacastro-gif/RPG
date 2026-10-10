@@ -8,6 +8,7 @@ import { allSpriteKeys } from '../managers/asset_packs';
 import { englishKeys } from '../managers/strings';
 import { gameState, hasGame } from '../managers/game_state';
 import { rng } from '../systems/rng';
+import { debugState, setDebug } from '../systems/debug_state';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -16,6 +17,8 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     input.install(this.game);
+    // dev builds: let the browser test flip debug switches directly
+    if (IS_DEV) (window as unknown as { __debug: object }).__debug = { state: debugState, set: setDebug };
     Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
 
     addCrashContext(() => ({

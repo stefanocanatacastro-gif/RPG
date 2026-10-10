@@ -32,7 +32,7 @@ export interface ValidationContext {
 
 const TARGETS: TargetRule[] = ['single', 'all', 'all_ground', 'front', 'self', 'partner'];
 const CATEGORIES = ['strike', 'aerial', 'grapple', 'enemy', 'partner'];
-const COMMANDS = ['none', 'timed_press', 'hold_release', 'mash', 'rotate', 'sequence', 'ring'];
+const COMMANDS = ['none', 'stomp', 'timed_press', 'hold_release', 'mash', 'rotate', 'sequence', 'ring'];
 const STEPS = ['walk_to_target', 'jump_to_target', 'anim', 'command', 'hit', 'return', 'wait'];
 const PROPS = ['spiky', 'airborne', 'armoured', 'flips', 'fiery'];
 const ITEM_CATS = ['heal', 'damage', 'buff', 'key'];

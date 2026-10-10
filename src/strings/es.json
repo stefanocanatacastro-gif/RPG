@@ -67,5 +67,14 @@
   "battle.round": "RONDA {n}",
   "battle.rewards": "+{coins} MONEDAS    +{xp} XP",
   "battle.defeat_note": "El game over llega después. Por ahora te levantas con todos tus PV.",
-  "battle.guard": "GUARDIA"
+  "battle.guard": "GUARDIA",
+  "battle.cmd.great": "¡GENIAL!",
+  "battle.cmd.good": "¡BIEN!",
+  "battle.cmd.early": "MUY PRONTO",
+  "battle.cmd.late": "MUY TARDE",
+  "battle.cmd.overheld": "MUY LARGO",
+  "battle.cmd.none": "FALLO",
+  "battle.cmd.hold": "MANTÉN",
+  "enemy.sparring_dummy": "Muñeco de Práctica",
+  "scout.sparring_dummy": "Un muñeco acolchado. Mucha vida y casi no pega. Para practicar el ritmo."
 }

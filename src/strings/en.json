@@ -67,5 +67,14 @@
   "battle.round": "ROUND {n}",
   "battle.rewards": "+{coins} COINS    +{xp} XP",
   "battle.defeat_note": "Game over comes later. For now you get back up with full HP.",
-  "battle.guard": "GUARD"
+  "battle.guard": "GUARD",
+  "battle.cmd.great": "GREAT!",
+  "battle.cmd.good": "NICE!",
+  "battle.cmd.early": "TOO EARLY",
+  "battle.cmd.late": "TOO LATE",
+  "battle.cmd.overheld": "HELD TOO LONG",
+  "battle.cmd.none": "MISS",
+  "battle.cmd.hold": "HOLD",
+  "enemy.sparring_dummy": "Sparring Dummy",
+  "scout.sparring_dummy": "A padded practice dummy. Lots of HP, barely hits back. For practising timing."
 }

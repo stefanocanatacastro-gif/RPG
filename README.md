@@ -11,7 +11,7 @@ It runs in any browser on computer or phone. Every build is a single self-contai
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
 | Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
-| M1 Battle system | In progress: step 1 of 4 (stage, turns, menu, damage, win/lose) |
+| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands) |
 | M2 Prologue playable | Planned |
 
 The full task list and milestone plan live in the project's *Programming List* doc; the art, audio and story plan in the *Asset Outline* doc.
@@ -82,6 +82,18 @@ Rooms are 3D spaces drawn from a fixed camera angle, like TTYD's field camera:
 - Blocks (crates, steps, platforms, the ring) have width, depth and height in units. Anything up to 0.3 units high is climbed by walking; a jump reaches about 1.6 units.
 
 All of these numbers are in `src/data/world.json`; field rules such as the flee grace period are in `src/data/rules.json`.
+
+## Action commands
+
+Every hero move has a timing challenge. The rules are in `src/battle/commands.ts`, the numbers in `src/data/battle_rules.json`.
+
+| Command | Move | How it works | Result |
+| --- | --- | --- | --- |
+| Double jump (`stomp`) | Elbow Drop | Press just before landing on the opponent. Pressing too early locks you out. | Success bounces you up for another hit; a miss ends the move after this hit. |
+| Precision press (`timed_press`) | Chop | A ring closes on the target; press as it lines up. | GREAT ×1.5 damage, NICE ×1, miss ×0.5. |
+| Precision release (`hold_release`) | Body Slam | Hold to fill the bar, release in the lit zone. Holding too long fizzles. | GREAT ×1.5, NICE ×1, miss ×0.5. |
+
+Commands work with Z / Enter / Space, gamepad A, the on-screen A button, or a tap anywhere on the stage. The debug menu's *Perfect commands* switch makes every command succeed.
 
 ## Testing
 

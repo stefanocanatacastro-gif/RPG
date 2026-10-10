@@ -5,6 +5,8 @@ export const debugState = {
   god: false,
   hitboxes: false,
   fps: false,
+  /** Action commands always succeed with GREAT (also the future accessibility option). */
+  autoCommands: false,
 };
 
 export type DebugKey = keyof typeof debugState;

@@ -19,6 +19,8 @@ import { input } from '../systems/input';
 import { animKey } from '../systems/anim_builder';
 import { debugState } from '../systems/debug_state';
 import rules from '../data/battle_rules.json';
+import { CommandRunner } from '../battle/command_view';
+import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle/commands';
 
 type Choice =
   | { kind: 'move'; move: string; target: string }
@@ -47,6 +49,7 @@ export class BattleScene extends Phaser.Scene {
   private roundText!: Phaser.GameObjects.Text;
   private menu: MenuList | null = null;
   private cursor!: Phaser.GameObjects.Graphics;
+  commands!: CommandRunner;
   private menuCursor = 0;
 
   constructor() {
@@ -73,6 +76,7 @@ export class BattleScene extends Phaser.Scene {
     for (const f of this.engine.fighters) this.addFighter(f);
     this.buildHud();
     this.cursor = this.add.graphics().setDepth(60).setVisible(false);
+    this.commands = new CommandRunner(this);
 
     this.run().catch((err) => {
       // surface engine/scene errors through the crash screen
@@ -370,7 +374,12 @@ export class BattleScene extends Phaser.Scene {
 
   // ── Playing moves ───────────────────────────────────────────────────
 
-  /** Plays a move from its steps in moves.json. Each "hit" step applies one hit through the engine. */
+  /**
+   * Plays a move from its steps in moves.json. Each "hit" step applies one hit
+   * through the engine; a "command" step runs the move's action command (hero
+   * only) and its rating scales the next hit, or for a double jump decides
+   * whether the combo goes on.
+   */
   private async playMove(
     actorId: string,
     moveId: string,
@@ -382,9 +391,23 @@ export class BattleScene extends Phaser.Scene {
     const move = Database.move(moveId);
     const dir = actor.f.side === 'hero' ? 1 : -1;
     const s = actor.sprite;
+    const runsCommands = actor.f.side === 'hero' && !opts.firstStrike && move.command !== 'none';
+    const stomp = COMMANDS.stomp;
     s.setDepth(40);
     this.tweens.killTweensOf(s); // stop a flyer's hover while it acts
-    for (const step of move.steps) {
+
+    let hovering = false;
+    let ended = false;
+    let rating: Rating | undefined;
+    let pendingStomp: Promise<CommandResult> | null = null;
+    const hitsLeft = (from: number) => move.steps.slice(from).some((x) => x.do === 'hit');
+    const topOf = (v: FighterView) => v.sprite.y - v.sprite.displayHeight + 6;
+    const drop = (ms: number) =>
+      this.tween({ targets: s, y: topOf(target), duration: ms, ease: 'Quad.easeIn' });
+
+    for (let i = 0; i < move.steps.length; i++) {
+      const step = move.steps[i];
+      if (ended && step.do !== 'return') continue;
       switch (step.do) {
         case 'walk_to_target':
           this.playAnim(actor, 'walk');
@@ -397,42 +420,81 @@ export class BattleScene extends Phaser.Scene {
           this.playAnim(actor, 'idle');
           break;
         case 'jump_to_target': {
-          // arc up and land on top of the target
+          // arc up to a point above the target; the fall comes with the next command or hit
           const sx = s.x;
           const sy = s.y;
           const tx = target.sprite.x - dir * 4;
-          const ty = target.sprite.y - target.sprite.displayHeight + 6;
+          const ty = topOf(target) - 64;
           const o = { p: 0 };
           await this.tween({
             targets: o,
             p: 1,
-            duration: 420,
+            duration: 320,
+            ease: 'Sine.easeOut',
             onUpdate: () => {
               s.x = sx + (tx - sx) * o.p;
-              s.y = sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 70;
+              s.y = sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 40;
             },
           });
+          hovering = true;
           break;
         }
         case 'anim':
           await this.playAnimOnce(actor, step.anim);
           break;
-        case 'command':
-          // action commands arrive in step 2
+        case 'command': {
+          if (!runsCommands) break;
+          if (move.command === 'stomp') {
+            const landAt = this.time.now + stomp.fallMs;
+            pendingStomp = this.commands.stomp(s, landAt);
+            await drop(stomp.fallMs);
+            hovering = false;
+          } else if (move.command === 'timed_press') {
+            const r = await this.commands.press(target.sprite);
+            rating = r.rating;
+            this.noteCommand(moveId, r, actor);
+          } else if (move.command === 'hold_release') {
+            const r = await this.commands.hold(s);
+            rating = r.rating;
+            this.noteCommand(moveId, r, actor);
+          }
           break;
+        }
         case 'hit': {
+          if (hovering) {
+            await drop(stomp.fallMs);
+            hovering = false;
+          }
+          const mult = (step.mult ?? 1) * (rating ? ratingMult(move.command, rating) : 1);
+          rating = undefined;
           const r = opts.firstStrike
             ? this.engine.damage(targetId, rules.firstStrikeDamage + this.engine.hero.attack)
-            : this.engine.hit(actorId, targetId, moveId, step.mult ?? 1);
+            : this.engine.hit(actorId, targetId, moveId, mult);
           await this.showHit(target, r.damage, r.ko);
-          if (move.steps.filter((x) => x.do === 'hit').length > 1 && !r.ko) {
-            // bounce off for the next hit
-            await this.tween({ targets: s, y: s.y - 34, duration: 140, yoyo: true });
+          if (pendingStomp) {
+            const res = await pendingStomp;
+            pendingStomp = null;
+            this.noteCommand(moveId, res, actor);
+            if (res.rating === 'miss') ended = true;
           }
-          if (r.ko) await this.knockOut(target);
+          if (r.ko) {
+            await this.knockOut(target);
+            ended = true;
+          }
+          if (!ended && hitsLeft(i + 1)) {
+            // bounce back up for the next hit
+            await this.tween({
+              targets: s,
+              y: topOf(target) - 64,
+              duration: stomp.bounceMs,
+              ease: 'Quad.easeOut',
+            });
+            hovering = true;
+          }
           break;
         }
         case 'return':
+          hovering = false;
           await this.returnHome(actor);
           break;
         case 'wait':
@@ -443,6 +505,14 @@ export class BattleScene extends Phaser.Scene {
     if (s.x !== actor.home.x || s.y !== actor.home.y) await this.returnHome(actor);
     s.setDepth(10 + actor.f.order);
     if (actor.f.airborne && actor.f.hp > 0) this.hover(actor);
+  }
+
+  /** Logs a command result and shows its rating over the attacker. */
+  private noteCommand(moveId: string, r: CommandResult, at: FighterView): void {
+    this.engine.log.push(`cmd ${moveId} ${r.rating}${r.note ? ` ${r.note}` : ''}`);
+    const key = r.rating === 'miss' ? `battle.cmd.${r.note ?? 'none'}` : `battle.cmd.${r.rating}`;
+    const color = r.rating === 'great' ? UI.spark : r.rating === 'good' ? UI.ink : UI.inkDim;
+    void this.popText(at, t(key), color);
   }
 
   private hover(v: FighterView): void {

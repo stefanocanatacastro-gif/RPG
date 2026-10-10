@@ -44,7 +44,8 @@ export interface EnemyDef {
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';
 export type TargetRule = 'single' | 'all' | 'all_ground' | 'front' | 'self' | 'partner';
-export type CommandType = 'none' | 'timed_press' | 'hold_release' | 'mash' | 'rotate' | 'sequence' | 'ring';
+export type CommandType =
+  'none' | 'stomp' | 'timed_press' | 'hold_release' | 'mash' | 'rotate' | 'sequence' | 'ring';
 
 export type MoveStep =
   | { do: 'walk_to_target' }

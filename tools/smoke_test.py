@@ -53,8 +53,74 @@ def wait_battle_input(page, state, timeout=20000):
     page.wait_for_timeout(160)
 
 
+def battle_eval(page, js):
+    return page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('battle'); {js} }})()")
+
+
+def choose_move(page, index):
+    wait_battle_input(page, "menu")
+    battle_eval(page, f"s.menu.setCursor({index});")
+    press(page, "Enter", 200)
+    wait_battle_input(page, "target")
+    press(page, "Enter", 50)
+
+
+def wait_command(page, kind, timeout=8000):
+    page.wait_for_function(
+        f"(() => {{ const s = window.__game.scene.getScene('battle'); return s.commands.state && s.commands.state.kind === '{kind}' && s.commands.state.keyAt > 0; }})()",
+        timeout=timeout,
+    )
+
+
+def ms_until_key(page):
+    return battle_eval(page, "return s.commands.state ? s.commands.state.keyAt - s.time.now : 0;")
+
+
+def last_cmds(page, move):
+    return battle_eval(page, f"return s.engine.log.filter(l => l.startsWith('cmd {move}'));")
+
+
+def hits_in_turn(page, move):
+    return battle_eval(page, f"const i = s.engine.log.map(l => l.startsWith('hero')).lastIndexOf(false); return s.engine.log.filter(l => l.startsWith('hero {move}')).length;")
+
+
+def wait_turn_over(page):
+    wait_battle_input(page, "menu", 30000)
+
+
+def key_at(page, lead_ms=12, hold_ms=60, code="KeyZ"):
+    """Presses a key inside the page, timed against the game clock, just before the command's key moment."""
+    page.evaluate(
+        f"""(() => {{
+          const s = window.__game.scene.getScene('battle');
+          const delay = Math.max(0, s.commands.state.keyAt - performance.now() - {lead_ms});
+          setTimeout(() => {{
+            window.dispatchEvent(new KeyboardEvent('keydown', {{ code: '{code}' }}));
+            setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', {{ code: '{code}' }})), {hold_ms});
+          }}, delay);
+          return delay;
+        }})()"""
+    )
+
+
+def key_down_in_page(page, code="KeyZ"):
+    page.evaluate(f"window.dispatchEvent(new KeyboardEvent('keydown', {{ code: '{code}' }}))")
+
+
+def key_up_at(page, lead_ms=40, code="KeyZ"):
+    page.evaluate(
+        f"""(() => {{
+          const s = window.__game.scene.getScene('battle');
+          const delay = Math.max(0, s.commands.state.keyAt - performance.now() - {lead_ms});
+          setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', {{ code: '{code}' }})), delay);
+        }})()"""
+    )
+
+
 def fight(page, out, shot_prefix):
-    """Picks the highlighted command and the first target until the battle ends. Returns the final phase."""
+    """Picks the highlighted command and the first target until the battle ends. Returns the final phase.
+    Action commands are set to always succeed: mashing would otherwise press too early and miss."""
+    page.evaluate("window.__debug.set('autoCommands', true)")
     shots = 0
     for _ in range(400):
         if not active(page, "battle"):
@@ -72,6 +138,7 @@ def fight(page, out, shot_prefix):
             press(page, "Enter", 120)
         else:
             page.wait_for_timeout(150)
+    page.evaluate("window.__debug.set('autoCommands', false)")
     return page.evaluate("window.__game.scene.getScene('battle').engine.phase")
 
 
@@ -172,6 +239,123 @@ with sync_playwright() as p:
     check(True, "enemy can engage again once the grace period ends")
     result = fight(page, out, "06c")
     check(result in ("victory", "defeat"), f"the mixed fight (spiky, flyer, goon) ends ({result})")
+    wait_scene(page, "field_test", 10000)
+    page.wait_for_timeout(300)
+
+    # ── Action commands, fought against the sparring dummy with real key timing ──
+    page.evaluate("window.__game.scene.getScene('field_test').graceMs = 99999")
+    pick_debug = lambda value: page.evaluate(
+        f"(() => {{ const m = window.__game.scene.getScene('debug').menu; m.setCursor(m.items.findIndex(i => i.value === '{value}')); }})()"
+    )
+    press(page, "F1", 400)
+    pick_debug("god")  # the dummy barely hits, but earlier fights left HP low
+    press(page, "Enter", 200)
+    pick_debug("battle")
+    press(page, "Enter", 250)
+    pick_debug("test_dummy")
+    press(page, "Enter")
+    wait_scene(page, "battle")
+
+    # precision press: Chop, pressed as the ring lines up
+    choose_move(page, 0)
+    wait_command(page, "timed_press")
+    key_at(page)
+    page.wait_for_timeout(max(0, ms_until_key(page) - 380))
+    page.screenshot(path=f"{out}/20_cmd_press.png")
+    wait_turn_over(page)
+    r = last_cmds(page, "chop")
+    check(r and r[-1] in ("cmd chop great", "cmd chop good"), f"precision press lands on time ({r})")
+
+    # precision press missed on purpose: pressed far too early
+    choose_move(page, 0)
+    wait_command(page, "timed_press")
+    page.wait_for_timeout(120)
+    press(page, "Enter", 0)
+    wait_turn_over(page)
+    r = last_cmds(page, "chop")
+    dmg = battle_eval(page, "return s.engine.log.filter(l => l.startsWith('hero chop')).map(l => l.split(' -')[1]);")
+    check(r[-1] == "cmd chop miss early", f"an early press misses ({r[-1]})")
+    check(dmg[-1].startswith("1") and dmg[0].split(' ')[0] in ("3", "2"), f"a miss deals less damage than a hit (hits {dmg})")
+
+    # double jump: Elbow Drop, pressed just before each landing -> two hits
+    hp0 = battle_eval(page, "return s.engine.enemies()[0].hp;")
+    choose_move(page, 1)
+    for n in range(2):
+        try:
+            wait_command(page, "stomp")
+        except Exception:
+            print("    log:", battle_eval(page, "return s.engine.log.slice(-6);"), battle_eval(page, "return s.commands.state;"))
+            raise
+        key_at(page, lead_ms=25)
+        if n == 0:
+            page.wait_for_timeout(120)
+            page.screenshot(path=f"{out}/21_cmd_stomp.png")
+        page.wait_for_function("!window.__game.scene.getScene('battle').commands.state", timeout=4000)
+    wait_turn_over(page)
+    r = last_cmds(page, "elbow_drop")
+    hp1 = battle_eval(page, "return s.engine.enemies()[0].hp;")
+    check(len(r) == 2 and all(x.split(' ')[2] in ("great", "good") for x in r) and hp0 - hp1 == 4,
+          f"double jump: two timed presses give two hits ({r}, -{hp0 - hp1} HP)")
+
+    # double jump fumbled: no press at all -> one hit only
+    hp0 = hp1
+    choose_move(page, 1)
+    wait_turn_over(page)
+    r = last_cmds(page, "elbow_drop")
+    hp1 = battle_eval(page, "return s.engine.enemies()[0].hp;")
+    check(r[-1] == "cmd elbow_drop miss none" and hp0 - hp1 == 2, f"no press: the combo ends after one hit ({r[-1]}, -{hp0 - hp1} HP)")
+
+    # precision release: Body Slam, hold Z and let go inside the lit zone
+    choose_move(page, 2)
+    page.wait_for_function("(() => { const s = window.__game.scene.getScene('battle'); return s.commands.state && s.commands.state.kind === 'hold_release'; })()")
+    page.wait_for_timeout(200)
+    key_down_in_page(page)
+    wait_command(page, "hold_release")
+    key_up_at(page, lead_ms=30)
+    page.wait_for_timeout(max(0, ms_until_key(page) - 220))
+    page.screenshot(path=f"{out}/22_cmd_hold.png")
+    wait_turn_over(page)
+    r = last_cmds(page, "body_slam")
+    check(r and r[-1] in ("cmd body_slam great", "cmd body_slam good"), f"precision release in the zone ({r})")
+
+    # precision release held too long -> fizzles
+    choose_move(page, 2)
+    page.wait_for_function("(() => { const s = window.__game.scene.getScene('battle'); return s.commands.state && s.commands.state.kind === 'hold_release'; })()")
+    page.wait_for_timeout(200)
+    page.keyboard.down("KeyZ")
+    page.wait_for_timeout(1700)
+    page.keyboard.up("KeyZ")
+    wait_turn_over(page)
+    r = last_cmds(page, "body_slam")
+    check(r[-1] == "cmd body_slam miss overheld", f"holding too long fizzles ({r[-1]})")
+
+    # Perfect commands (debug toggle) rates everything GREAT with no input
+    press(page, "F1", 300)
+    pick_debug("autoCommands")
+    press(page, "Enter", 150)
+    press(page, "x", 300)
+    choose_move(page, 1)
+    wait_turn_over(page)
+    r = last_cmds(page, "elbow_drop")
+    check(r[-2:] == ["cmd elbow_drop great", "cmd elbow_drop great"], f"Perfect commands toggle works ({r[-2:]})")
+    press(page, "F1", 300)
+    pick_debug("autoCommands")
+    press(page, "Enter", 150)
+    pick_debug("god")
+    press(page, "Enter", 150)
+    press(page, "x", 300)
+
+    # leave by running away
+    for _ in range(12):
+        wait_battle_input(page, "menu")
+        battle_eval(page, "s.menu.setCursor(s.menu.items.length - 1);")
+        press(page, "Enter", 300)
+        page.wait_for_function(
+            "!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').inputState === 'menu' || window.__game.scene.getScene('battle').engine.phase === 'fled'",
+            timeout=20000,
+        )
+        if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
+            break
     wait_scene(page, "field_test", 10000)
     page.wait_for_timeout(300)
 

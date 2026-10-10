@@ -139,6 +139,7 @@ export class DebugMenuScene extends Phaser.Scene {
       { label: 'God mode', value: 'god', right: onOff('god') },
       { label: 'Hitboxes', value: 'hitboxes', right: onOff('hitboxes') },
       { label: 'Show FPS', value: 'fps', right: onOff('fps') },
+      { label: 'Perfect commands', value: 'autoCommands', right: onOff('autoCommands') },
       { label: 'Give 100 coins', value: 'coins' },
       { label: 'Give item', value: 'item', right: '>' },
       { label: 'Toggle flag', value: 'flag', right: '>' },
@@ -162,6 +163,7 @@ export class DebugMenuScene extends Phaser.Scene {
           case 'god':
           case 'hitboxes':
           case 'fps':
+          case 'autoCommands':
             setDebug(item.value, !debugState[item.value]);
             return this.showMain(i);
           case 'coins':
@@ -230,7 +232,7 @@ export class DebugMenuScene extends Phaser.Scene {
         const ok = gameState().addItem(item.value);
         this.flash(ok ? `bag: ${gameState().data.items.length}/10` : 'bag is full');
       },
-      () => this.showMain(6),
+      () => this.showMain(7),
     );
   }
 
@@ -246,7 +248,7 @@ export class DebugMenuScene extends Phaser.Scene {
         this.menu?.setItems(list());
         this.menu?.setCursor(c);
       },
-      () => this.showMain(7),
+      () => this.showMain(8),
     );
   }
 }

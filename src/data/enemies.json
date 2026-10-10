@@ -11,7 +11,12 @@
     "coins": 2,
     "props": [],
     "moves": ["goon_shove"],
-    "ai": [{ "move": "goon_shove", "weight": 1 }],
+    "ai": [
+      {
+        "move": "goon_shove",
+        "weight": 1
+      }
+    ],
     "scout": "scout.dock_goon"
   },
   {
@@ -27,8 +32,14 @@
     "props": ["spiky"],
     "moves": ["goon_shove", "spike_charge"],
     "ai": [
-      { "move": "goon_shove", "weight": 2 },
-      { "move": "spike_charge", "weight": 1 }
+      {
+        "move": "goon_shove",
+        "weight": 2
+      },
+      {
+        "move": "spike_charge",
+        "weight": 1
+      }
     ],
     "scout": "scout.spiky_bouncer"
   },
@@ -44,7 +55,32 @@
     "coins": 2,
     "props": ["airborne"],
     "moves": ["dive_peck"],
-    "ai": [{ "move": "dive_peck", "weight": 1 }],
+    "ai": [
+      {
+        "move": "dive_peck",
+        "weight": 1
+      }
+    ],
     "scout": "scout.gull_flyer"
+  },
+  {
+    "id": "sparring_dummy",
+    "name": "enemy.sparring_dummy",
+    "sprite": "spr_sparring_dummy",
+    "level": 1,
+    "hp": 40,
+    "attack": 0,
+    "defence": 0,
+    "xp": 0,
+    "coins": 0,
+    "props": [],
+    "moves": ["goon_shove"],
+    "ai": [
+      {
+        "move": "goon_shove",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.sparring_dummy"
   }
 ]
