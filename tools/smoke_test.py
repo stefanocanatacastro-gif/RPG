@@ -286,7 +286,7 @@ with sync_playwright() as p:
         except Exception:
             print("    log:", battle_eval(page, "return s.engine.log.slice(-6);"), battle_eval(page, "return s.commands.state;"))
             raise
-        key_at(page, lead_ms=25)
+        key_at(page, lead_ms=70)
         if n == 0:
             page.wait_for_timeout(120)
             page.screenshot(path=f"{out}/21_cmd_stomp.png")
@@ -346,6 +346,57 @@ with sync_playwright() as p:
     press(page, "x", 300)
 
     # leave by running away
+    for _ in range(12):
+        wait_battle_input(page, "menu")
+        battle_eval(page, "s.menu.setCursor(s.menu.items.length - 1);")
+        press(page, "Enter", 300)
+        page.wait_for_function(
+            "!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').inputState === 'menu' || window.__game.scene.getScene('battle').engine.phase === 'fled'",
+            timeout=20000,
+        )
+        if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
+            break
+    wait_scene(page, "field_test", 10000)
+    page.wait_for_timeout(300)
+
+    # ── Block and Reversal against the sparring dummy (1 damage per hit) ──
+    page.evaluate("window.__debug.set('god', false); window.__debug.heal()")
+    press(page, "F1", 400)
+    pick_debug("battle")
+    press(page, "Enter", 250)
+    pick_debug("test_dummy")
+    press(page, "Enter")
+    wait_scene(page, "battle")
+
+    def enemy_attack(code=None, lead=40, early=False, shot=None):
+        """Lets the hero's Chop time out, then answers the dummy's strike."""
+        choose_move(page, 0)
+        wait_command(page, "guard", timeout=15000)
+        if early:
+            page.evaluate(f"window.dispatchEvent(new KeyboardEvent('keydown', {{ code: '{code}' }}))")
+            page.wait_for_timeout(40)
+            page.evaluate(f"window.dispatchEvent(new KeyboardEvent('keyup', {{ code: '{code}' }}))")
+        elif code:
+            key_at(page, lead_ms=lead, code=code)
+        if shot:
+            page.wait_for_timeout(max(0, ms_until_key(page) + 120))
+            page.screenshot(path=f"{out}/{shot}.png")
+        wait_turn_over(page)
+        hero_hp = battle_eval(page, "return s.engine.hero.hp;")
+        dummy_hp = battle_eval(page, "return s.engine.enemies()[0].hp;")
+        last = battle_eval(page, "return s.engine.log.filter(l => l.startsWith('guardcmd')).pop();")
+        return hero_hp, dummy_hp, last
+
+    h0 = battle_eval(page, "return s.engine.hero.hp;")
+    h1, d1, g = enemy_attack("KeyZ", lead=60, shot="23_block")
+    check(g == "guardcmd block" and h1 == h0, f"Block with A just before the hit takes no damage ({g}, HP {h0}->{h1})")
+    h2, d2, g = enemy_attack("KeyX", lead=32, shot="24_reversal")
+    check(g == "guardcmd reversal" and h2 == h1 and d2 < d1 - 0, f"Reversal with B: no damage and the dummy is hit back ({g}, dummy {d1}->{d2})")
+    h3, d3, g = enemy_attack("KeyZ", early=True)
+    check(g == "guardcmd none early" and h3 == h2 - 1, f"pressing during the wind-up is too early ({g}, HP {h2}->{h3})")
+    h4, d4, g = enemy_attack(None)
+    check(g == "guardcmd none none" and h4 == h3 - 1, f"no guard takes the full hit ({g}, HP {h3}->{h4})")
+
     for _ in range(12):
         wait_battle_input(page, "menu")
         battle_eval(page, "s.menu.setCursor(s.menu.items.length - 1);")

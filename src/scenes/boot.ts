@@ -18,7 +18,12 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     input.install(this.game);
     // dev builds: let the browser test flip debug switches directly
-    if (IS_DEV) (window as unknown as { __debug: object }).__debug = { state: debugState, set: setDebug };
+    if (IS_DEV)
+      (window as unknown as { __debug: object }).__debug = {
+        state: debugState,
+        set: setDebug,
+        heal: () => hasGame() && gameState().setHp(gameState().hero().id, gameState().hero().maxHp),
+      };
     Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
 
     addCrashContext(() => ({

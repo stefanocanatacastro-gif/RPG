@@ -21,6 +21,7 @@ import { debugState } from '../systems/debug_state';
 import rules from '../data/battle_rules.json';
 import { CommandRunner } from '../battle/command_view';
 import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle/commands';
+import type { GuardResult } from '../battle/engine';
 
 type Choice =
   | { kind: 'move'; move: string; target: string }
@@ -440,7 +441,9 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'anim':
-          await this.playAnimOnce(actor, step.anim);
+          // placeholder enemies have no animations yet; their strike comes with the hit
+          if (actor.f.side === 'hero' || this.hasAnim(actor, step.anim))
+            await this.playAnimOnce(actor, step.anim);
           break;
         case 'command': {
           if (!runsCommands) break;
@@ -461,7 +464,22 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'hit': {
-          if (hovering) {
+          // an enemy attacking the hero: wind up and strike, while the player can Block or Reverse
+          let guard: GuardResult = 'none';
+          if (actor.f.side === 'enemy' && target.f.side === 'hero' && !opts.firstStrike) {
+            const g = COMMANDS.guard;
+            const motionMs = hovering ? stomp.fallMs : g.windUpMs + g.strikeMs;
+            const watch = this.commands.guard(this.time.now + motionMs);
+            if (hovering) await drop(stomp.fallMs);
+            else {
+              await this.tween({ targets: s, x: s.x - dir * 10, duration: g.windUpMs, ease: 'Sine.easeOut' });
+              await this.tween({ targets: s, x: s.x + dir * 18, duration: g.strikeMs, ease: 'Quad.easeIn' });
+            }
+            hovering = false;
+            const j = await watch;
+            guard = j.result;
+            this.engine.log.push(`guardcmd ${j.result}${j.note ? ` ${j.note}` : ''}`);
+          } else if (hovering) {
             await drop(stomp.fallMs);
             hovering = false;
           }
@@ -469,7 +487,13 @@ export class BattleScene extends Phaser.Scene {
           rating = undefined;
           const r = opts.firstStrike
             ? this.engine.damage(targetId, rules.firstStrikeDamage + this.engine.hero.attack)
-            : this.engine.hit(actorId, targetId, moveId, mult);
+            : this.engine.hit(actorId, targetId, moveId, mult, guard);
+          if (r.guard === 'reversal') {
+            await this.showReversal(target, actor, r.counter ?? 0, !!r.attackerKo);
+            if (r.attackerKo) ended = true;
+            break;
+          }
+          if (r.guard === 'block') this.showBlock(target);
           await this.showHit(target, r.damage, r.ko);
           if (pendingStomp) {
             const res = await pendingStomp;
@@ -505,6 +529,32 @@ export class BattleScene extends Phaser.Scene {
     if (s.x !== actor.home.x || s.y !== actor.home.y) await this.returnHome(actor);
     s.setDepth(10 + actor.f.order);
     if (actor.f.airborne && actor.f.hp > 0) this.hover(actor);
+  }
+
+  private showBlock(v: FighterView): void {
+    void this.popText(v, t('battle.cmd.block'), UI.grit);
+    v.sprite.setTintFill(0x9fd8ff);
+    this.time.delayedCall(90, () => v.sprite.clearTint());
+  }
+
+  /** The hero takes nothing and shoves the attacker back with a counter-hit. */
+  private async showReversal(
+    hero: FighterView,
+    attacker: FighterView,
+    counter: number,
+    ko: boolean,
+  ): Promise<void> {
+    void this.popText(hero, t('battle.cmd.reversal'), UI.spark);
+    this.cameras.main.shake(120, 0.012);
+    await this.tween({ targets: hero.sprite, x: hero.sprite.x + 14, duration: 70, yoyo: true });
+    await this.tween({
+      targets: attacker.sprite,
+      x: attacker.sprite.x + 30,
+      duration: 160,
+      ease: 'Quad.easeOut',
+    });
+    await this.showHit(attacker, counter, ko);
+    if (ko) await this.knockOut(attacker);
   }
 
   /** Logs a command result and shows its rating over the attacker. */

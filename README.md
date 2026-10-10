@@ -11,7 +11,7 @@ It runs in any browser on computer or phone. Every build is a single self-contai
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
 | Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
-| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands) |
+| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands, Block and Reversal) |
 | M2 Prologue playable | Planned |
 
 The full task list and milestone plan live in the project's *Programming List* doc; the art, audio and story plan in the *Asset Outline* doc.
@@ -92,8 +92,10 @@ Every hero move has a timing challenge. The rules are in `src/battle/commands.ts
 | Double jump (`stomp`) | Elbow Drop | Press just before landing on the opponent. Pressing too early locks you out. | Success bounces you up for another hit; a miss ends the move after this hit. |
 | Precision press (`timed_press`) | Chop | A ring closes on the target; press as it lines up. | GREAT ×1.5 damage, NICE ×1, miss ×0.5. |
 | Precision release (`hold_release`) | Body Slam | Hold to fill the bar, release in the lit zone. Holding too long fizzles. | GREAT ×1.5, NICE ×1, miss ×0.5. |
+| Block (`guard`, A) | Any enemy attack | Press A just before the hit lands (130 ms window). | 1 less damage. |
+| Reversal (`guard`, B) | Any enemy attack | Press B in a tighter window (60 ms). | No damage, and the attacker takes 1. |
 
-Commands work with Z / Enter / Space, gamepad A, the on-screen A button, or a tap anywhere on the stage. The debug menu's *Perfect commands* switch makes every command succeed.
+Commands work with Z / Enter / Space, gamepad A, the on-screen A button, or a tap anywhere on the stage. For guarding, only the first press counts: pressing during the wind-up locks you out. The debug menu's *Perfect commands* switch makes every command succeed (and auto-blocks).
 
 ## Testing
 

@@ -76,5 +76,7 @@
   "battle.cmd.none": "MISS",
   "battle.cmd.hold": "HOLD",
   "enemy.sparring_dummy": "Sparring Dummy",
-  "scout.sparring_dummy": "A padded practice dummy. Lots of HP, barely hits back. For practising timing."
+  "scout.sparring_dummy": "A padded practice dummy. Lots of HP, barely hits back. For practising timing.",
+  "battle.cmd.block": "BLOCK!",
+  "battle.cmd.reversal": "REVERSAL!"
 }

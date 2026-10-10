@@ -86,3 +86,29 @@ export function judgeRelease(heldMs: number | null, cfg = COMMANDS.hold_release)
   if (fill >= cfg.goodFrom) return { rating: 'good' };
   return { rating: 'miss', note: 'early' };
 }
+
+// ── Guarding against enemy attacks ────────────────────────────────────
+
+export type GuardButton = 'block' | 'reversal';
+export interface GuardJudgement {
+  result: 'none' | 'block' | 'reversal';
+  note?: MissNote;
+}
+
+/**
+ * Block (A) or Reversal (B), judged on the first press during the enemy's
+ * strike. Block has a generous window before contact; Reversal a tight one.
+ * The first press is the only one that counts, so mashing locks you out.
+ */
+export function judgeGuard(
+  press: { button: GuardButton; t: number } | null,
+  contactAt: number,
+  cfg = COMMANDS.guard,
+): GuardJudgement {
+  if (!press) return { result: 'none', note: 'none' };
+  const d = press.t - contactAt;
+  if (d > cfg.lateMs) return { result: 'none', note: 'late' };
+  const window = press.button === 'block' ? cfg.blockWindowMs : cfg.reversalWindowMs;
+  if (d < -window) return { result: 'none', note: 'early' };
+  return { result: press.button };
+}

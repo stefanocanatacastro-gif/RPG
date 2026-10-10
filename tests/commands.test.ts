@@ -69,3 +69,56 @@ describe('precision release', () => {
     expect(holdFill(c.fillMs * 3)).toBe(1);
   });
 });
+
+import { judgeGuard } from '../src/battle/commands';
+import { BattleEngine } from '../src/battle/engine';
+import { Database } from '../src/managers/database';
+
+describe('Block and Reversal', () => {
+  const c = COMMANDS.guard;
+  const hit = 2000;
+  it('blocks with a generous window and reverses with a tight one', () => {
+    expect(judgeGuard({ button: 'block', t: hit - c.blockWindowMs + 10 }, hit).result).toBe('block');
+    expect(judgeGuard({ button: 'reversal', t: hit - c.reversalWindowMs + 10 }, hit).result).toBe('reversal');
+    expect(judgeGuard({ button: 'reversal', t: hit - c.blockWindowMs + 10 }, hit)).toEqual({
+      result: 'none',
+      note: 'early',
+    });
+  });
+  it('misses when late, early or never pressed', () => {
+    expect(judgeGuard({ button: 'block', t: hit + c.lateMs + 5 }, hit)).toEqual({
+      result: 'none',
+      note: 'late',
+    });
+    expect(judgeGuard({ button: 'block', t: hit - c.blockWindowMs - 5 }, hit)).toEqual({
+      result: 'none',
+      note: 'early',
+    });
+    expect(judgeGuard(null, hit).result).toBe('none');
+  });
+
+  const hero = Database.character('chispa');
+  const battle = () =>
+    new BattleEngine(Database, hero, { hp: 10, maxHp: 10 }, Database.formation('test_goons'), 3);
+
+  it('a Block takes 1 off the hit, a Reversal takes all of it and hits back', () => {
+    const b = battle();
+    expect(b.hit('e0', 'hero', 'goon_shove', 1, 'none').damage).toBe(2);
+    expect(b.hit('e0', 'hero', 'goon_shove', 1, 'block').damage).toBe(1);
+    const r = b.hit('e0', 'hero', 'goon_shove', 1, 'reversal');
+    expect(r.damage).toBe(0);
+    expect(r.counter).toBe(1);
+    expect(b.get('e0').hp).toBe(3);
+  });
+
+  it('wins the fight when a Reversal knocks out the last enemy', () => {
+    const b = battle();
+    b.begin('enemy');
+    b.get('e1').hp = 0;
+    b.get('e0').hp = 1;
+    const p = b.nextEnemyPlan()!;
+    expect(b.hit(p.actor, 'hero', p.move, 1, 'reversal').attackerKo).toBe(true);
+    b.endEnemyAction();
+    expect(b.phase).toBe('victory');
+  });
+});

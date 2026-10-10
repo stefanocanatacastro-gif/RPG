@@ -76,5 +76,7 @@
   "battle.cmd.none": "FALLO",
   "battle.cmd.hold": "MANTÉN",
   "enemy.sparring_dummy": "Muñeco de Práctica",
-  "scout.sparring_dummy": "Un muñeco acolchado. Mucha vida y casi no pega. Para practicar el ritmo."
+  "scout.sparring_dummy": "Un muñeco acolchado. Mucha vida y casi no pega. Para practicar el ritmo.",
+  "battle.cmd.block": "¡BLOQUEO!",
+  "battle.cmd.reversal": "¡CONTRA!"
 }

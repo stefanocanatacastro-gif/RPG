@@ -2,9 +2,19 @@
   "defendGuard": 1,
   "runChance": 0.75,
   "firstStrikeDamage": 1,
-  "ratingMult": { "great": 1.5, "good": 1, "miss": 0.5 },
+  "ratingMult": {
+    "great": 1.5,
+    "good": 1,
+    "miss": 0.5
+  },
   "actionCommands": {
-    "stomp": { "fallMs": 320, "windowMs": 140, "lateMs": 40, "greatMs": 50, "bounceMs": 260 },
+    "stomp": {
+      "fallMs": 320,
+      "windowMs": 140,
+      "lateMs": 40,
+      "greatMs": 50,
+      "bounceMs": 260
+    },
     "timed_press": {
       "closeMs": 900,
       "startRadius": 46,
@@ -19,6 +29,15 @@
       "greatFrom": 0.92,
       "overMs": 220,
       "startTimeoutMs": 2500
+    },
+    "guard": {
+      "blockWindowMs": 130,
+      "reversalWindowMs": 60,
+      "lateMs": 30,
+      "windUpMs": 220,
+      "strikeMs": 110
     }
-  }
+  },
+  "blockReduce": 1,
+  "reversalDamage": 1
 }

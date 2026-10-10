@@ -15,8 +15,11 @@ import {
   judgePress,
   judgeRelease,
   judgeStomp,
+  judgeGuard,
   ringRadius,
   type CommandResult,
+  type GuardButton,
+  type GuardJudgement,
 } from './commands';
 
 const DEPTH = 75;
@@ -222,6 +225,33 @@ export class CommandRunner {
       label.destroy();
       icon.destroy();
       return judgeRelease(heldMs);
+    });
+  }
+
+  // ── Guarding ────────────────────────────────────────────────────────
+
+  /**
+   * Watches for Block (confirm / A / a tap on the stage) or Reversal (cancel / B)
+   * during an enemy's strike. Call as the strike starts; resolves just after contact.
+   */
+  guard(contactAt: number): Promise<GuardJudgement> {
+    const cfg = COMMANDS.guard;
+    let first: { button: GuardButton; t: number } | null = null;
+    this.state = { kind: 'guard', startAt: this.now(), keyAt: contactAt };
+    return new Promise((resolve) => {
+      const fn = () => {
+        const now = this.now();
+        if (!first) {
+          if (input.justPressed('cancel')) first = { button: 'reversal', t: now };
+          else if (this.pressed()) first = { button: 'block', t: now };
+          else if (debugState.autoCommands && now >= contactAt - 30) first = { button: 'block', t: now };
+        }
+        if (now < contactAt + cfg.lateMs) return;
+        this.scene.events.off(Phaser.Scenes.Events.UPDATE, fn);
+        this.state = null;
+        resolve(judgeGuard(first, contactAt));
+      };
+      this.scene.events.on(Phaser.Scenes.Events.UPDATE, fn);
     });
   }
 }

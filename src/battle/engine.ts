@@ -45,11 +45,20 @@ export interface TargetCheck {
   reason?: string;
 }
 
+/** How the defender answered an attack: no guard, a Block (less damage) or a Reversal (no damage, hits back). */
+export type GuardResult = 'none' | 'block' | 'reversal';
+
 export interface HitResult {
   target: string;
   damage: number;
   ko: boolean;
   guarded: boolean;
+  /** Set when the hit was blocked or reversed. */
+  guard?: GuardResult;
+  /** Damage the attacker took from a Reversal. */
+  counter?: number;
+  /** The attacker was knocked out by the Reversal. */
+  attackerKo?: boolean;
 }
 
 export interface EnemyPlan {
@@ -207,18 +216,34 @@ export class BattleEngine {
   }
 
   /** Applies one hit of a move. Moves with several "hit" steps call this once per step. */
-  hit(attackerId: string, targetId: string, moveId: string, mult = 1): HitResult {
+  hit(
+    attackerId: string,
+    targetId: string,
+    moveId: string,
+    mult = 1,
+    guard: GuardResult = 'none',
+  ): HitResult {
     const a = this.get(attackerId);
     const t = this.get(targetId);
     const m = this.db.move(moveId);
+    if (guard === 'reversal') {
+      // no damage taken, and the attacker gets hit back
+      const counter = rules.reversalDamage;
+      a.hp = Math.max(0, a.hp - counter);
+      this.log.push(`guard ${t.id} reversal`);
+      this.log.push(`${t.id} reversal ${a.id} -${counter}${a.hp === 0 ? ' KO' : ''}`);
+      return { target: t.id, damage: 0, ko: false, guarded: true, guard, counter, attackerKo: a.hp === 0 };
+    }
+    const block = guard === 'block' ? rules.blockReduce : 0;
     const damage = computeDamage(m.power, a.attack, t.defence, {
       mult,
       piercing: m.piercing,
-      guard: t.guard,
+      guard: t.guard + block,
     });
     t.hp = Math.max(0, t.hp - damage);
+    if (guard === 'block') this.log.push(`guard ${t.id} block`);
     this.log.push(`${a.id} ${m.id} ${t.id} -${damage}${t.hp === 0 ? ' KO' : ''}`);
-    return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard > 0 };
+    return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard + block > 0, guard };
   }
 
   /** Direct damage that isn't a move (items, First Strike bonus). */
@@ -294,6 +319,11 @@ export class BattleEngine {
   endEnemyAction(): void {
     if (this.hero.hp <= 0) {
       this.phase = 'defeat';
+      return;
+    }
+    if (this.enemies().length === 0) {
+      // the last enemy fell to a Reversal
+      this.phase = 'victory';
       return;
     }
     if (this.enemyQueue.length === 0) {
