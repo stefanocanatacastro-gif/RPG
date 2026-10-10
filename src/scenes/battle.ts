@@ -5,7 +5,8 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
 import { BattleEngine, type Fighter } from '../battle/engine';
-import { drawStage, homeOf, STAGE } from '../battle/stage';
+import { drawStage, homeOf, STAGE, ARENA, type Arena } from '../battle/stage';
+import { CameraDirector, type Shot } from '../battle/camera_director';
 import { MenuList, Bar, BAR_STYLES, drawPanel, type MenuItem } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
 import { tinyText, tinyTextWidth } from '../ui/tiny_font';
@@ -40,6 +41,16 @@ interface FighterView {
 /** The hero uses the test wrestler until Kid Chispa's real sprite exists. */
 const HERO_TEXTURE = 'spr_test_dummy';
 
+/** Fixed camera framings. Moves use tracking shots instead (see playMove). */
+const SHOTS: Record<string, Shot> = {
+  /** Opening: high on the crowd and the lights, before sweeping down to the ring. */
+  intro: { x: ARENA.cx, y: 150, zoom: 1.7 },
+  /** The whole ring. */
+  wide: { x: ARENA.cx, y: STAGE.floorY - 8, zoom: 1 },
+  /** Your turn: Chispa just right of the command menu, the opponents across the ring. */
+  command: { x: STAGE.heroX + 20, y: STAGE.floorY - 8, zoom: 1 },
+};
+
 export class BattleScene extends Phaser.Scene {
   engine!: BattleEngine;
   /** What the battle is waiting for — read by the browser test. */
@@ -51,6 +62,11 @@ export class BattleScene extends Phaser.Scene {
   private menu: MenuList | null = null;
   private cursor!: Phaser.GameObjects.Graphics;
   commands!: CommandRunner;
+  director!: CameraDirector;
+  private arena!: Arena;
+  /** HUD, menus and banners live here, drawn by a fixed camera so they never pan or zoom. */
+  private uiLayer!: Phaser.GameObjects.Layer;
+  private uiCam!: Phaser.Cameras.Scene2D.Camera;
   private menuCursor = 0;
 
   constructor() {
@@ -73,9 +89,29 @@ export class BattleScene extends Phaser.Scene {
     );
     this.registry.set('battleSeed', this.engine.rng.seed);
 
-    drawStage(this);
+    this.arena = drawStage(this);
+    this.uiLayer = this.add.layer().setDepth(1000);
+    this.cameras.main.ignore(this.uiLayer);
+    this.uiCam = this.cameras.add(0, 0, W, H).setName('ui');
+    this.director = new CameraDirector(
+      this.cameras.main,
+      { width: ARENA.width, height: ARENA.height },
+      SHOTS.intro,
+    );
+    // anything not on the UI layer belongs to the arena: keep it off the fixed camera
+    const sortCameras = () => {
+      for (const obj of this.children.list) {
+        if ((obj as unknown) !== this.uiLayer && !(obj.cameraFilter & this.uiCam.id)) this.uiCam.ignore(obj);
+      }
+    };
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, sortCameras);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
+      this.events.off(Phaser.Scenes.Events.POST_UPDATE, sortCameras),
+    );
+
     for (const f of this.engine.fighters) this.addFighter(f);
     this.buildHud();
+    sortCameras();
     this.cursor = this.add.graphics().setDepth(60).setVisible(false);
     this.commands = new CommandRunner(this);
 
@@ -102,9 +138,9 @@ export class BattleScene extends Phaser.Scene {
     if (!isHero) {
       view.bar = new Bar(
         this,
-        home.x - 30,
+        home.x - 22,
         STAGE.floorY + 6,
-        60,
+        44,
         BAR_STYLES.hp,
         f.hp,
         f.maxHp,
@@ -115,37 +151,62 @@ export class BattleScene extends Phaser.Scene {
     this.views.set(f.id, view);
   }
 
+  /** Moves a game object onto the fixed UI layer. */
+  private ui<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.uiLayer.add(obj);
+    return obj;
+  }
+
+  /** Darkened screen edges, like a broadcast camera; on the UI layer so it never moves. */
+  private vignette(): void {
+    const key = '__battle_vignette';
+    if (!this.textures.exists(key)) {
+      const tex = this.textures.createCanvas(key, W, H)!;
+      const ctx = tex.getContext();
+      const grad = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.62);
+      grad.addColorStop(0, 'rgba(5,4,10,0)');
+      grad.addColorStop(1, 'rgba(5,4,10,0.55)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+      tex.refresh();
+    }
+    this.ui(this.add.image(0, 0, key).setOrigin(0));
+  }
+
   private buildHud(): void {
     const gs = gameState();
-    const g = this.add.graphics().setDepth(70);
+    this.vignette();
+    const g = this.ui(this.add.graphics());
     drawPanel(g, 8, 8, 236, 66, { alpha: 0.94 });
-    pixelText(this, 20, 18, t('char.chispa').toUpperCase(), 8, css(UI.spark)).setOrigin(0, 0).setDepth(71);
-    const hp = new Bar(this, 20, 34, 212, BAR_STYLES.hp, gs.hero().hp, gs.hero().maxHp).setDepth(71);
-    const grit = new Bar(this, 20, 52, 212, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit).setDepth(71);
+    this.ui(pixelText(this, 20, 18, t('char.chispa').toUpperCase(), 8, css(UI.spark)).setOrigin(0, 0));
+    const hp = this.ui(new Bar(this, 20, 34, 212, BAR_STYLES.hp, gs.hero().hp, gs.hero().maxHp));
+    const grit = this.ui(new Bar(this, 20, 52, 212, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit));
     const offs = [
       bus.on('hp.changed', (e) => e.who === gs.hero().id && hp.setValue(e.hp, e.maxHp)),
       bus.on('grit.changed', (e) => grit.setValue(e.grit, e.maxGrit)),
     ];
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => offs.forEach((off) => off()));
 
-    this.roundText = pixelText(this, W - 14, 14, '', 8, css(UI.inkDim))
-      .setOrigin(1, 0)
-      .setDepth(71);
-    this.desc = pixelText(this, 16, H - 26, '', 8)
-      .setOrigin(0, 0)
-      .setDepth(71)
-      .setWordWrapWidth(W - 32);
+    this.roundText = this.ui(pixelText(this, W - 14, 14, '', 8, css(UI.inkDim)).setOrigin(1, 0));
+    this.desc = this.ui(
+      pixelText(this, 16, H - 26, '', 8)
+        .setOrigin(0, 0)
+        .setWordWrapWidth(W - 32),
+    );
     const seed = `SEED ${this.engine.rng.seed}`;
-    tinyText(this, W - 8 - tinyTextWidth(seed) * 2, H - 12, seed, css(UI.border))
-      .setOrigin(0)
-      .setScale(2)
-      .setDepth(71);
+    this.ui(
+      tinyText(this, W - 8 - tinyTextWidth(seed) * 2, H - 12, seed, css(UI.border))
+        .setOrigin(0)
+        .setScale(2),
+    );
   }
 
-  /** Shadows stay on the canvas and follow their fighter sideways. */
-  update(): void {
+  /** Shadows stay on the canvas and follow their fighter sideways; the camera eases toward its shot. */
+  update(_t: number, dt: number): void {
+    this.director.update(dt);
     for (const v of this.views.values()) {
       v.shadow.x = v.sprite.x;
+      if (v.bar) v.bar.x = Math.round(v.sprite.x - 22);
       const lift = Math.max(0, STAGE.floorY - v.sprite.y);
       v.shadow.setScale(Math.max(0.5, 1 - lift / 160));
     }
@@ -155,7 +216,9 @@ export class BattleScene extends Phaser.Scene {
 
   private async run(): Promise<void> {
     const e = this.engine;
-    await this.wait(250);
+    // establishing shot: from the crowd and the lights down onto the ring
+    this.director.to(SHOTS.wide, 2.2);
+    await this.wait(900);
     if (this.start.firstStrike === 'player') {
       await this.banner(t('battle.first_strike'), UI.spark);
       const target = e.frontGround() ?? e.enemies()[0];
@@ -173,6 +236,7 @@ export class BattleScene extends Phaser.Scene {
     for (let guard = 0; guard < 500; guard++) {
       this.roundText.setText(tf('battle.round', { n: e.round }));
       if (e.phase === 'command') {
+        this.director.to(SHOTS.command, 5);
         const choice = await this.chooseAction();
         await this.perform(choice);
       } else if (e.phase === 'enemy') {
@@ -200,15 +264,18 @@ export class BattleScene extends Phaser.Scene {
       await this.playMove('hero', c.move, c.target);
     } else if (c.kind === 'item') {
       e.beginHeroAction();
+      this.director.track([this.views.get(c.target)!.sprite, this.views.get('hero')!.sprite], 1.2);
       await this.useItem(c.item, c.target);
     } else if (c.kind === 'defend') {
       e.defend();
+      this.director.track([this.views.get('hero')!.sprite], 1.35, 10);
       await this.popText(this.views.get('hero')!, t('battle.guard'), UI.grit);
     } else {
       const ok = e.tryRun();
       if (!ok) await this.banner(t('battle.run_failed'), UI.rope);
       else {
         const hero = this.views.get('hero')!;
+        this.director.track([hero.sprite], 1.15);
         hero.sprite.setFlipX(true).play(animKey(HERO_TEXTURE, 'walk'));
         await this.tween({ targets: hero.sprite, x: -40, duration: 500 });
         await this.banner(t('battle.fled'), UI.ink);
@@ -280,7 +347,7 @@ export class BattleScene extends Phaser.Scene {
         });
         // keep the last choice highlighted, unless it's greyed out now
         if (!items[this.menuCursor]?.disabled) this.menu.setCursor(this.menuCursor);
-        this.menu.setDepth(65);
+        this.ui(this.menu.setDepth(65));
       };
       const done = (c: Choice) => {
         this.menu?.destroy();
@@ -322,7 +389,7 @@ export class BattleScene extends Phaser.Scene {
           );
       },
     });
-    this.menu.setDepth(65);
+    this.ui(this.menu.setDepth(65));
   }
 
   /** Arrow over a target; left/right (or up/down) to switch, confirm to pick, cancel to go back. */
@@ -330,8 +397,10 @@ export class BattleScene extends Phaser.Scene {
     this.inputState = 'target';
     this.menu?.setVisible(false);
     let i = 0;
+    const hero = this.views.get('hero')!.sprite;
     const draw = () => {
       const v = this.views.get(ids[i])!;
+      this.director.track([hero, v.sprite], 1.08, 0, 5);
       const top = v.sprite.y - v.sprite.displayHeight - 14;
       this.cursor.clear().setVisible(true);
       const bob = Math.floor(this.time.now / 250) % 2;
@@ -351,6 +420,7 @@ export class BattleScene extends Phaser.Scene {
       if (picked) onPick(ids[i]);
       else {
         this.menu?.focus();
+        this.director.to(SHOTS.command, 5);
         onBack();
       }
     };
@@ -364,7 +434,8 @@ export class BattleScene extends Phaser.Scene {
     };
     const tap = (p: Phaser.Input.Pointer) => {
       if (this.time.now < readyAt || input.onTouchControl(p.x, p.y)) return;
-      const hit = ids.findIndex((id) => this.views.get(id)!.sprite.getBounds().contains(p.x, p.y));
+      const w = this.cameras.main.getWorldPoint(p.x, p.y);
+      const hit = ids.findIndex((id) => this.views.get(id)!.sprite.getBounds().contains(w.x, w.y));
       if (hit < 0) return;
       if (hit === i) finish(true);
       else i = hit;
@@ -392,6 +463,8 @@ export class BattleScene extends Phaser.Scene {
     const move = Database.move(moveId);
     const dir = actor.f.side === 'hero' ? 1 : -1;
     const s = actor.sprite;
+    // the camera follows the attacker across the ring to the target
+    this.director.track([s, target.sprite], actor.f.side === 'hero' ? 1.22 : 1.18, 6);
     const runsCommands = actor.f.side === 'hero' && !opts.firstStrike && move.command !== 'none';
     const stomp = COMMANDS.stomp;
     s.setDepth(40);
@@ -546,6 +619,8 @@ export class BattleScene extends Phaser.Scene {
   ): Promise<void> {
     void this.popText(hero, t('battle.cmd.reversal'), UI.spark);
     this.cameras.main.shake(120, 0.012);
+    this.director.punchIn(0.22);
+    this.arena.cheer(1);
     await this.tween({ targets: hero.sprite, x: hero.sprite.x + 14, duration: 70, yoyo: true });
     await this.tween({
       targets: attacker.sprite,
@@ -615,6 +690,9 @@ export class BattleScene extends Phaser.Scene {
   private async showHit(target: FighterView, damage: number, ko: boolean): Promise<void> {
     const s = target.sprite;
     this.cameras.main.shake(damage > 0 ? 110 : 60, damage > 2 ? 0.01 : 0.006);
+    // punch in on impact; big hits get the crowd off their seats
+    this.director.punchIn(damage >= 3 ? 0.2 : damage > 0 ? 0.11 : 0.05);
+    if (damage >= 3 || ko) this.arena.cheer(ko ? 2 : 1);
     s.setTintFill(0xffffff);
     this.time.delayedCall(70, () => s.clearTint());
     void this.popText(target, String(damage), damage > 0 ? UI.spark : UI.inkDim);
@@ -675,16 +753,14 @@ export class BattleScene extends Phaser.Scene {
     gs.addCoins(r.coins);
     gs.addXp(r.xp);
     const hero = this.views.get('hero')!;
+    // close-up on the winner while the crowd goes wild
+    this.director.to({ x: hero.sprite.x + 30, y: STAGE.floorY - 48, zoom: 1.6 }, 3);
+    this.arena.cheer(2);
     hero.sprite.play(animKey(HERO_TEXTURE, 'chop'));
     await this.banner(t('battle.victory'), UI.spark, 900);
-    const line = pixelText(
-      this,
-      W / 2,
-      168,
-      tf('battle.rewards', { coins: r.coins, xp: r.xp }),
-      16,
-      css(UI.ink),
-    ).setDepth(80);
+    const line = this.ui(
+      pixelText(this, W / 2, 168, tf('battle.rewards', { coins: r.coins, xp: r.xp }), 16, css(UI.ink)),
+    );
     await this.wait(900);
     line.destroy();
     this.finish('win');
@@ -692,6 +768,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async defeat(): Promise<void> {
     const hero = this.views.get('hero')!;
+    this.director.to({ x: hero.sprite.x, y: STAGE.floorY - 30, zoom: 1.45 }, 2.5);
     await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 8, duration: 300 });
     await this.banner(t('battle.defeat'), UI.rope, 900);
     this.desc.setText(t('battle.defeat_note')).setColor(css(UI.inkDim));
@@ -723,8 +800,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async banner(text: string, color: number, hold = 550): Promise<void> {
-    const b = pixelText(this, W / 2, 132, text, 32, css(color)).setDepth(90);
-    const shadow = pixelText(this, W / 2 + 3, 135, text, 32, '#1b0a10').setDepth(89);
+    const shadow = this.ui(pixelText(this, W / 2 + 3, 135, text, 32, '#1b0a10'));
+    const b = this.ui(pixelText(this, W / 2, 132, text, 32, css(color)));
     b.setScale(1, 0);
     shadow.setScale(1, 0);
     await this.tween({ targets: [b, shadow], scaleY: 1, duration: 120, ease: 'Back.easeOut' });

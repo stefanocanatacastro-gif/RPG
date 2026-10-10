@@ -11,7 +11,7 @@ It runs in any browser on computer or phone. Every build is a single self-contai
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
 | Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
-| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands, Block and Reversal) |
+| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands, Block and Reversal), plus the arena and camera overhaul |
 | M2 Prologue playable | Planned |
 
 The full task list and milestone plan live in the project's *Programming List* doc; the art, audio and story plan in the *Asset Outline* doc.
@@ -84,6 +84,12 @@ Rooms are 3D spaces seen through a perspective camera, like TTYD's field camera:
 - Blocks (crates, steps, platforms, the ring) have width, depth and height in units. Anything up to 0.3 units high is climbed by walking; a jump reaches about 1.6 units.
 
 All of these numbers are in `src/data/world.json`; field rules such as the flee grace period are in `src/data/rules.json`.
+
+## Battle presentation
+
+Fights take place in a perspective arena (`src/battle/stage.ts`): a raised ring with corner posts, turnbuckles and ropes, ringside mats and a barricade, crowd stands behind and on both sides, and a lighting rig. Everything is placed with `P(X, Y, Z)` in arena units; fighters stand on one depth line at their pixel size, so the art is never resized by the perspective. Static parts are drawn once into images for speed.
+
+Chispa starts on the left of the ring with the opponents across from him. The camera (`src/battle/camera_director.ts`) eases between shots rather than cutting: an establishing sweep from the crowd down to the ring, a command view that keeps Chispa clear of the menu, a pan to the chosen target, a tracking shot that follows the attacker across the ring, a punch-in on every impact (bigger for big hits), and close-ups for victory and defeat. Big hits and knockouts make the crowd jump. The HUD, menus and banners sit on a separate fixed layer, so they never pan or zoom.
 
 ## Action commands
 

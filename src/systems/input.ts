@@ -62,6 +62,7 @@ class InputManager {
   /** Screen areas covered by on-screen controls (game coordinates). */
   private zones: { x: number; y: number; r: number }[] = [];
   private touchDown = new Set<Action>();
+  private scripted: { action: Action; from: number; to: number; seen: boolean }[] = [];
   private now = new Set<Action>();
   private prev = new Set<Action>();
   private _device: InputDevice = 'keyboard';
@@ -92,7 +93,7 @@ class InputManager {
     window.addEventListener('touchstart', () => this.setDevice('touch'), { passive: true });
 
     // Sample all devices once per frame, before scenes update.
-    game.events.on(Phaser.Core.Events.PRE_STEP, () => this.poll());
+    game.events.on(Phaser.Core.Events.PRE_STEP, (time: number) => this.poll(time));
   }
 
   private setDevice(d: InputDevice): void {
@@ -101,9 +102,17 @@ class InputManager {
     bus.emit('input.device', { device: d });
   }
 
-  private poll(): void {
+  private poll(time = 0): void {
     this.prev = this.now;
     const next = new Set<Action>();
+    // scripted presses (browser tests): held from `from` until `to`, at least one frame
+    this.scripted = this.scripted.filter((h) => {
+      if (time >= h.from && (time < h.to || !h.seen)) {
+        next.add(h.action);
+        h.seen = true;
+      }
+      return !(h.seen && time >= h.to);
+    });
     for (const a of ACTIONS) {
       if (KEYS[a].some((k) => this.keysDown.has(k) || this.keysTapped.has(k))) next.add(a);
       if (this.touchDown.has(a)) next.add(a);
@@ -155,6 +164,15 @@ class InputManager {
       x: (this.isDown('right') ? 1 : 0) - (this.isDown('left') ? 1 : 0),
       y: (this.isDown('down') ? 1 : 0) - (this.isDown('up') ? 1 : 0),
     };
+  }
+
+  /**
+   * Dev builds / browser tests: holds an action from game time `from` until `to`.
+   * The press lands on the first frame at or after `from`, independent of how
+   * accurate the browser's timers are.
+   */
+  script(action: Action, from: number, to: number): void {
+    this.scripted.push({ action, from, to, seen: false });
   }
 
   /** Used by the on-screen touch controls. */

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { waitForPixelFont } from '../ui/pixel_text';
 import { addCrashContext } from '../systems/error_overlay';
-import { input } from '../systems/input';
+import { input, type Action } from '../systems/input';
 import { IS_DEV } from '../systems/version';
 import { Database } from '../managers/database';
 import { allSpriteKeys } from '../managers/asset_packs';
@@ -23,6 +23,7 @@ export class BootScene extends Phaser.Scene {
         state: debugState,
         set: setDebug,
         heal: () => hasGame() && gameState().setHp(gameState().hero().id, gameState().hero().maxHp),
+        press: (action: Action, from: number, to: number) => input.script(action, from, to),
       };
     Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
 

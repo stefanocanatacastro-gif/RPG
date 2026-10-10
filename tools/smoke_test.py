@@ -88,31 +88,25 @@ def wait_turn_over(page):
     wait_battle_input(page, "menu", 30000)
 
 
-def key_at(page, lead_ms=12, hold_ms=60, code="KeyZ"):
-    """Presses a key inside the page, timed against the game clock, just before the command's key moment."""
+def key_at(page, lead_ms=12, hold_ms=50, code="KeyZ"):
+    """Presses a button on the first game frame at least `lead_ms` before the command's key moment."""
+    action = {"KeyZ": "confirm", "KeyX": "cancel"}[code]
     page.evaluate(
         f"""(() => {{
           const s = window.__game.scene.getScene('battle');
-          const delay = Math.max(0, s.commands.state.keyAt - performance.now() - {lead_ms});
-          setTimeout(() => {{
-            window.dispatchEvent(new KeyboardEvent('keydown', {{ code: '{code}' }}));
-            setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', {{ code: '{code}' }})), {hold_ms});
-          }}, delay);
-          return delay;
+          const at = s.commands.state.keyAt - {lead_ms};
+          window.__debug.press('{action}', at, at + {hold_ms});
         }})()"""
     )
 
 
-def key_down_in_page(page, code="KeyZ"):
-    page.evaluate(f"window.dispatchEvent(new KeyboardEvent('keydown', {{ code: '{code}' }}))")
-
-
-def key_up_at(page, lead_ms=40, code="KeyZ"):
+def hold_in_page(page, from_delay=40, hold_ms=1000):
+    """Holds Confirm for `hold_ms` of game time, starting shortly after now."""
     page.evaluate(
         f"""(() => {{
           const s = window.__game.scene.getScene('battle');
-          const delay = Math.max(0, s.commands.state.keyAt - performance.now() - {lead_ms});
-          setTimeout(() => window.dispatchEvent(new KeyboardEvent('keyup', {{ code: '{code}' }})), delay);
+          const at = s.time.now + {from_delay};
+          window.__debug.press('confirm', at, at + {hold_ms});
         }})()"""
     )
 
@@ -286,7 +280,7 @@ with sync_playwright() as p:
         except Exception:
             print("    log:", battle_eval(page, "return s.engine.log.slice(-6);"), battle_eval(page, "return s.commands.state;"))
             raise
-        key_at(page, lead_ms=70)
+        key_at(page, lead_ms=80)
         if n == 0:
             page.wait_for_timeout(120)
             page.screenshot(path=f"{out}/21_cmd_stomp.png")
@@ -309,9 +303,8 @@ with sync_playwright() as p:
     choose_move(page, 2)
     page.wait_for_function("(() => { const s = window.__game.scene.getScene('battle'); return s.commands.state && s.commands.state.kind === 'hold_release'; })()")
     page.wait_for_timeout(200)
-    key_down_in_page(page)
+    hold_in_page(page, hold_ms=1010)
     wait_command(page, "hold_release")
-    key_up_at(page, lead_ms=30)
     page.wait_for_timeout(max(0, ms_until_key(page) - 220))
     page.screenshot(path=f"{out}/22_cmd_hold.png")
     wait_turn_over(page)
@@ -322,9 +315,7 @@ with sync_playwright() as p:
     choose_move(page, 2)
     page.wait_for_function("(() => { const s = window.__game.scene.getScene('battle'); return s.commands.state && s.commands.state.kind === 'hold_release'; })()")
     page.wait_for_timeout(200)
-    page.keyboard.down("KeyZ")
-    page.wait_for_timeout(1700)
-    page.keyboard.up("KeyZ")
+    hold_in_page(page, hold_ms=1700)
     wait_turn_over(page)
     r = last_cmds(page, "body_slam")
     check(r[-1] == "cmd body_slam miss overheld", f"holding too long fizzles ({r[-1]})")
@@ -388,9 +379,9 @@ with sync_playwright() as p:
         return hero_hp, dummy_hp, last
 
     h0 = battle_eval(page, "return s.engine.hero.hp;")
-    h1, d1, g = enemy_attack("KeyZ", lead=60, shot="23_block")
+    h1, d1, g = enemy_attack("KeyZ", lead=90, shot="23_block")
     check(g == "guardcmd block" and h1 == h0, f"Block with A just before the hit takes no damage ({g}, HP {h0}->{h1})")
-    h2, d2, g = enemy_attack("KeyX", lead=32, shot="24_reversal")
+    h2, d2, g = enemy_attack("KeyX", lead=45, shot="24_reversal")
     check(g == "guardcmd reversal" and h2 == h1 and d2 < d1 - 0, f"Reversal with B: no damage and the dummy is hit back ({g}, dummy {d1}->{d2})")
     h3, d3, g = enemy_attack("KeyZ", early=True)
     check(g == "guardcmd none early" and h3 == h2 - 1, f"pressing during the wind-up is too early ({g}, HP {h2}->{h3})")
