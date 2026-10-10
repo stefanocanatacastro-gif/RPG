@@ -2,10 +2,10 @@
 //   x  — left to right along the room
 //   z  — depth: 0 is the front edge of the floor, larger is farther back
 //   y  — height above the floor
-// One unit is 32 px across the screen. The camera looks at the stage from a
-// fixed angle (like TTYD's field camera), so depth is drawn at half scale and
-// nothing is resized — pixel art stays crisp. A screen is 20 units wide, and
-// rooms are a whole number of screens wide.
+// One unit is 32 px across the screen at the front edge of the floor. The
+// camera looks at the stage in perspective (like TTYD's field camera): farther
+// back, things are smaller and closer to the middle of the screen. A screen is
+// 20 units wide, and rooms are a whole number of screens wide.
 //
 // A room's floor is a convex outline in the x–z plane: a rectangle by default,
 // or any convex shape such as an octagon. Walls run along its edges, and gates
@@ -164,17 +164,81 @@ function constrain(shape: RoomShape, b: { x: number; z: number; r: number }): vo
 }
 
 // ── Projection and drawing order ──────────────────────────────────────
+//
+// A perspective camera, like TTYD's: things farther back are drawn smaller
+// and pulled toward the middle of the screen, so floors converge, side walls
+// show, and the near parts of a room slide past faster than the far parts as
+// the camera scrolls.
+//
+//   s(z)  = 1 / (1 + k·z)                 size at depth z (1 at the front edge)
+//   x_px  = cx·U + (x − cx)·U·s           cx = the world x at the screen centre
+//   y_px  = H0 + (F − H0)·s − y·U·s       H0 = the horizon line
+//
+// F − H0 = U·depthScale / k, so right at the front edge depth still climbs the
+// screen at the old half-scale rate. At the front (z = 0) nothing changes:
+// sizes and positions there are exactly what they were before perspective.
+// k = world.perspective; 0 gives the old flat projection.
 
-/** World position → pixel position in the room's drawing space (before camera scroll). */
-export function project(p: Vec3): { x: number; y: number } {
+const K = world.perspective;
+const F = world.floorFrontY;
+const HORIZON_SPAN = K > 0 ? (U * world.depthScale) / K : 0;
+
+/** How large something at depth z is drawn (1 at the front edge, smaller farther back). */
+export function depthScale(z: number): number {
+  return K > 0 ? 1 / (1 + K * z) : 1;
+}
+
+/** depthScale snapped to steps so sprites shrink in a few clean sizes instead of shimmering. */
+export function spriteScale(z: number): number {
+  const step = world.spriteScaleStep;
+  return Math.max(step, Math.round(depthScale(z) / step) * step);
+}
+
+/**
+ * World position → pixel position in the room's drawing space (before camera
+ * scroll). cx is the world x the camera is centred on; `s` is the draw scale there.
+ */
+export function project(p: Vec3, cx: number): { x: number; y: number; s: number } {
+  if (K <= 0) {
+    return {
+      x: Math.round(p.x * U),
+      y: Math.round(F - p.z * U * world.depthScale - p.y * U),
+      s: 1,
+    };
+  }
+  const s = depthScale(p.z);
   return {
-    x: Math.round(p.x * U),
-    y: Math.round(world.floorFrontY - p.z * U * world.depthScale - p.y * U),
+    x: Math.round(cx * U + (p.x - cx) * U * s),
+    y: Math.round(F - HORIZON_SPAN + HORIZON_SPAN * s - p.y * U * s),
+    s,
   };
 }
 
-/** Screen pixels per unit of depth (for drawing floors and block tops). */
-export const DEPTH_PX = U * world.depthScale;
+/** The same projection without rounding, for drawing smooth polygon edges. */
+export function projectExact(p: Vec3, cx: number): { x: number; y: number } {
+  if (K <= 0) return { x: p.x * U, y: F - p.z * U * world.depthScale - p.y * U };
+  const s = depthScale(p.z);
+  return { x: cx * U + (p.x - cx) * U * s, y: F - HORIZON_SPAN + HORIZON_SPAN * s - p.y * U * s };
+}
+
+/** The world x at the middle of the screen for a given horizontal camera scroll (pixels). */
+export function cameraCentre(scrollX: number, screenW: number): number {
+  return (scrollX + screenW / 2) / U;
+}
+
+/**
+ * How much of a colour fades into the room's haze at depth z: 0 at the front,
+ * up to world.fogMax at the back wall.
+ */
+export function fogAmount(z: number, roomDepth: number): number {
+  return Math.max(0, Math.min(1, z / Math.max(1, roomDepth))) * world.fogMax;
+}
+
+/** Mixes colour a toward b by t (0–1). */
+export function mixColor(a: number, b: number, t: number): number {
+  const m = (sh: number) => Math.round(((a >> sh) & 255) + (((b >> sh) & 255) - ((a >> sh) & 255)) * t);
+  return (m(16) << 16) | (m(8) << 8) | m(0);
+}
 
 /** Draw order: farther back is drawn first; things on top of a block draw after it. */
 export function sortDepth(z: number, onTopOfFront?: number): number {
@@ -274,7 +338,8 @@ export function roomPixelBounds(
   wallHeight: number,
   screenH: number,
 ): { top: number; bottom: number } {
-  return { top: Math.min(0, world.floorFrontY - depth * DEPTH_PX - wallHeight * U - 24), bottom: screenH };
+  // y doesn't depend on the camera's x, so any cx works here
+  return { top: Math.min(0, project({ x: 0, y: wallHeight, z: depth }, 0).y - 24), bottom: screenH };
 }
 
 /** Vertical camera scroll: keeps the player a little below the middle, clamped to the room. */

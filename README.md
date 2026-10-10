@@ -73,11 +73,13 @@ tools/               build helper and the browser smoke test
 
 ### The world unit
 
-Rooms are 3D spaces drawn from a fixed camera angle, like TTYD's field camera:
+Rooms are 3D spaces seen through a perspective camera, like TTYD's field camera:
 
 - **x** runs left to right, **z** is depth (0 = front edge, larger = farther back), **y** is height.
-- **1 unit = 32 px** across the screen. Depth is drawn at half scale; height at full scale. Nothing is resized, so pixel art stays crisp.
+- **1 unit = 32 px** across the screen at the front edge of the floor. Farther back, everything is drawn smaller and pulled toward the middle of the screen (`perspective` in `world.json`; 0 turns it off). Floors converge, side walls show, and near things slide past faster than far ones as the camera scrolls.
+- **Sprites shrink with depth in clean steps** (`spriteScaleStep`, 1/16) so pixel art doesn't shimmer as characters walk back and forth.
 - **A screen is 20 units wide.** Rooms are a whole number of screens wide and as deep as needed; the camera scrolls on both axes.
+- **Depth cues** set per room: things fade into the room's haze toward the back (`fog`, strength `fogMax`), `lights` make pools and shafts of light on the floor that also lift characters out of the haze, and `foreground` silhouettes (pillars, crowd, railings) sit between the camera and the room and turn see-through when the player walks behind them. The backdrop has three layers scrolling at different speeds.
 - A room's floor is any **convex outline**: a rectangle, an octagon from a single corner-cut number, or a list of points. Walls, cage fences, the stage lip and gates follow the outline.
 - Blocks (crates, steps, platforms, the ring) have width, depth and height in units. Anything up to 0.3 units high is climbed by walking; a jump reaches about 1.6 units.
 

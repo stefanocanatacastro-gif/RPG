@@ -20,8 +20,12 @@ import { Database } from '../managers/database';
 import {
   WORLD,
   U,
-  DEPTH_PX,
   project,
+  spriteScale,
+  depthScale,
+  cameraCentre,
+  fogAmount,
+  mixColor,
   moveBody,
   groundAt,
   sortDepth,
@@ -35,7 +39,7 @@ import {
   type Body,
   type RoomShape,
 } from '../field/world';
-import { drawRoom } from '../field/room_view';
+import { drawRoom, type RoomView } from '../field/room_view';
 import { buildShape } from '../field/room_shape';
 import type { RoomDef, RoomExit } from '../field/room_types';
 import rooms from '../data/rooms/test_rooms.json';
@@ -47,6 +51,8 @@ interface Actor {
   body: Body;
   sprite: Phaser.GameObjects.Sprite;
   shadow: Phaser.GameObjects.Ellipse;
+  /** Horizontal squash for the paper-flip turn (1 = flat to the camera). */
+  squash: number;
 }
 
 interface FieldEnemy extends Actor {
@@ -75,6 +81,9 @@ export class FieldTestScene extends Phaser.Scene {
   private camX = 0;
   private camY = 0;
   private bounds = { top: 0, bottom: H };
+  private view!: RoomView;
+  /** World x at the middle of the screen, for the perspective projection. */
+  private cx = 0;
   private exits: RoomExit[] = [];
 
   constructor() {
@@ -94,6 +103,7 @@ export class FieldTestScene extends Phaser.Scene {
     this.exits = built.exits;
     const width = this.shape.width;
     const view = drawRoom(this, this.room, this.shape);
+    this.view = view;
     this.bounds = view.bounds;
     this.cameras.main.setBounds(0, view.bounds.top, width * U, view.bounds.bottom - view.bounds.top);
 
@@ -102,8 +112,12 @@ export class FieldTestScene extends Phaser.Scene {
     this.buildHud();
 
     this.camX = cameraX(this.player.body.x, width, W);
-    this.camY = cameraY(project(this.player.body).y, this.bounds, H);
+    this.camY = cameraY(project(this.player.body, 0).y, this.bounds, H);
     this.cameras.main.setScroll(Math.round(this.camX), Math.round(this.camY));
+    this.cx = cameraCentre(Math.round(this.camX), W);
+    this.place(this.player);
+    for (const e of this.enemies) this.place(e);
+    this.view.update(this.cx, this.time.now);
 
     this.debugGfx = this.add.graphics().setDepth(900000);
     this.events.on(Phaser.Scenes.Events.WAKE, (_sys: unknown, end: BattleEnd) => this.onBattleEnd(end));
@@ -115,23 +129,29 @@ export class FieldTestScene extends Phaser.Scene {
     const body: Body = { x, y, z, vy: 0, r: WORLD.actorRadius, grounded: true };
     const shadow = this.add.ellipse(0, 0, 30, 8, 0x000000, 0.35);
     const sprite = this.add.sprite(0, 0, texture, frame).setOrigin(0.5, 1);
-    const a = { body, sprite, shadow };
-    this.place(a);
-    return a;
+    return { body, sprite, shadow, squash: 1 };
   }
 
-  /** Puts an actor's sprite and shadow where its 3D position projects to. */
+  /**
+   * Puts an actor's sprite and shadow where its 3D position projects to:
+   * smaller farther back, faded into the room's haze unless standing in light.
+   */
   private place(a: Actor): void {
-    const p = project(a.body);
-    a.sprite.setPosition(p.x, p.y);
+    const p = project(a.body, this.cx);
+    const size = spriteScale(a.body.z);
+    a.sprite.setPosition(p.x, p.y).setScale(size * a.squash, size);
+    // tinting multiplies, so bright sprites take a lighter dose than the floor to match it
+    const haze =
+      0.6 * fogAmount(a.body.z, this.room.depth) * (1 - this.view.lightAt(a.body.x, a.body.z) * 0.8);
+    a.sprite.setTint(mixColor(0xffffff, this.view.fog, haze));
     const ground = groundAt(this.shape, a.body.x, a.body.z, a.body.r);
-    const gp = project({ x: a.body.x, y: ground.y, z: a.body.z });
+    const gp = project({ x: a.body.x, y: ground.y, z: a.body.z }, this.cx);
     const lift = Math.max(0, a.body.y - ground.y);
     const s = Math.max(0.45, 1 - lift * 0.25);
     a.shadow
       .setPosition(gp.x, gp.y)
-      .setScale(s)
-      .setAlpha(0.35 * s + 0.1);
+      .setScale(s * depthScale(a.body.z))
+      .setAlpha(0.45 * s + 0.1);
     // standing on (or above) a block: draw after that block
     const d = ground.block ? depthOnBlock(ground.block, a.body.z) : sortDepth(a.body.z);
     a.sprite.setDepth(d + 2);
@@ -296,6 +316,13 @@ export class FieldTestScene extends Phaser.Scene {
     }
     moveBody(this.shape, b, dx, dz, dt);
 
+    // camera follows sideways and into the depth, eased, on whole pixels;
+    // done before placing anything, since the perspective depends on it
+    this.camX += (cameraX(b.x, this.shape.width, W) - this.camX) * 0.15;
+    this.camY += (cameraY(project(b, 0).y, this.bounds, H) - this.camY) * 0.12;
+    this.cameras.main.setScroll(Math.round(this.camX), Math.round(this.camY));
+    this.cx = cameraCentre(Math.round(this.camX), W);
+
     if (x !== 0 && !busy) {
       const f: Facing = x < 0 ? 'left' : 'right';
       if (f !== this.facing) this.paperFlip(f);
@@ -318,25 +345,22 @@ export class FieldTestScene extends Phaser.Scene {
     for (const e of this.enemies) this.updateEnemy(e, dt);
     this.checkTouches();
 
-    // camera follows sideways and into the depth, eased, on whole pixels
-    this.camX += (cameraX(b.x, this.shape.width, W) - this.camX) * 0.15;
-    this.camY += (cameraY(project(b).y, this.bounds, H) - this.camY) * 0.12;
-    this.cameras.main.setScroll(Math.round(this.camX), Math.round(this.camY));
-
+    this.view.update(this.cx, this.time.now, this.player.sprite.x);
     this.drawDebug();
   }
 
   /** TTYD-style turn: squash to a sliver, flip, unsquash. */
   private paperFlip(f: Facing): void {
     this.facing = f;
-    const s = this.player.sprite;
+    const a = this.player;
+    this.tweens.killTweensOf(a);
     this.tweens.add({
-      targets: s,
-      scaleX: 0.1,
+      targets: a,
+      squash: 0.1,
       duration: 60,
       yoyo: true,
-      onYoyo: () => s.setFlipX(f === 'left'),
-      onComplete: () => s.setScale(1),
+      onYoyo: () => a.sprite.setFlipX(f === 'left'),
+      onComplete: () => (a.squash = 1),
     });
   }
 
@@ -360,7 +384,7 @@ export class FieldTestScene extends Phaser.Scene {
   }
 
   private emote(s: Phaser.GameObjects.Sprite, mark: '!' | '?'): void {
-    const bang = pixelText(this, s.x, s.y - s.height - 20, mark, 16, css(UI.spark)).setDepth(950000);
+    const bang = pixelText(this, s.x, s.y - s.displayHeight - 20, mark, 16, css(UI.spark)).setDepth(950000);
     this.tweens.add({
       targets: bang,
       y: bang.y - 6,
@@ -410,27 +434,32 @@ export class FieldTestScene extends Phaser.Scene {
     g.clear();
     if (!debugState.hitboxes) return;
     const foot = (b: Body, color: number) => {
-      const a = project({ x: b.x - b.r, y: b.y, z: b.z + b.r });
-      const c = project({ x: b.x + b.r, y: b.y, z: b.z - b.r });
-      g.lineStyle(1, color).strokeRect(a.x, a.y, c.x - a.x, c.y - a.y);
+      quad(color, b.x - b.r, b.x + b.r, b.z - b.r, b.z + b.r, b.y);
+    };
+    const P = (x: number, y: number, z: number) => project({ x, y, z }, this.cx);
+    const quad = (color: number, x0: number, x1: number, z0: number, z1: number, y: number) => {
+      const pts = [P(x0, y, z0), P(x1, y, z0), P(x1, y, z1), P(x0, y, z1)];
+      g.lineStyle(1, color);
+      pts.forEach((p, i) => {
+        const q = pts[(i + 1) % 4];
+        g.lineBetween(p.x, p.y, q.x, q.y);
+      });
     };
     // the unit grid on the floor
     g.lineStyle(1, 0xffffff, 0.15);
     for (let x = 0; x <= this.shape.width; x++) {
-      const a = project({ x, y: 0, z: 0 });
-      g.lineBetween(a.x, a.y, a.x, a.y - this.shape.depth * DEPTH_PX);
+      const a = P(x, 0, 0);
+      const c = P(x, 0, this.shape.depth);
+      g.lineBetween(a.x, a.y, c.x, c.y);
     }
     for (let z = 0; z <= this.shape.depth; z++) {
-      const a = project({ x: 0, y: 0, z });
-      g.lineBetween(0, a.y, this.shape.width * U, a.y);
+      const a = P(0, 0, z);
+      const c = P(this.shape.width, 0, z);
+      g.lineBetween(a.x, a.y, c.x, c.y);
     }
-    for (const k of this.room.blocks) {
-      const a = project({ x: k.x, y: k.h, z: k.z + k.d });
-      const c = project({ x: k.x + k.w, y: 0, z: k.z });
-      g.lineStyle(1, 0xffb238).strokeRect(a.x, a.y, c.x - a.x, c.y - a.y);
-    }
+    for (const k of this.room.blocks) quad(0xffb238, k.x, k.x + k.w, k.z, k.z + k.d, k.h);
     // the room outline (walls, fences and gates follow it)
-    const pts = outlineOf(this.shape).map(([x, z]) => project({ x, y: 0, z }));
+    const pts = outlineOf(this.shape).map(([x, z]) => P(x, 0, z));
     g.lineStyle(2, 0x5fd0ff, 0.9);
     pts.forEach((p, i) => {
       const q = pts[(i + 1) % pts.length];

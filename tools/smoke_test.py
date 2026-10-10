@@ -449,13 +449,18 @@ with sync_playwright() as p:
     page.screenshot(path=f"{out}/07f_in_ring.png")
     page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 30; s.player.body.z = 27; }")
     page.wait_for_timeout(1200)
-    cam_y = page.evaluate("window.__game.scene.getScene('field_test').cameras.main.scrollY")
-    check(cam_y < -100, f"camera scrolls up at the back of a deep room (scrollY {cam_y})")
+    # in perspective the deep room fits on screen: the player at the back is in view
+    feet = page.evaluate("(() => { const s = window.__game.scene.getScene('field_test'); return s.player.sprite.y - s.cameras.main.scrollY; })()")
+    check(40 < feet < 360, f"the back of a deep room is in view (player's feet at y {feet:.0f})")
     page.screenshot(path=f"{out}/07e_octagon_back.png")
     # out through the gate on the left wall, back to room B
     page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 1.2; s.player.body.z = 15; }")
+    # hold left until the room changes (slow software rendering clamps the time step)
     page.keyboard.down("ArrowLeft")
-    page.wait_for_timeout(500)
+    try:
+        page.wait_for_function("window.__game.scene.getScene('field_test').roomId === 'test_b'", timeout=4000)
+    except Exception:
+        pass
     page.keyboard.up("ArrowLeft")
     page.wait_for_timeout(900)
     room = page.evaluate("window.__game.scene.getScene('field_test').roomId")

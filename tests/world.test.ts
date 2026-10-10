@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   project,
+  spriteScale,
+  depthScale,
+  fogAmount,
+  mixColor,
   moveBody,
   groundAt,
   cameraX,
@@ -31,11 +35,38 @@ function walk(b: Body, dx: number, dz: number, frames: number): void {
 }
 
 describe('world projection', () => {
-  it('puts depth at half scale and height at full scale', () => {
-    const base = project({ x: 2, y: 0, z: 0 });
-    expect(base).toEqual({ x: 2 * U, y: WORLD.floorFrontY });
-    expect(project({ x: 2, y: 0, z: 4 }).y).toBe(WORLD.floorFrontY - 4 * U * 0.5);
-    expect(project({ x: 2, y: 1, z: 0 }).y).toBe(WORLD.floorFrontY - U);
+  it('is unchanged at the front edge: full scale, height at full scale', () => {
+    expect(project({ x: 2, y: 0, z: 0 }, 10)).toEqual({ x: 2 * U, y: WORLD.floorFrontY, s: 1 });
+    expect(project({ x: 2, y: 1, z: 0 }, 10).y).toBe(WORLD.floorFrontY - U);
+  });
+
+  it('draws farther things smaller and closer to the middle of the screen', () => {
+    const cx = 10;
+    const near = project({ x: 2, y: 0, z: 1 }, cx);
+    const far = project({ x: 2, y: 0, z: 8 }, cx);
+    expect(far.s).toBeLessThan(near.s);
+    expect(far.y).toBeLessThan(near.y); // still higher up the screen
+    expect(far.x).toBeGreaterThan(near.x); // pulled toward the centre (x = 10)
+    // a point right at the camera centre doesn't drift sideways with depth
+    expect(project({ x: cx, y: 0, z: 8 }, cx).x).toBe(cx * U);
+    // near the front, depth still climbs at about half scale
+    expect(WORLD.floorFrontY - project({ x: 2, y: 0, z: 0.25 }, cx).y).toBeCloseTo(0.25 * U * 0.5, 0);
+  });
+
+  it('shrinks sprites in clean steps and never to nothing', () => {
+    expect(spriteScale(0)).toBe(1);
+    const s = spriteScale(12);
+    expect(s).toBeLessThan(1);
+    expect((s / WORLD.spriteScaleStep) % 1).toBe(0);
+    expect(spriteScale(1e6)).toBeGreaterThan(0);
+    expect(depthScale(20)).toBeLessThan(depthScale(5));
+  });
+
+  it('fades into the haze with depth, up to the limit', () => {
+    expect(fogAmount(0, 8)).toBe(0);
+    expect(fogAmount(8, 8)).toBe(WORLD.fogMax);
+    expect(fogAmount(4, 8)).toBeCloseTo(WORLD.fogMax / 2);
+    expect(mixColor(0x000000, 0xffffff, 0.5)).toBe(0x808080);
   });
 
   it('draws farther things first', () => {
@@ -127,7 +158,7 @@ describe('octagon rooms', () => {
   });
 
   it('scrolls the camera vertically in deep rooms', () => {
-    const bounds = roomPixelBounds(28, 4, 360);
+    const bounds = roomPixelBounds(28, 16, 360); // tall back wall: taller than the screen in perspective
     expect(bounds.top).toBeLessThan(0);
     const front = cameraY(340, bounds, 360);
     const back = cameraY(340 - 27 * 16, bounds, 360);
