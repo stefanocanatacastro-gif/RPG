@@ -169,8 +169,12 @@ with sync_playwright() as p:
 
     # walk right for a moment to prove movement
     x0 = page.evaluate("window.__game.scene.getScene('field_test').player.body.x")
+    # hold right until the player has moved (slow software rendering clamps the time step)
     page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(400)
+    try:
+        page.wait_for_function(f"window.__game.scene.getScene('field_test').player.body.x > {x0 + 1.2}", timeout=4000)
+    except Exception:
+        pass
     page.keyboard.up("ArrowRight")
     x1 = page.evaluate("window.__game.scene.getScene('field_test').player.body.x")
     check(x1 > x0 + 1, f"player walks right in world units ({x0:.1f} -> {x1:.1f})")
@@ -253,7 +257,7 @@ with sync_playwright() as p:
     # precision press: Chop, pressed as the ring lines up
     choose_move(page, 0)
     wait_command(page, "timed_press")
-    key_at(page)
+    key_at(page, lead_ms=30)
     page.wait_for_timeout(max(0, ms_until_key(page) - 380))
     page.screenshot(path=f"{out}/20_cmd_press.png")
     wait_turn_over(page)
