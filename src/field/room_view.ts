@@ -414,7 +414,6 @@ export function drawRoom(scene: Phaser.Scene, room: RoomDef, shape: RoomShape): 
   const gLip = scene.add.graphics().setDepth(-190000);
   const gWalls = scene.add.graphics().setDepth(-150000);
   const gBackPosts = scene.add.graphics().setDepth(-140000);
-  const gBeams = scene.add.graphics().setDepth(700000);
   const gFence = scene.add.graphics().setDepth(800000);
   const gFrontPosts = scene.add.graphics().setDepth(800001);
   const gFore = scene.add.graphics().setDepth(850000);
@@ -428,11 +427,13 @@ export function drawRoom(scene: Phaser.Scene, room: RoomDef, shape: RoomShape): 
     const top = groundAt(shape, lt.x, lt.z, 0.01);
     return top.block ? scene.add.graphics().setDepth(blockDepth(top.block) + 0.5) : null;
   });
+  // each shaft sorts at its light's depth, so anyone in front of it walks over it
+  const beams = lights.map((lt) => scene.add.graphics().setDepth(sortDepth(lt.z)));
 
   let lastCx = Number.NaN;
 
   const drawStatic = (l: Lens) => {
-    for (const g of [gGround, gFloor, gPools, gLip, gWalls, gBackPosts, gBeams, gFence, gFrontPosts])
+    for (const g of [gGround, gFloor, gPools, gLip, gWalls, gBackPosts, gFence, gFrontPosts, ...beams])
       g.clear();
 
     // ground outside the outline (cut corners, beyond the gates)
@@ -585,7 +586,7 @@ export function drawRoom(scene: Phaser.Scene, room: RoomDef, shape: RoomShape): 
     });
 
     // light pools and shafts
-    lights.forEach((lt, i) => drawLight(raisedPools[i] ?? gPools, gBeams, l, lt, shape, room.wallHeight));
+    lights.forEach((lt, i) => drawLight(raisedPools[i] ?? gPools, beams[i], l, lt, shape, room.wallHeight));
 
     for (const { b, g } of blocks) {
       g.clear();
@@ -644,9 +645,11 @@ function drawLight(
   }
   if (!lt.beam) return;
   // a shaft from high above, widening down to the pool
-  const top = wallHeight + 6;
-  const narrow = lt.r * 0.15;
-  const wide = lt.r * 0.85;
+  // a narrow, faint shaft whatever the size of the pool: a wide one swings
+  // across the screen as the perspective shifts and swamps the scene
+  const top = wallHeight + 4;
+  const wide = Math.min(lt.r * 0.6, 1.6);
+  const narrow = wide * 0.2;
   fill(
     beams,
     l,
@@ -657,7 +660,7 @@ function drawLight(
       [lt.x - wide, y, lt.z],
     ],
     color,
-    0.05,
+    0.035,
   );
   fill(
     beams,
@@ -669,7 +672,7 @@ function drawLight(
       [lt.x - wide * 0.55, y, lt.z],
     ],
     color,
-    0.05,
+    0.035,
   );
 }
 
