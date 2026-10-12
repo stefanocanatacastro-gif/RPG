@@ -84,15 +84,21 @@ export class BattleScene extends Phaser.Scene {
     this.inputState = 'busy';
     const gs = gameState();
     const hero = Database.character(gs.hero().id);
+    const formation = start.formationDef ?? Database.formation(start.formation);
     this.engine = new BattleEngine(
       Database,
       hero,
       { hp: gs.hero().hp, maxHp: gs.hero().maxHp },
-      Database.formation(start.formation),
+      formation,
+      start.seed,
     );
+    if (start.hero) {
+      this.engine.hero.attack = start.hero.attack;
+      this.engine.hero.defence = start.hero.defence;
+    }
     this.registry.set('battleSeed', this.engine.rng.seed);
 
-    this.arena = drawStage(this);
+    this.arena = drawStage(this, Database.stage(formation.stage));
     this.uiLayer = this.add.layer().setDepth(1000);
     this.cameras.main.ignore(this.uiLayer);
     this.uiCam = this.cameras.add(0, 0, W, H).setName('ui');

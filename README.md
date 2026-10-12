@@ -11,7 +11,7 @@ It runs in any browser on computer or phone. Every build is a single self-contai
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
 | Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
-| M1 Battle system | In progress: steps 1–3 of 4 done (turns and damage; action commands, Block and Reversal; enemy patterns and results screen), plus the arena and camera overhaul |
+| M1 Battle system | Done for now: turns and damage, action commands, Block and Reversal, enemy patterns, results screen, arena and camera overhaul, battle sandbox. Still to come at M1: the battle HUD's crowd/Hype parts and more input types |
 | M2 Prologue playable | Planned |
 
 The full task list and milestone plan live in the project's *Programming List* doc; the art, audio and story plan in the *Asset Outline* doc.
@@ -119,9 +119,21 @@ The *test_crew* line-up (Bruiser, Goon, Medic) is in the debug menu's battle lis
 
 After a win, the results panel lists who was beaten and their XP, the coins, and the XP bar filling toward the next level (XP to next level = 10 + 5 × (level − 1), in `battle_rules.json`). A level up fully restores HP and Grit. The panel waits for a button press.
 
+## Battle sandbox
+
+Dev hub → *Battle sandbox* is the balancing bench. Build a fight from any enemies (up to 4, front or back row; flyers stay in the air), start from any line-up in `formations.json`, pick the arena look, and set Chispa's HP, attack, defence and Grit, the First Strike, assists (Perfect commands, god mode) and the seed (random, or the last fight's seed to replay it).
+
+- **FIGHT!** plays it. Afterwards the panel shows the result, rounds, damage dealt and taken, how the action commands and guards went, and the seed. The save, the debug switches and Chispa's real stats are put back exactly as they were.
+- **Simulate ×200** fights it 200 times without graphics (`src/battle/simulate.ts`) through the real battle engine. The hero picks the move and target that do the most expected damage, going for healers and charging enemies first; the timing is rolled from a skill level: Perfect, Skilled, Casual or None. It reports the win rate, rounds per win, HP left and damage taken.
+- Hazards are listed but greyed out until they exist (M3).
+
+### Arena looks
+
+`src/data/stages.json` holds the colours for each arena (backdrop, stands, how full they are, barricade, mats, apron, canvas, posts, turnbuckles, ropes, lights). A formation's `stage` picks one: *Grand Arena*, *Harbor Docks* (night, sparse crowd, white ropes) and *Underground Circuit* (dim, yellow ropes, black apron).
+
 ## Testing
 
-- `npm test` runs unit tests for the RNG, EventBus, GameState, the Database validator, the animation builder and the world rules (collision, stairs, jumping, slanted walls, gates, camera).
+- `npm test` runs unit tests for the battle engine, action commands, enemy patterns, levels, the simulator, the RNG, EventBus, GameState, the Database validator, the animation builder and the world rules (collision, stairs, jumping, slanted walls, gates, camera).
 - `npm run test:browser` builds nothing itself: run `npm run build` first. It opens the game headless at desktop and phone sizes and plays through title → dev hub → field → battle → back, the flee grace period, every room and gate, the debug menu, each test screen and the crash screen.
 
 ## Art

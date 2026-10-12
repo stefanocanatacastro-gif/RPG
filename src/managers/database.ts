@@ -9,6 +9,7 @@ import type {
   ItemDef,
   MoveDef,
   MoveStep,
+  StageDef,
   TargetRule,
 } from '../types/data';
 import characters from '../data/characters.json';
@@ -16,6 +17,7 @@ import enemies from '../data/enemies.json';
 import moves from '../data/moves.json';
 import items from '../data/items.json';
 import formations from '../data/formations.json';
+import stages from '../data/stages.json';
 
 export interface Problem {
   file: string;
@@ -74,6 +76,7 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
   checkIds('characters', data.characters);
   checkIds('items', data.items);
   checkIds('formations', data.formations);
+  const stageIds = checkIds('stages', data.stages);
 
   const checkMoveRefs = (file: string, id: string, list: unknown) => {
     if (!Array.isArray(list)) return add(file, id, 'moves must be a list');
@@ -169,6 +172,32 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
         if (!SLOTS.includes(s.slot)) add('formations', f.id, `unknown slot "${s.slot}"`);
       }
     if (!f.stage) add('formations', f.id, 'stage is missing');
+    else if (!stageIds.has(f.stage)) add('formations', f.id, `unknown stage "${f.stage}"`);
+  }
+
+  const COLOUR = /^#[0-9a-f]{6}$/i;
+  const LENGTHS: Record<string, number> = {
+    sky: 5,
+    rows: 7,
+    barricade: 3,
+    mats: 2,
+    apron: 3,
+    canvas: 4,
+    post: 3,
+    buckle: 2,
+    rope: 2,
+  };
+  for (const st of data.stages) {
+    checkString('stages', st.id, 'name', st.name);
+    for (const [field, value] of Object.entries(st)) {
+      if (field === 'id' || field === 'name' || field === 'crowd') continue;
+      const list = Array.isArray(value) ? value : [value];
+      if (list.length === 0 || !list.every((c) => typeof c === 'string' && COLOUR.test(c)))
+        add('stages', st.id, `${field} must be #rrggbb colours`);
+      else if (LENGTHS[field] && list.length !== LENGTHS[field])
+        add('stages', st.id, `${field} needs ${LENGTHS[field]} colours`);
+    }
+    if (!isNum(st.crowd) || st.crowd < 0 || st.crowd > 1) add('stages', st.id, 'crowd must be 0–1');
   }
 
   return problems;
@@ -182,6 +211,7 @@ const DATA: GameData = {
   moves: moves as MoveDef[],
   items: items as ItemDef[],
   formations: formations as FormationDef[],
+  stages: stages as StageDef[],
 };
 
 function index<T extends { id: string }>(list: T[]): Map<string, T> {
@@ -194,6 +224,7 @@ const maps = {
   moves: index(DATA.moves),
   items: index(DATA.items),
   formations: index(DATA.formations),
+  stages: index(DATA.stages),
 };
 
 let lastProblems: Problem[] = [];
@@ -217,6 +248,7 @@ export const Database = {
   move: (id: string) => lookup(maps.moves, 'move', id),
   item: (id: string) => lookup(maps.items, 'item', id),
   formation: (id: string) => lookup(maps.formations, 'formation', id),
+  stage: (id: string) => lookup(maps.stages, 'stage', id),
   counts: () => ({
     characters: DATA.characters.length,
     enemies: DATA.enemies.length,

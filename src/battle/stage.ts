@@ -11,6 +11,7 @@
 // pixel art is never resized by the perspective.
 
 import Phaser from 'phaser';
+import type { StageDef } from '../types/data';
 
 export const ARENA = {
   width: 960,
@@ -96,21 +97,43 @@ export interface Arena {
   cheer(strength?: number): void;
 }
 
-const CROWD_SHIRTS = [0x3a2d50, 0x47375f, 0x2e2441, 0x55406e, 0x5e1422, 0x2a4fb8, 0x6b5f7c];
 const CROWD_SKIN = [0x8a6a5a, 0x6e5040, 0xa07a62, 0x5a4034];
 
-export function drawStage(scene: Phaser.Scene): Arena {
+const hex = (c: string): number => parseInt(c.replace('#', ''), 16);
+
+/** A stage skin's colours as numbers. */
+function palette(st: StageDef) {
+  const n = (list: string[]) => list.map(hex);
+  return {
+    sky: n(st.sky),
+    rows: n(st.rows),
+    shirts: n(st.shirts),
+    barricade: n(st.barricade),
+    mats: n(st.mats),
+    apron: n(st.apron),
+    emblem: hex(st.emblem),
+    canvas: n(st.canvas),
+    post: n(st.post),
+    buckle: n(st.buckle),
+    rope: n(st.rope),
+    truss: hex(st.truss),
+    light: hex(st.light),
+  };
+}
+
+export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
   const { width: AW, height: AH } = ARENA;
+  const C = palette(stage);
   const rand = rng(1931);
   const heads: { x: number; y: number; s: number }[] = [];
 
   // dithered backdrop: dark at the rafters, a little warmer behind the crowd
-  const key = '__arena_bg';
+  const key = `__arena_bg_${stage.id}`;
   if (!scene.textures.exists(key)) {
     const tex = scene.textures.createCanvas(key, AW, AH)!;
     const ctx = tex.getContext();
     const img = ctx.createImageData(AW, AH);
-    const ramp = [0x05040a, 0x0a0812, 0x110c1c, 0x181127, 0x201631];
+    const ramp = C.sky;
     for (let y = 0; y < AH; y++) {
       const pos = Math.min(1, y / 260) * (ramp.length - 1);
       const lo = Math.min(Math.floor(pos), ramp.length - 2);
@@ -126,7 +149,7 @@ export function drawStage(scene: Phaser.Scene): Arena {
     }
     ctx.putImageData(img, 0, 0);
     // arena floor, far beyond the ring in every direction
-    ctx.fillStyle = '#120e19';
+    ctx.fillStyle = stage.floor;
     ctx.beginPath();
     [P(-30, 0, 3.6), P(30, 0, 3.6), P(30, 0, 24), P(-30, 0, 24)].forEach((pt, i) =>
       i ? ctx.lineTo(Math.round(pt.x), Math.round(pt.y)) : ctx.moveTo(Math.round(pt.x), Math.round(pt.y)),
@@ -137,14 +160,16 @@ export function drawStage(scene: Phaser.Scene): Arena {
   scene.add.image(0, 0, key).setOrigin(0).setDepth(-100);
 
   // ── crowd stands ──
-  const rowColors = [0x1b1526, 0x211a2f, 0x281f38, 0x2f2541, 0x362a4a, 0x3c2f52, 0x42345a];
+  const rowColors = C.rows;
+  // fewer people in smaller venues: empty seats are skipped
+  const seated = () => rand() < stage.crowd;
   const drawHead = (g: Phaser.GameObjects.Graphics, X: number, Y: number, Z: number) => {
     const s = unitPx(Z);
     const p = P(X, Y, Z);
     const hw = Math.max(2, Math.round(0.34 * s));
     const bodyW = Math.max(3, Math.round(0.55 * s));
     const bob = Math.round(rand() * 0.08 * s);
-    g.fillStyle(shade(CROWD_SHIRTS[Math.floor(rand() * CROWD_SHIRTS.length)], 0.42 + Z / 90));
+    g.fillStyle(shade(C.shirts[Math.floor(rand() * C.shirts.length)], 0.42 + Z / 90));
     g.fillRect(Math.round(p.x - bodyW / 2), Math.round(p.y - 0.35 * s) - bob, bodyW, Math.round(0.4 * s));
     g.fillStyle(shade(CROWD_SKIN[Math.floor(rand() * CROWD_SKIN.length)], 0.4 + Z / 100));
     g.fillRect(Math.round(p.x - hw / 2), Math.round(p.y - 0.35 * s - hw) - bob, hw, hw);
@@ -183,7 +208,7 @@ export function drawStage(scene: Phaser.Scene): Arena {
       P(26, Y, Z + 1.15),
       P(-26, Y, Z + 1.15),
     ]);
-    for (let X = -25; X < 25; X += 0.5 + rand() * 0.15) drawHead(back, X, Y, Z + 0.4);
+    for (let X = -25; X < 25; X += 0.5 + rand() * 0.15) if (seated()) drawHead(back, X, Y, Z + 0.4);
   }
   // side stands: rows rising away from the ring to the left and right
   for (const dir of [-1, 1]) {
@@ -198,7 +223,7 @@ export function drawStage(scene: Phaser.Scene): Arena {
         P(X + dir * 1.05, Y, 16.2),
         P(X + dir * 1.05, Y, 4),
       ]);
-      for (let Z = 15.8; Z > 4.4; Z -= 0.55 + rand() * 0.15) drawHead(g, X + dir * 0.45, Y, Z);
+      for (let Z = 15.8; Z > 4.4; Z -= 0.55 + rand() * 0.15) if (seated()) drawHead(g, X + dir * 0.45, Y, Z);
     }
   }
 
@@ -209,9 +234,9 @@ export function drawStage(scene: Phaser.Scene): Arena {
   const bx = 5.6;
   const bz0 = 4.2;
   const bz1 = 15.6;
-  quad(rail, 0x2b2338, [P(-bx, 0, bz1), P(bx, 0, bz1), P(bx, 0.55, bz1), P(-bx, 0.55, bz1)]);
+  quad(rail, C.barricade[0], [P(-bx, 0, bz1), P(bx, 0, bz1), P(bx, 0.55, bz1), P(-bx, 0.55, bz1)]);
   for (const dir of [-1, 1]) {
-    quad(rail, 0x231c2e, [
+    quad(rail, C.barricade[1], [
       P(dir * bx, 0, bz0),
       P(dir * bx, 0, bz1),
       P(dir * bx, 0.55, bz1),
@@ -219,15 +244,15 @@ export function drawStage(scene: Phaser.Scene): Arena {
     ]);
     const a = P(dir * bx, 0.55, bz0);
     const b = P(dir * bx, 0.55, bz1);
-    rail.lineStyle(2, 0x5b5068).lineBetween(a.x, a.y, b.x, b.y);
+    rail.lineStyle(2, C.barricade[2]).lineBetween(a.x, a.y, b.x, b.y);
   }
   const ra = P(-bx, 0.55, bz1);
   const rb = P(bx, 0.55, bz1);
-  rail.lineStyle(2, 0x5b5068).lineBetween(ra.x, ra.y, rb.x, rb.y);
+  rail.lineStyle(2, C.barricade[2]).lineBetween(ra.x, ra.y, rb.x, rb.y);
 
   // ringside mats
-  quad(rail, 0x1d2a4a, [P(-5.2, 0, 4.6), P(5.2, 0, 4.6), P(5.2, 0, 15.2), P(-5.2, 0, 15.2)]);
-  quad(rail, 0x23345a, [P(-4.6, 0, 5.2), P(4.6, 0, 5.2), P(4.6, 0, 14.6), P(-4.6, 0, 14.6)]);
+  quad(rail, C.mats[0], [P(-5.2, 0, 4.6), P(5.2, 0, 4.6), P(5.2, 0, 15.2), P(-5.2, 0, 15.2)]);
+  quad(rail, C.mats[1], [P(-4.6, 0, 5.2), P(4.6, 0, 5.2), P(4.6, 0, 14.6), P(-4.6, 0, 14.6)]);
 
   // ── the ring ──
   const { half: rh, near: rn, far: rf } = ARENA.ring;
@@ -245,19 +270,19 @@ export function drawStage(scene: Phaser.Scene): Arena {
     0.35,
   );
   // apron (the skirt on the near face) with panels
-  quad(ring, 0x8f1f33, [P(-rh, 0, rn), P(rh, 0, rn), P(rh, ringTop, rn), P(-rh, ringTop, rn)]);
-  quad(ring, 0x5e1422, [P(-rh, 0, rn), P(rh, 0, rn), P(rh, 0.12, rn), P(-rh, 0.12, rn)]);
+  quad(ring, C.apron[0], [P(-rh, 0, rn), P(rh, 0, rn), P(rh, ringTop, rn), P(-rh, ringTop, rn)]);
+  quad(ring, C.apron[1], [P(-rh, 0, rn), P(rh, 0, rn), P(rh, 0.12, rn), P(-rh, 0.12, rn)]);
   for (let X = -rh + 1.2; X < rh; X += 1.2) {
     const a = P(X, 0.12, rn);
     const b = P(X, ringTop, rn);
-    ring.lineStyle(1, 0x5e1422).lineBetween(a.x, a.y, b.x, b.y);
+    ring.lineStyle(1, C.apron[1]).lineBetween(a.x, a.y, b.x, b.y);
   }
   const apronTop0 = P(-rh, ringTop, rn);
   const apronTop1 = P(rh, ringTop, rn);
-  ring.lineStyle(2, 0xb02a40).lineBetween(apronTop0.x, apronTop0.y + 1, apronTop1.x, apronTop1.y + 1);
+  ring.lineStyle(2, C.apron[2]).lineBetween(apronTop0.x, apronTop0.y + 1, apronTop1.x, apronTop1.y + 1);
   // gold spark emblem on the apron
   const em = (dx: number, dy: number) => P(dx * 0.42, 0.5 + dy * 0.42, rn - 0.01);
-  quad(ring, 0xf2c14e, [
+  quad(ring, C.emblem, [
     em(0.1, 1),
     em(-0.6, -0.05),
     em(-0.05, -0.05),
@@ -267,8 +292,8 @@ export function drawStage(scene: Phaser.Scene): Arena {
     em(0.45, 1),
   ]);
   // canvas
-  quad(ring, 0xc9b994, [P(-rh, ringTop, rn), P(rh, ringTop, rn), P(rh, ringTop, rf), P(-rh, ringTop, rf)]);
-  quad(ring, 0xd9c9a8, [
+  quad(ring, C.canvas[0], [P(-rh, ringTop, rn), P(rh, ringTop, rn), P(rh, ringTop, rf), P(-rh, ringTop, rf)]);
+  quad(ring, C.canvas[1], [
     P(-rh + 0.25, ringTop, rn + 0.25),
     P(rh - 0.25, ringTop, rn + 0.25),
     P(rh - 0.25, ringTop, rf - 0.25),
@@ -280,12 +305,12 @@ export function drawStage(scene: Phaser.Scene): Arena {
     const a = (i / 24) * Math.PI * 2;
     pool.push(P(Math.cos(a) * 2.6, ringTop, ARENA.fighterZ + 0.2 + Math.sin(a) * 2.2));
   }
-  quad(ring, 0xefe3c6, pool, 0.55);
+  quad(ring, C.canvas[2], pool, 0.55);
   // canvas logo, flat on the mat
   const logo = (dx: number, dz: number) => P(dx * 0.9, ringTop, ARENA.fighterZ + 1.6 + dz * 0.9);
   quad(
     ring,
-    0xb3a183,
+    C.canvas[3],
     [
       logo(0.15, 1),
       logo(-0.7, -0.1),
@@ -307,8 +332,8 @@ export function drawStage(scene: Phaser.Scene): Arena {
     const w = Math.max(4, Math.round(0.18 * s));
     const b = P(X, ringTop, Z);
     const t = P(X, ringTop + postH, Z);
-    g.fillStyle(0x5b5068).fillRect(Math.round(b.x - w / 2), Math.round(t.y), w, Math.round(b.y - t.y));
-    g.fillStyle(0x8a7f99).fillRect(
+    g.fillStyle(C.post[0]).fillRect(Math.round(b.x - w / 2), Math.round(t.y), w, Math.round(b.y - t.y));
+    g.fillStyle(C.post[1]).fillRect(
       Math.round(b.x - w / 2),
       Math.round(t.y),
       Math.max(1, Math.round(w / 3)),
@@ -318,23 +343,23 @@ export function drawStage(scene: Phaser.Scene): Arena {
       const p = P(X, ringTop + h, Z);
       const pw = Math.round(w * 1.9);
       const ph = Math.max(4, Math.round(0.22 * s));
-      g.fillStyle(0x2a4fb8).fillRect(Math.round(p.x - pw / 2), Math.round(p.y - ph / 2), pw, ph);
-      g.fillStyle(0x4c78e0).fillRect(
+      g.fillStyle(C.buckle[0]).fillRect(Math.round(p.x - pw / 2), Math.round(p.y - ph / 2), pw, ph);
+      g.fillStyle(C.buckle[1]).fillRect(
         Math.round(p.x - pw / 2),
         Math.round(p.y - ph / 2),
         pw,
         Math.max(1, Math.round(ph / 3)),
       );
     }
-    g.fillStyle(0xa79cb6).fillRect(Math.round(b.x - w / 2 - 1), Math.round(t.y) - 2, w + 2, 3);
+    g.fillStyle(C.post[2]).fillRect(Math.round(b.x - w / 2 - 1), Math.round(t.y) - 2, w + 2, 3);
   };
   const rope = (g: Phaser.GameObjects.Graphics, a: readonly number[], b: readonly number[]) => {
     for (const h of ropeHeights) {
       const p = P(a[0], ringTop + h, a[1]);
       const q = P(b[0], ringTop + h, b[1]);
       const w = Math.max(2, Math.round(0.06 * unitPx(Math.min(a[1], b[1]))));
-      g.lineStyle(w, 0xb02a40).lineBetween(p.x, p.y, q.x, q.y);
-      g.lineStyle(1, 0xff6b7d).lineBetween(p.x, p.y - Math.floor(w / 2), q.x, q.y - Math.floor(w / 2));
+      g.lineStyle(w, C.rope[0]).lineBetween(p.x, p.y, q.x, q.y);
+      g.lineStyle(1, C.rope[1]).lineBetween(p.x, p.y - Math.floor(w / 2), q.x, q.y - Math.floor(w / 2));
     }
   };
   const backRig = top;
@@ -366,20 +391,20 @@ export function drawStage(scene: Phaser.Scene): Arena {
   const trussY = 5.6;
   const ta = P(-9, trussY, trussZ);
   const tb = P(9, trussY, trussZ);
-  rig.fillStyle(0x2b2338).fillRect(Math.round(ta.x), Math.round(ta.y), Math.round(tb.x - ta.x), 4);
+  rig.fillStyle(C.truss).fillRect(Math.round(ta.x), Math.round(ta.y), Math.round(tb.x - ta.x), 4);
   rig.fillRect(Math.round(ta.x), Math.round(ta.y) + 12, Math.round(tb.x - ta.x), 4);
   for (let x = ta.x; x < tb.x; x += 12) rig.fillRect(Math.round(x), Math.round(ta.y) + 4, 2, 8);
   const lamps = [-6, -3.4, 3.4, 6].map((X) => P(X, trussY - 0.35, trussZ));
   for (const l of lamps) {
     rig.fillStyle(0x14101b).fillRect(Math.round(l.x) - 6, Math.round(l.y) + 2, 12, 10);
-    rig.fillStyle(0xfff1c4).fillRect(Math.round(l.x) - 4, Math.round(l.y) + 11, 8, 2);
+    rig.fillStyle(C.light).fillRect(Math.round(l.x) - 4, Math.round(l.y) + 11, 8, 2);
   }
   // spotlight cones, baked into one image that sways gently (live shapes cost a lot every frame)
   const beamsG = scene.add.graphics().setDepth(-70);
   lamps.forEach((l, i) => {
     const c = P(i < 2 ? -1.2 : 1.2, ringTop, ARENA.fighterZ);
     const spread = 1.5 * unitPx(ARENA.fighterZ);
-    beamsG.fillStyle(0xfff1c4, 0.045);
+    beamsG.fillStyle(C.light, 0.045);
     beamsG.fillTriangle(l.x - 3, l.y + 12, l.x + 3, l.y + 12, c.x + spread, c.y);
     beamsG.fillTriangle(l.x - 3, l.y + 12, c.x - spread, c.y, c.x + spread, c.y);
   });

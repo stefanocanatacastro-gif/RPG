@@ -95,5 +95,10 @@
   "battle.results.next": "{xp}/{need} XP to next level",
   "battle.results.levelup": "LEVEL UP!",
   "battle.results.levelup_note": "HP and Grit fully restored",
-  "battle.results.continue": "{button}: continue"
+  "battle.results.continue": "{button}: continue",
+  "stage.arena": "Grand Arena",
+  "stage.dockside": "Harbor Docks",
+  "stage.underground": "Underground Circuit",
+  "hub.sandbox": "Battle sandbox",
+  "hub.sandbox.desc": "Build any fight, play it or simulate it 200 times. Your save is never touched."
 }

@@ -6,6 +6,7 @@ import Phaser from 'phaser';
 import type { TransitionScene } from '../scenes/transition';
 import { bus, type BattleResult } from './event_bus';
 import { gameState, hasGame, type Facing } from './game_state';
+import type { FormationDef } from '../types/data';
 
 export interface RoomEntry {
   room: string;
@@ -23,6 +24,12 @@ export interface BattleStart {
   returnTo: string;
   /** Id of the field enemy that started it, so the field can remove it on a win. */
   fieldEnemyId?: string;
+  /** Battle sandbox: a line-up built on the spot instead of one from formations.json. */
+  formationDef?: FormationDef;
+  /** Fixed seed, to replay a fight exactly. */
+  seed?: number;
+  /** Battle sandbox: the hero's attack and defence for this fight. */
+  hero?: { attack: number; defence: number };
 }
 
 export interface BattleEnd {

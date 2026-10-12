@@ -95,5 +95,10 @@
   "battle.results.next": "{xp}/{need} XP al siguiente nivel",
   "battle.results.levelup": "¡SUBES DE NIVEL!",
   "battle.results.levelup_note": "PV y Garra restaurados",
-  "battle.results.continue": "{button}: continuar"
+  "battle.results.continue": "{button}: continuar",
+  "stage.arena": "Gran Arena",
+  "stage.dockside": "Muelles del Puerto",
+  "stage.underground": "Circuito Clandestino",
+  "hub.sandbox": "Sandbox de combate",
+  "hub.sandbox.desc": "Arma cualquier pelea, juégala o simúlala 200 veces. Tu partida no se toca."
 }

@@ -160,13 +160,13 @@ describe('enemy AI patterns', () => {
     b.beginHeroAction();
     b.defend();
     b.endHeroAction();
-    let p;
-    while ((p = b.nextEnemyPlan())) b.endEnemyAction();
+    while (b.nextEnemyPlan()) b.endEnemyAction();
     expect(bruiser(b).charging).toBeTruthy();
     expect(b.breakCharge(bruiser(b).id)).toBe(true);
     b.beginHeroAction();
     b.endHeroAction();
     const plans = [];
+    let p;
     while ((p = b.nextEnemyPlan())) {
       plans.push(p);
       b.endEnemyAction();

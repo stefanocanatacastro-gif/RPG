@@ -110,10 +110,39 @@ export interface FormationDef {
   hazards?: string[];
 }
 
+/** A look for the battle arena: colours for every part, and how full the stands are. */
+export interface StageDef {
+  id: string;
+  name: string;
+  /** Backdrop gradient, rafters to stands (5 colours). */
+  sky: string[];
+  floor: string;
+  /** Stand rows, front to back (7). */
+  rows: string[];
+  shirts: string[];
+  /** Share of seats filled, 0–1. */
+  crowd: number;
+  /** Front, sides, top rail. */
+  barricade: string[];
+  mats: string[];
+  /** Apron face, shadow, top edge. */
+  apron: string[];
+  emblem: string;
+  /** Canvas edge, canvas, spotlight pool, logo. */
+  canvas: string[];
+  /** Post, highlight, cap. */
+  post: string[];
+  buckle: string[];
+  rope: string[];
+  truss: string;
+  light: string;
+}
+
 export interface GameData {
   characters: CharacterDef[];
   enemies: EnemyDef[];
   moves: MoveDef[];
   items: ItemDef[];
   formations: FormationDef[];
+  stages: StageDef[];
 }

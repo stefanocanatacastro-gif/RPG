@@ -24,6 +24,7 @@ export class BootScene extends Phaser.Scene {
         set: setDebug,
         heal: () => hasGame() && gameState().setHp(gameState().hero().id, gameState().hero().maxHp),
         press: (action: Action, from: number, to: number) => input.script(action, from, to),
+        save: () => (hasGame() ? JSON.stringify(gameState().snapshot()) : null),
       };
     Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
 

@@ -33,6 +33,7 @@ export class DevHubScene extends Phaser.Scene {
 
     const targets: Record<string, string> = {
       field: 'field_test',
+      sandbox: 'battle_sandbox',
       input: 'input_test',
       ui: 'ui_kit',
       anim: 'anim_test',
@@ -42,7 +43,7 @@ export class DevHubScene extends Phaser.Scene {
     const keys = Object.keys(targets);
     const menu = new MenuList(this, 16, 72, {
       width: 360,
-      rows: 6,
+      rows: 7,
       items: keys.map((k) => ({ label: t(`hub.${k}`), value: k, desc: t(`hub.${k}.desc`) })),
       descText: desc,
       cancellable: true,

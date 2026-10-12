@@ -547,8 +547,52 @@ with sync_playwright() as p:
 
     press(page, "Escape")  # back to hub
     wait_scene(page, "dev_hub")
+
+    # ── Battle sandbox ──
+    page.wait_for_timeout(400)
+    press(page, "ArrowDown")
+    press(page, "Enter")
+    wait_scene(page, "battle_sandbox")
+    page.wait_for_timeout(400)
+    page.screenshot(path=f"{out}/15_sandbox.png")
+    sb = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('battle_sandbox'); {js} }})()")
+    press(page, "ArrowDown")  # Enemy 1
+    press(page, "ArrowRight")
+    page.screenshot(path=f"{out}/15b_sandbox_enemy.png")
+    press(page, "ArrowLeft")
+    sb("s.pressRow('Simulate', 'confirm');")
+    page.wait_for_timeout(300)
+    sim = sb("return s.lastSim;")
+    check(sim and sim["runs"] == 200 and sim["wins"] + sim["losses"] + sim["timeouts"] == 200, f"the sandbox simulates 200 fights ({sim and sim['wins']} wins)")
+    page.screenshot(path=f"{out}/16_sandbox_sim.png")
+    # play two goons on the dock stage with a big HP pool, Perfect commands and god mode
+    sb("s.s.preset = 0; s.pressRow('Line-up', 'confirm');")
+    sb("s.pressRow('Stage', 'right'); s.pressRow('Max HP', 'right'); s.pressRow('Assist', 'left');")
+    stage = sb("return s.rows.find(r => r.label === 'Stage').value();")
+    gs_before = page.evaluate("window.__debug.save()")
+    sb("s.pressRow('FIGHT', 'confirm');")
+    wait_scene(page, "battle")
+    wait_battle_input(page, "menu")
+    page.screenshot(path=f"{out}/17_sandbox_battle_{stage.replace(' ', '_')}.png")
+    hp = battle_eval(page, "return [s.engine.hero.hp, s.engine.hero.maxHp];")
+    check(hp == [11, 11], f"the fight uses the sandbox's HP ({hp})")
+    phase = fight(page, out, "18_sandbox")
+    check(phase == "victory", f"the sandbox fight is won ({phase})")
+    wait_scene(page, "battle_sandbox", 10000)
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{out}/19_sandbox_report.png")
+    last = sb("return s.lastFight;")
+    check(last and last["result"] == "win", f"the sandbox reports the fight ({last})")
+    gs_after = page.evaluate("window.__debug.save()")
+    check(gs_before == gs_after, "a sandbox fight leaves the save untouched")
+    flags = page.evaluate("[window.__debug.state.god, window.__debug.state.autoCommands]")
+    check(flags == [False, False], f"the sandbox puts the debug switches back ({flags})")
+    press(page, "x", 300)
+    wait_scene(page, "dev_hub")
+    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
+
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=1
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=2
     ):
         page.wait_for_timeout(400)
         for _ in range(i):
