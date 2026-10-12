@@ -128,3 +128,83 @@ describe('enemy AI', () => {
     expect(shoves).toBeLessThan(28);
   });
 });
+
+import { xpToNext, addXp } from '../src/battle/progression';
+import { GameState, freshSave } from '../src/managers/game_state';
+import { EventBus, type GameEvents } from '../src/managers/event_bus';
+
+describe('enemy AI patterns', () => {
+  const crew = (seed = 5) => new BattleEngine(Database, hero, fresh(), Database.formation('test_crew'), seed);
+  const bruiser = (b: BattleEngine) => b.fighters.find((f) => f.defId === 'ringside_bruiser')!;
+
+  it('the Bruiser winds up on round 1, unleashes it on round 2, winds up again on round 3', () => {
+    const b = crew();
+    b.begin(null);
+    const kinds: string[] = [];
+    for (let round = 1; round <= 3; round++) {
+      b.beginHeroAction();
+      b.defend();
+      b.endHeroAction();
+      let p;
+      while ((p = b.nextEnemyPlan())) {
+        if (p.actor === bruiser(b).id) kinds.push(p.kind);
+        b.endEnemyAction();
+      }
+    }
+    expect(kinds).toEqual(['charge', 'release', 'charge']);
+  });
+
+  it('a broken charge means no lariat next turn', () => {
+    const b = crew();
+    b.begin(null);
+    b.beginHeroAction();
+    b.defend();
+    b.endHeroAction();
+    let p;
+    while ((p = b.nextEnemyPlan())) b.endEnemyAction();
+    expect(bruiser(b).charging).toBeTruthy();
+    expect(b.breakCharge(bruiser(b).id)).toBe(true);
+    b.beginHeroAction();
+    b.endHeroAction();
+    const plans = [];
+    while ((p = b.nextEnemyPlan())) {
+      plans.push(p);
+      b.endEnemyAction();
+    }
+    expect(plans.find((x) => x.actor === bruiser(b).id)?.kind).toBe('attack');
+  });
+
+  it('the Medic heals the most hurt teammate, and only when someone is hurt', () => {
+    const b = crew();
+    b.begin(null);
+    const medic = b.fighters.find((f) => f.defId === 'corner_medic')!;
+    expect(b.chooseEnemyMove(medic)).toBe('goon_shove');
+    const goon = b.fighters.find((f) => f.defId === 'dock_goon')!;
+    goon.hp = 1;
+    bruiser(b).hp = 7;
+    expect(b.lowestAlly(medic)?.id).toBe(goon.id);
+    expect(b.chooseEnemyMove(medic)).toBe('patch_up');
+    expect(b.healFighter(goon.id, 3)).toBe(3);
+  });
+});
+
+describe('levels', () => {
+  it('needs more XP for each level', () => {
+    expect(xpToNext(1)).toBe(10);
+    expect(xpToNext(2)).toBe(15);
+  });
+  it('rolls XP over into levels', () => {
+    expect(addXp(1, 8, 4)).toEqual({ level: 2, xp: 2, levelsGained: 1 });
+    expect(addXp(1, 0, 30)).toEqual({ level: 3, xp: 5, levelsGained: 2 });
+    expect(addXp(1, 0, 3)).toEqual({ level: 1, xp: 3, levelsGained: 0 });
+  });
+  it('a level-up restores HP and Grit', () => {
+    const gs = new GameState(freshSave(hero), new EventBus<GameEvents>());
+    gs.setHp('chispa', 2);
+    gs.setGrit(0);
+    expect(gs.addXp(12)).toBe(1);
+    expect(gs.hero().hp).toBe(hero.hp);
+    expect(gs.data.grit).toBe(gs.data.maxGrit);
+    expect(gs.data.level).toBe(2);
+  });
+});

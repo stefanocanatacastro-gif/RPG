@@ -78,5 +78,22 @@
   "enemy.sparring_dummy": "Muñeco de Práctica",
   "scout.sparring_dummy": "Un muñeco acolchado. Mucha vida y casi no pega. Para practicar el ritmo.",
   "battle.cmd.block": "¡BLOQUEO!",
-  "battle.cmd.reversal": "¡CONTRA!"
+  "battle.cmd.reversal": "¡CONTRA!",
+  "enemy.ringside_bruiser": "Matón de Ringside",
+  "scout.ringside_bruiser": "Prepara un Lariat a la Carrera cada dos rondas. Dale un golpe GENIAL mientras carga para desestabilizarlo.",
+  "enemy.corner_medic": "Médico de Esquina",
+  "scout.corner_medic": "Cura a sus compañeros heridos en vez de pelear. Sácalo primero.",
+  "move.running_lariat": "Lariat a la Carrera",
+  "move.patch_up": "Parche Rápido",
+  "battle.charging": "¡CARGANDO!",
+  "battle.staggered": "¡DESESTABILIZADO!",
+  "battle.charging_tag": "CARGANDO",
+  "battle.results.title": "RESULTADOS",
+  "battle.results.coins": "Monedas",
+  "battle.results.total": "XP total",
+  "battle.results.level": "NV {n}",
+  "battle.results.next": "{xp}/{need} XP al siguiente nivel",
+  "battle.results.levelup": "¡SUBES DE NIVEL!",
+  "battle.results.levelup_note": "PV y Garra restaurados",
+  "battle.results.continue": "{button}: continuar"
 }

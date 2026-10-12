@@ -2,11 +2,41 @@
   "id": "c0_prologue",
   "note": "Prologue, Ringside Harbor. Filled in at M2.",
   "images": [
-    { "key": "spr_pip", "w": 32, "h": 32 },
-    { "key": "spr_c0_dock_goon", "w": 48, "h": 64 },
-    { "key": "spr_c0_spiky_bouncer", "w": 48, "h": 56 },
-    { "key": "spr_c0_gull_flyer", "w": 40, "h": 32 },
-    { "key": "spr_c0_agent_brick", "w": 64, "h": 80 }
+    {
+      "key": "spr_pip",
+      "w": 32,
+      "h": 32
+    },
+    {
+      "key": "spr_c0_dock_goon",
+      "w": 48,
+      "h": 64
+    },
+    {
+      "key": "spr_c0_spiky_bouncer",
+      "w": 48,
+      "h": 56
+    },
+    {
+      "key": "spr_c0_gull_flyer",
+      "w": 40,
+      "h": 32
+    },
+    {
+      "key": "spr_c0_agent_brick",
+      "w": 64,
+      "h": 80
+    },
+    {
+      "key": "spr_c0_ringside_bruiser",
+      "w": 56,
+      "h": 72
+    },
+    {
+      "key": "spr_c0_corner_medic",
+      "w": 40,
+      "h": 60
+    }
   ],
   "audio": []
 }

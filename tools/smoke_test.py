@@ -120,6 +120,11 @@ def fight(page, out, shot_prefix):
         if not active(page, "battle"):
             break
         st = page.evaluate("(() => { const s = window.__game.scene.getScene('battle'); return [s.inputState, s.engine.phase]; })()")
+        if st[0] == "results":
+            page.wait_for_timeout(900)  # let the XP bar fill
+            page.screenshot(path=f"{out}/{shot_prefix}_results.png")
+            press(page, "Enter", 300)
+            continue
         if st[1] in ("victory", "defeat", "fled"):
             if shots == 0:
                 page.wait_for_timeout(500)
@@ -402,6 +407,71 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
+    wait_scene(page, "field_test", 10000)
+    page.wait_for_timeout(300)
+
+    # ── Enemy patterns: the Bruiser winds up and lets go, a GREAT hit staggers him, the Medic heals ──
+    page.evaluate("window.__debug.set('god', true); window.__debug.set('autoCommands', true); window.__debug.heal()")
+    press(page, "F1", 400)
+    pick_debug("battle")
+    press(page, "Enter", 250)
+    pick_debug("test_crew")
+    press(page, "Enter")
+    wait_scene(page, "battle")
+
+    def defend():
+        wait_battle_input(page, "menu", 30000)
+        battle_eval(page, "s.menu.setCursor(s.menu.items.findIndex(i => i.value === 'defend'));")
+        press(page, "Enter", 200)
+
+    def crew_log():
+        return battle_eval(page, "return s.engine.log.slice();")
+
+    defend()  # round 1: the Bruiser starts winding up
+    page.wait_for_function(
+        "window.__game.scene.getScene('battle').engine.log.some(l => l === 'charge e0 running_lariat')", timeout=20000
+    )
+    page.wait_for_timeout(500)
+    page.screenshot(path=f"{out}/25_charge.png")
+    defend()  # round 2: he lets it go
+    page.wait_for_function(
+        "window.__game.scene.getScene('battle').engine.log.some(l => l === 'release e0 running_lariat')", timeout=20000
+    )
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{out}/26_release.png")
+    defend()  # round 3: winding up again
+    wait_battle_input(page, "menu", 30000)
+    charging = battle_eval(page, "return !!s.engine.get('e0').charging;")
+    check(charging, "the Bruiser charges every other round")
+    choose_move(page, 0)  # Chop him while he's charging (Perfect commands: GREAT)
+    page.wait_for_function(
+        "window.__game.scene.getScene('battle').engine.log.some(l => l === 'break e0')", timeout=20000
+    )
+    page.wait_for_timeout(250)
+    page.screenshot(path=f"{out}/27_stagger.png")
+    wait_battle_input(page, "menu", 30000)
+    log = crew_log()
+    check(any(l.startswith("heal e0") for l in log), f"the Medic patches up the hurt Bruiser ({[l for l in log if l.startswith(('heal', 'support'))]})")
+    check(not any(l.startswith("release e0") for l in log[log.index("break e0"):]), "a staggered Bruiser never releases that charge")
+    # take the Medic out first: Elbow Drop reaches the back row
+    for _ in range(4):
+        if battle_eval(page, "return s.engine.get('e2').hp <= 0;"):
+            break
+        wait_battle_input(page, "menu", 30000)
+        battle_eval(page, "s.menu.setCursor(1);")
+        press(page, "Enter", 200)
+        wait_battle_input(page, "target")
+        press(page, "ArrowLeft", 120)
+        press(page, "Enter", 50)
+        page.wait_for_function(
+            "(() => { const s = window.__game.scene.getScene('battle'); return s.inputState === 'menu' || s.engine.phase === 'victory'; })()",
+            timeout=30000,
+        )
+    check(battle_eval(page, "return s.engine.get('e2').hp <= 0;"), "Elbow Drop reaches the Medic in the back row")
+    phase = fight(page, out, "28_crew")
+    check(phase == "victory", f"the crew is beaten ({phase})")
+    check(os.path.exists(f"{out}/28_crew_results.png"), "the results screen waits for a button press")
+    page.evaluate("window.__debug.set('god', false); window.__debug.set('autoCommands', false)")
     wait_scene(page, "field_test", 10000)
     page.wait_for_timeout(300)
 

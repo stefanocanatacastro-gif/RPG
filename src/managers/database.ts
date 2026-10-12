@@ -30,10 +30,10 @@ export interface ValidationContext {
   stringKeys?: Set<string>;
 }
 
-const TARGETS: TargetRule[] = ['single', 'all', 'all_ground', 'front', 'self', 'partner'];
+const TARGETS: TargetRule[] = ['single', 'all', 'all_ground', 'front', 'self', 'partner', 'ally_lowest'];
 const CATEGORIES = ['strike', 'aerial', 'grapple', 'enemy', 'partner'];
 const COMMANDS = ['none', 'stomp', 'timed_press', 'hold_release', 'mash', 'rotate', 'sequence', 'ring'];
-const STEPS = ['walk_to_target', 'jump_to_target', 'anim', 'command', 'hit', 'return', 'wait'];
+const STEPS = ['walk_to_target', 'jump_to_target', 'anim', 'command', 'hit', 'heal', 'return', 'wait'];
 const PROPS = ['spiky', 'airborne', 'armoured', 'flips', 'fiery'];
 const ITEM_CATS = ['heal', 'damage', 'buff', 'key'];
 const SLOTS = ['front', 'back', 'air'];
@@ -95,7 +95,11 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
         if (s.do === 'anim' && !s.anim) add('moves', m.id, `step ${i + 1}: anim needs a name`);
       });
       const hasHit = m.steps.some((s) => s.do === 'hit');
-      if (!hasHit) add('moves', m.id, 'never hits (no "hit" step)');
+      const hasHeal = m.steps.some((s) => s.do === 'heal');
+      if (!hasHit && !hasHeal) add('moves', m.id, 'never hits (no "hit" step)');
+      if (hasHeal && !(m.heal && m.heal > 0)) add('moves', m.id, 'has a "heal" step but no heal amount');
+      if (m.target === 'ally_lowest' && !hasHeal)
+        add('moves', m.id, 'targets an ally but has no "heal" step');
       const hasCmd = m.steps.some((s) => s.do === 'command');
       if (m.command !== 'none' && !hasCmd) add('moves', m.id, 'has an action command but no "command" step');
       if (m.command === 'none' && hasCmd) add('moves', m.id, 'has a "command" step but command is "none"');
@@ -135,6 +139,13 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
       for (const r of e.ai) {
         if (!e.moves?.includes(r.move))
           add('enemies', e.id, `AI uses "${r.move}", which isn't in its move list`);
+        for (const f of ['whenHpBelow', 'whenAllyHpBelow'] as const) {
+          const v = r[f];
+          if (v !== undefined && (!isNum(v) || v < 0 || v > 1))
+            add('enemies', e.id, `${f} for "${r.move}" must be between 0 and 1`);
+        }
+        if (r.everyRounds !== undefined && (!isNum(r.everyRounds) || r.everyRounds < 1))
+          add('enemies', e.id, `everyRounds for "${r.move}" must be 1 or more`);
         if (!isNum(r.weight) || r.weight <= 0)
           add('enemies', e.id, `AI weight for "${r.move}" must be above 0`);
       }

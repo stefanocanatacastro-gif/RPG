@@ -3,6 +3,7 @@
 // through a method so the EventBus hears about it.
 
 import type { CharacterDef } from '../types/data';
+import { addXp as addXpRule } from '../battle/progression';
 import { bus as defaultBus, EventBus, type FlagValue, type GameEvents } from './event_bus';
 
 export const SAVE_VERSION = 1;
@@ -113,8 +114,16 @@ export class GameState {
     return true;
   }
 
-  addXp(amount: number): void {
-    this.d.xp += Math.max(0, Math.round(amount));
+  /** Adds XP and levels up as far as it reaches. A level-up restores HP and Grit. Returns levels gained. */
+  addXp(amount: number): number {
+    const r = addXpRule(this.d.level, this.d.xp, amount);
+    this.d.level = r.level;
+    this.d.xp = r.xp;
+    if (r.levelsGained > 0) {
+      for (const m of this.d.party) this.setHp(m.id, m.maxHp);
+      this.setGrit(this.d.maxGrit);
+    }
+    return r.levelsGained;
   }
 
   // ── Coins and items ────────────────────────────────────────────────

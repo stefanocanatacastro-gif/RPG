@@ -82,5 +82,58 @@
       }
     ],
     "scout": "scout.sparring_dummy"
+  },
+  {
+    "id": "ringside_bruiser",
+    "name": "enemy.ringside_bruiser",
+    "sprite": "spr_c0_ringside_bruiser",
+    "level": 4,
+    "hp": 8,
+    "attack": 2,
+    "defence": 0,
+    "xp": 5,
+    "coins": 4,
+    "props": [],
+    "moves": ["goon_shove", "running_lariat"],
+    "ai": [
+      {
+        "move": "running_lariat",
+        "weight": 1,
+        "priority": 1,
+        "everyRounds": 2,
+        "fromRound": 1
+      },
+      {
+        "move": "goon_shove",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.ringside_bruiser"
+  },
+  {
+    "id": "corner_medic",
+    "name": "enemy.corner_medic",
+    "sprite": "spr_c0_corner_medic",
+    "level": 3,
+    "hp": 4,
+    "attack": 1,
+    "defence": 0,
+    "xp": 3,
+    "coins": 3,
+    "props": [],
+    "moves": ["goon_shove", "patch_up"],
+    "ai": [
+      {
+        "move": "patch_up",
+        "weight": 1,
+        "priority": 1,
+        "whenAllyHpBelow": 0.75
+      },
+      {
+        "move": "goon_shove",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.corner_medic"
   }
 ]

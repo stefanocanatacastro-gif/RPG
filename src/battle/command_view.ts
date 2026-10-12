@@ -124,7 +124,7 @@ export class CommandRunner {
     let pressAt: number | null = null;
     return this.loop((now) => {
       if (pressAt === null && this.pressed()) pressAt = now;
-      if (pressAt === null && debugState.autoCommands && now >= perfectAt) pressAt = now;
+      if (pressAt === null && debugState.autoCommands && now >= perfectAt) pressAt = perfectAt;
       const r = Math.max(2, ringRadius(now, start));
       g.clear();
       // the target ring, the closing ring, and crosshair ticks

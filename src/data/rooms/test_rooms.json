@@ -432,8 +432,8 @@
       },
       {
         "id": "o4",
-        "enemy": "dock_goon",
-        "formation": "test_goons",
+        "enemy": "ringside_bruiser",
+        "formation": "test_crew",
         "x": 40,
         "z": 24,
         "patrol": 3

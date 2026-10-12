@@ -11,7 +11,7 @@ It runs in any browser on computer or phone. Every build is a single self-contai
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
 | Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
-| M1 Battle system | In progress: steps 1–2 of 4 done (turns and damage; action commands, Block and Reversal), plus the arena and camera overhaul |
+| M1 Battle system | In progress: steps 1–3 of 4 done (turns and damage; action commands, Block and Reversal; enemy patterns and results screen), plus the arena and camera overhaul |
 | M2 Prologue playable | Planned |
 
 The full task list and milestone plan live in the project's *Programming List* doc; the art, audio and story plan in the *Asset Outline* doc.
@@ -104,6 +104,20 @@ Every hero move has a timing challenge. The rules are in `src/battle/commands.ts
 | Reversal (`guard`, B) | Any enemy attack | Press B in a tighter window (60 ms). | No damage, and the attacker takes 1. |
 
 Commands work with Z / Enter / Space, gamepad A, the on-screen A button, or a tap anywhere on the stage. For guarding, only the first press counts: pressing during the wind-up locks you out. The debug menu's *Perfect commands* switch makes every command succeed (and auto-blocks).
+
+## Enemy patterns
+
+Each enemy's `ai` list in `src/data/enemies.json` is a set of rules. Every turn the rules whose conditions hold are collected, the highest `priority` wins, and `weight` picks between equals. Conditions: `whenHpBelow` (own HP fraction), `whenAllyHpBelow` (a teammate's), `fromRound` and `everyRounds`.
+
+- **Charged moves** (`charge` in moves.json) take a turn to wind up: the enemy glows and a WINDING UP! warning shows, then it lets go next turn. A GREAT action command on a charging enemy staggers it and cancels the charge. The Ringside Bruiser winds up a Running Lariat every other round.
+- **Support moves** (`heal`, target `ally_lowest`) heal the most hurt teammate. The Corner Medic only patches up someone below 75% HP, from the back row, so Elbow Drop is the way to reach him.
+- A small caption names each enemy move as it starts.
+
+The *test_crew* line-up (Bruiser, Goon, Medic) is in the debug menu's battle list and patrols the octagon room.
+
+## Winning
+
+After a win, the results panel lists who was beaten and their XP, the coins, and the XP bar filling toward the next level (XP to next level = 10 + 5 × (level − 1), in `battle_rules.json`). A level up fully restores HP and Grit. The panel waits for a button press.
 
 ## Testing
 

@@ -40,5 +40,23 @@
       }
     ],
     "stage": "dockside"
+  },
+  {
+    "id": "test_crew",
+    "enemies": [
+      {
+        "enemy": "ringside_bruiser",
+        "slot": "front"
+      },
+      {
+        "enemy": "dock_goon",
+        "slot": "front"
+      },
+      {
+        "enemy": "corner_medic",
+        "slot": "back"
+      }
+    ],
+    "stage": "arena"
   }
 ]

@@ -169,5 +169,49 @@
         "do": "return"
       }
     ]
+  },
+  {
+    "id": "running_lariat",
+    "name": "move.running_lariat",
+    "category": "enemy",
+    "gritCost": 0,
+    "power": 4,
+    "target": "single",
+    "command": "none",
+    "charge": 1,
+    "reaches": {
+      "airborne": false,
+      "spiky": false
+    },
+    "steps": [
+      {
+        "do": "walk_to_target"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
+    ]
+  },
+  {
+    "id": "patch_up",
+    "name": "move.patch_up",
+    "category": "enemy",
+    "gritCost": 0,
+    "power": 0,
+    "heal": 2,
+    "target": "ally_lowest",
+    "command": "none",
+    "reaches": {
+      "airborne": true,
+      "spiky": true
+    },
+    "steps": [
+      {
+        "do": "heal"
+      }
+    ]
   }
 ]

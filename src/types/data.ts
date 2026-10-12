@@ -21,8 +21,19 @@ export type EnemyProp = 'spiky' | 'airborne' | 'armoured' | 'flips' | 'fiery';
 export interface AiRule {
   move: string;
   weight: number;
-  /** Only pick this move when the enemy's HP is at or below this fraction (0–1). */
+  /**
+   * Among rules whose conditions hold, only the highest priority are considered
+   * (default 0); weights then pick between those. Use it for "always do X when…".
+   */
+  priority?: number;
+  /** Only when the enemy's HP is at or below this fraction (0–1). */
   whenHpBelow?: number;
+  /** Only when some other enemy's HP is at or below this fraction (0–1). */
+  whenAllyHpBelow?: number;
+  /** Only on rounds fromRound, fromRound + everyRounds, … (a repeating pattern). */
+  everyRounds?: number;
+  /** First round this rule can apply (default 1). */
+  fromRound?: number;
 }
 
 export interface EnemyDef {
@@ -43,7 +54,7 @@ export interface EnemyDef {
 }
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';
-export type TargetRule = 'single' | 'all' | 'all_ground' | 'front' | 'self' | 'partner';
+export type TargetRule = 'single' | 'all' | 'all_ground' | 'front' | 'self' | 'partner' | 'ally_lowest';
 export type CommandType =
   'none' | 'stomp' | 'timed_press' | 'hold_release' | 'mash' | 'rotate' | 'sequence' | 'ring';
 
@@ -53,6 +64,7 @@ export type MoveStep =
   | { do: 'anim'; anim: string; wait?: number }
   | { do: 'command' }
   | { do: 'hit'; mult?: number }
+  | { do: 'heal' }
   | { do: 'return' }
   | { do: 'wait'; ms: number };
 
@@ -67,6 +79,10 @@ export interface MoveDef {
   /** Which enemy types this move can reach. */
   reaches: { airborne: boolean; spiky: boolean };
   piercing?: boolean;
+  /** Turns spent winding up before the move lands (the user is visibly charging meanwhile). */
+  charge?: number;
+  /** HP restored to the target (support moves, with a "heal" step). */
+  heal?: number;
   steps: MoveStep[];
 }
 

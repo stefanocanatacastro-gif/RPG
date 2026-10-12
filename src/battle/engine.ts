@@ -28,6 +28,8 @@ export interface Fighter {
   spiky: boolean;
   /** Damage taken is reduced by this until the fighter's next turn. */
   guard: number;
+  /** A charged move being wound up, and how many more turns until it's released. */
+  charging?: { move: string; turnsLeft: number };
   xp: number;
   coins: number;
 }
@@ -61,10 +63,18 @@ export interface HitResult {
   attackerKo?: boolean;
 }
 
+/**
+ * What an enemy does on its turn:
+ *   attack  — a normal move at the target
+ *   charge  — starts winding up a charged move (no hit this turn)
+ *   release — unleashes the move it was charging
+ *   support — a helping move on an ally (heals)
+ */
 export interface EnemyPlan {
   actor: string;
   move: string;
   target: string;
+  kind: 'attack' | 'charge' | 'release' | 'support';
 }
 
 export interface Rewards {
@@ -300,19 +310,102 @@ export class BattleEngine {
       const e = this.get(id);
       if (e.hp <= 0) continue;
       e.guard = 0;
-      return { actor: id, move: this.chooseEnemyMove(e), target: 'hero' };
+      // already winding up: keep charging, or let it go
+      if (e.charging) {
+        if (e.charging.turnsLeft > 1) {
+          e.charging.turnsLeft--;
+          this.log.push(`charge ${id} ${e.charging.move} hold`);
+          return { actor: id, move: e.charging.move, target: 'hero', kind: 'charge' };
+        }
+        const move = e.charging.move;
+        e.charging = undefined;
+        this.log.push(`release ${id} ${move}`);
+        return { actor: id, move, target: 'hero', kind: 'release' };
+      }
+      const move = this.chooseEnemyMove(e);
+      const m = this.db.move(move);
+      if (m.heal) {
+        const ally = this.lowestAlly(e);
+        if (ally) {
+          this.log.push(`support ${id} ${move} ${ally.id}`);
+          return { actor: id, move, target: ally.id, kind: 'support' };
+        }
+      }
+      if (m.charge && m.charge > 0) {
+        e.charging = { move, turnsLeft: m.charge };
+        this.log.push(`charge ${id} ${move}`);
+        return { actor: id, move, target: 'hero', kind: 'charge' };
+      }
+      return { actor: id, move, target: 'hero', kind: 'attack' };
     }
     return null;
   }
 
-  /** Weighted pick among the AI rules whose conditions hold. */
+  /** The most hurt standing enemy other than `self` (by HP fraction), if any is hurt at all. */
+  lowestAlly(self: Fighter): Fighter | undefined {
+    const hurt = this.enemies()
+      .filter((f) => f.id !== self.id && f.hp < f.maxHp)
+      .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp);
+    return hurt[0];
+  }
+
+  /** Whether an AI rule's conditions hold for this enemy right now. */
+  ruleApplies(
+    e: Fighter,
+    r: {
+      whenHpBelow?: number;
+      whenAllyHpBelow?: number;
+      everyRounds?: number;
+      fromRound?: number;
+      move: string;
+    },
+  ): boolean {
+    if (r.whenHpBelow !== undefined && e.hp / e.maxHp > r.whenHpBelow) return false;
+    if (r.whenAllyHpBelow !== undefined) {
+      const ally = this.lowestAlly(e);
+      if (!ally || ally.hp / ally.maxHp > r.whenAllyHpBelow) return false;
+    }
+    if (r.fromRound !== undefined || r.everyRounds !== undefined) {
+      const from = r.fromRound ?? 1;
+      if (this.round < from) return false;
+      if (r.everyRounds !== undefined && (this.round - from) % r.everyRounds !== 0) return false;
+    }
+    // a support move needs someone to help
+    if (this.db.move(r.move).heal && !this.lowestAlly(e)) return false;
+    return true;
+  }
+
+  /** Among the rules that apply, the highest priority wins; weights pick between equals. */
   chooseEnemyMove(e: Fighter): string {
     const def = this.db.enemy(e.defId);
-    const hpFrac = e.hp / e.maxHp;
-    const options = def.ai
-      .filter((r) => r.whenHpBelow === undefined || hpFrac <= r.whenHpBelow)
-      .map((r) => ({ value: r.move, weight: r.weight }));
-    return options.length ? this.rng.weighted(options) : def.ai[0].move;
+    const ok = def.ai.filter((r) => this.ruleApplies(e, r));
+    if (ok.length === 0) {
+      // fall back to the first plain attack
+      const plain = def.ai.find((r) => !this.db.move(r.move).heal && !this.db.move(r.move).charge);
+      return (plain ?? def.ai[0]).move;
+    }
+    const top = Math.max(...ok.map((r) => r.priority ?? 0));
+    return this.rng.weighted(
+      ok.filter((r) => (r.priority ?? 0) === top).map((r) => ({ value: r.move, weight: r.weight })),
+    );
+  }
+
+  /** A charging enemy hit hard enough loses its wind-up. Returns whether a charge was broken. */
+  breakCharge(id: string): boolean {
+    const f = this.get(id);
+    if (!f.charging || f.hp <= 0) return false;
+    f.charging = undefined;
+    this.log.push(`break ${id}`);
+    return true;
+  }
+
+  /** Heals an enemy (support moves). Returns the HP actually restored. */
+  healFighter(id: string, amount: number): number {
+    const f = this.get(id);
+    const before = f.hp;
+    f.hp = Math.min(f.maxHp, f.hp + amount);
+    this.log.push(`heal ${id} +${f.hp - before}`);
+    return f.hp - before;
   }
 
   /** After an enemy finishes acting: defeat, or keep going, or a new round. */

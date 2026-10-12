@@ -78,5 +78,22 @@
   "enemy.sparring_dummy": "Sparring Dummy",
   "scout.sparring_dummy": "A padded practice dummy. Lots of HP, barely hits back. For practising timing.",
   "battle.cmd.block": "BLOCK!",
-  "battle.cmd.reversal": "REVERSAL!"
+  "battle.cmd.reversal": "REVERSAL!",
+  "enemy.ringside_bruiser": "Ringside Bruiser",
+  "scout.ringside_bruiser": "Winds up a Running Lariat every other round. Land a GREAT hit while he's charging to stagger him.",
+  "enemy.corner_medic": "Corner Medic",
+  "scout.corner_medic": "Patches up hurt teammates instead of fighting. Take him out first.",
+  "move.running_lariat": "Running Lariat",
+  "move.patch_up": "Patch Up",
+  "battle.charging": "WINDING UP!",
+  "battle.staggered": "STAGGERED!",
+  "battle.charging_tag": "CHARGING",
+  "battle.results.title": "RESULTS",
+  "battle.results.coins": "Coins",
+  "battle.results.total": "Total XP",
+  "battle.results.level": "LV {n}",
+  "battle.results.next": "{xp}/{need} XP to next level",
+  "battle.results.levelup": "LEVEL UP!",
+  "battle.results.levelup_note": "HP and Grit fully restored",
+  "battle.results.continue": "{button}: continue"
 }

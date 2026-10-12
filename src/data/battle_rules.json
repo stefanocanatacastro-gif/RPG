@@ -39,5 +39,10 @@
     }
   },
   "blockReduce": 1,
-  "reversalDamage": 1
+  "reversalDamage": 1,
+  "levelUp": {
+    "xpBase": 10,
+    "xpGrowth": 5,
+    "maxLevel": 99
+  }
 }

@@ -23,6 +23,7 @@ import rules from '../data/battle_rules.json';
 import { CommandRunner } from '../battle/command_view';
 import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle/commands';
 import type { GuardResult } from '../battle/engine';
+import { xpToNext } from '../battle/progression';
 
 type Choice =
   | { kind: 'move'; move: string; target: string }
@@ -36,6 +37,8 @@ interface FighterView {
   shadow: Phaser.GameObjects.Ellipse;
   bar?: Bar;
   home: { x: number; y: number };
+  /** Pulsing glow behind an enemy that is winding up a charged move. */
+  aura?: Phaser.GameObjects.Ellipse;
 }
 
 /** The hero uses the test wrestler until Kid Chispa's real sprite exists. */
@@ -54,7 +57,7 @@ const SHOTS: Record<string, Shot> = {
 export class BattleScene extends Phaser.Scene {
   engine!: BattleEngine;
   /** What the battle is waiting for — read by the browser test. */
-  inputState: 'busy' | 'menu' | 'target' = 'busy';
+  inputState: 'busy' | 'menu' | 'target' | 'results' = 'busy';
   private start!: BattleStart;
   private views = new Map<string, FighterView>();
   private desc!: Phaser.GameObjects.Text;
@@ -207,6 +210,7 @@ export class BattleScene extends Phaser.Scene {
     for (const v of this.views.values()) {
       v.shadow.x = v.sprite.x;
       if (v.bar) v.bar.x = Math.round(v.sprite.x - 22);
+      if (v.aura) v.aura.setPosition(v.sprite.x, v.sprite.y - v.sprite.displayHeight / 2);
       const lift = Math.max(0, STAGE.floorY - v.sprite.y);
       v.shadow.setScale(Math.max(0.5, 1 - lift / 160));
     }
@@ -243,7 +247,13 @@ export class BattleScene extends Phaser.Scene {
         const plan = e.nextEnemyPlan();
         if (plan) {
           if (debugState.god) e.hero.guard = 99;
-          await this.playMove(plan.actor, plan.move, plan.target);
+          const v = this.views.get(plan.actor)!;
+          if (plan.kind === 'charge') await this.showCharge(v);
+          else {
+            if (plan.kind === 'release') this.clearAura(v);
+            await this.caption(t(Database.move(plan.move).name), plan.kind === 'release' ? UI.rope : UI.ink);
+            await this.playMove(plan.actor, plan.move, plan.target, { big: plan.kind === 'release' });
+          }
         }
         e.endEnemyAction();
       } else break;
@@ -408,7 +418,10 @@ export class BattleScene extends Phaser.Scene {
         .fillStyle(UI.spark)
         .fillTriangle(v.sprite.x - 8, top - 10 + bob, v.sprite.x + 8, top - 10 + bob, v.sprite.x, top + bob);
       this.desc
-        .setText(`${t('battle.pick_target')}: ${t(v.f.name)}  ${v.f.hp}/${v.f.maxHp}`)
+        .setText(
+          `${t('battle.pick_target')}: ${t(v.f.name)}  ${v.f.hp}/${v.f.maxHp}` +
+            (v.f.charging ? `  · ${t('battle.charging_tag')}` : ''),
+        )
         .setColor(css(UI.ink));
     };
     const readyAt = this.time.now + 120;
@@ -456,7 +469,7 @@ export class BattleScene extends Phaser.Scene {
     actorId: string,
     moveId: string,
     targetId: string,
-    opts: { firstStrike?: boolean } = {},
+    opts: { firstStrike?: boolean; big?: boolean } = {},
   ): Promise<void> {
     const actor = this.views.get(actorId)!;
     const target = this.views.get(targetId)!;
@@ -557,6 +570,7 @@ export class BattleScene extends Phaser.Scene {
             hovering = false;
           }
           const mult = (step.mult ?? 1) * (rating ? ratingMult(move.command, rating) : 1);
+          let great = rating === 'great';
           rating = undefined;
           const r = opts.firstStrike
             ? this.engine.damage(targetId, rules.firstStrikeDamage + this.engine.hero.attack)
@@ -568,12 +582,19 @@ export class BattleScene extends Phaser.Scene {
           }
           if (r.guard === 'block') this.showBlock(target);
           await this.showHit(target, r.damage, r.ko);
+          if (opts.big && r.damage > 0) {
+            this.director.punchIn(0.26);
+            this.arena.cheer(1);
+          }
           if (pendingStomp) {
             const res = await pendingStomp;
             pendingStomp = null;
             this.noteCommand(moveId, res, actor);
             if (res.rating === 'miss') ended = true;
+            if (res.rating === 'great') great = true;
           }
+          // a GREAT hit knocks a charging enemy out of its wind-up
+          if (great && !r.ko && this.engine.breakCharge(targetId)) await this.showStagger(target);
           if (r.ko) {
             await this.knockOut(target);
             ended = true;
@@ -597,11 +618,77 @@ export class BattleScene extends Phaser.Scene {
         case 'wait':
           await this.wait(step.ms);
           break;
+        case 'heal': {
+          await this.tween({ targets: s, y: s.y - 14, duration: 120, yoyo: true, ease: 'Quad.easeOut' });
+          const healed = this.engine.healFighter(targetId, move.heal ?? 0);
+          target.sprite.setTintFill(0x9ff0a8);
+          this.time.delayedCall(120, () => target.sprite.clearTint());
+          target.bar?.setValue(target.f.hp, target.f.maxHp);
+          await this.popText(target, `+${healed}`, UI.good);
+          break;
+        }
       }
     }
     if (s.x !== actor.home.x || s.y !== actor.home.y) await this.returnHome(actor);
     s.setDepth(10 + actor.f.order);
     if (actor.f.airborne && actor.f.hp > 0) this.hover(actor);
+  }
+
+  /** An enemy winds up: camera on it, a warning, and a glow that stays until it lets go. */
+  private async showCharge(v: FighterView): Promise<void> {
+    this.director.track([v.sprite], 1.35, 10);
+    if (!v.aura) {
+      v.aura = this.add
+        .ellipse(
+          v.sprite.x,
+          v.sprite.y - v.sprite.displayHeight / 2,
+          v.sprite.displayWidth + 26,
+          v.sprite.displayHeight + 18,
+          UI.spark,
+          0.35,
+        )
+        .setDepth(v.sprite.depth - 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: v.aura,
+        alpha: 0.12,
+        scaleX: 1.12,
+        scaleY: 1.06,
+        duration: 260,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+    await this.tween({ targets: v.sprite, scaleY: 0.9, scaleX: 1.08, duration: 160, yoyo: true, repeat: 1 });
+    await this.popText(v, t('battle.charging'), UI.spark);
+  }
+
+  private clearAura(v: FighterView): void {
+    if (!v.aura) return;
+    this.tweens.killTweensOf(v.aura);
+    v.aura.destroy();
+    v.aura = undefined;
+  }
+
+  private async showStagger(v: FighterView): Promise<void> {
+    this.clearAura(v);
+    this.director.punchIn(0.18);
+    this.arena.cheer(1);
+    void this.tween({ targets: v.sprite, angle: 8, duration: 70, yoyo: true, repeat: 2 });
+    await this.popText(v, t('battle.staggered'), UI.good);
+  }
+
+  /** Names an enemy's move in a small panel at the top of the screen. */
+  private async caption(text: string, color: number): Promise<void> {
+    const w = Math.max(160, text.length * 8 + 32);
+    const g = this.ui(this.add.graphics());
+    drawPanel(g, W / 2 - w / 2, 84, w, 26, { alpha: 0.94 });
+    const label = this.ui(pixelText(this, W / 2, 97, text.toUpperCase(), 8, css(color)));
+    await this.wait(420);
+    this.tween({ targets: [g, label], alpha: 0, delay: 600, duration: 200 }).then(() => {
+      g.destroy();
+      label.destroy();
+    });
   }
 
   private showBlock(v: FighterView): void {
@@ -713,6 +800,7 @@ export class BattleScene extends Phaser.Scene {
 
   private async knockOut(v: FighterView): Promise<void> {
     if (v.f.side === 'hero') return;
+    this.clearAura(v);
     // paper flip: spin flat, fade away
     this.tweens.killTweensOf(v.sprite);
     await this.tween({ targets: v.sprite, scaleX: 0, duration: 90, yoyo: true, repeat: 2 });
@@ -750,20 +838,145 @@ export class BattleScene extends Phaser.Scene {
   private async victory(): Promise<void> {
     const r = this.engine.rewards();
     const gs = gameState();
+    const before = { level: gs.data.level, xp: gs.data.xp };
     gs.addCoins(r.coins);
-    gs.addXp(r.xp);
+    const levels = gs.addXp(r.xp);
     const hero = this.views.get('hero')!;
     // close-up on the winner while the crowd goes wild
     this.director.to({ x: hero.sprite.x + 30, y: STAGE.floorY - 48, zoom: 1.6 }, 3);
     this.arena.cheer(2);
     hero.sprite.play(animKey(HERO_TEXTURE, 'chop'));
-    await this.banner(t('battle.victory'), UI.spark, 900);
-    const line = this.ui(
-      pixelText(this, W / 2, 168, tf('battle.rewards', { coins: r.coins, xp: r.xp }), 16, css(UI.ink)),
-    );
-    await this.wait(900);
-    line.destroy();
+    await this.banner(t('battle.victory'), UI.spark, 700);
+    await this.showResults(r, before, levels);
     this.finish('win');
+  }
+
+  /** Who was beaten, coins and XP earned, and the XP bar filling toward the next level. */
+  private async showResults(
+    r: { xp: number; coins: number },
+    before: { level: number; xp: number },
+    levels: number,
+  ): Promise<void> {
+    const gs = gameState();
+    const groups = new Map<string, { name: string; count: number; xp: number }>();
+    for (const f of this.engine.enemies(false)) {
+      const g = groups.get(f.defId) ?? { name: t(f.name), count: 0, xp: 0 };
+      g.count++;
+      g.xp += f.xp;
+      groups.set(f.defId, g);
+    }
+    const pw = 300;
+    const rows = groups.size;
+    const ph = 164 + rows * 14;
+    const px = W - pw - 20;
+    const py = Math.round((H - ph) / 2);
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      parts.push(this.ui(o));
+      return o;
+    };
+    const g = add(this.add.graphics());
+    drawPanel(g, px, py, pw, ph, { alpha: 0.96 });
+    add(pixelText(this, px + pw / 2, py + 14, t('battle.results.title'), 16, css(UI.spark)));
+    let y = py + 34;
+    const row = (left: string, right: string, color: number = UI.ink) => {
+      add(pixelText(this, px + 14, y, left, 8, css(color)).setOrigin(0, 0));
+      add(pixelText(this, px + pw - 14, y, right, 8, css(color)).setOrigin(1, 0));
+      y += 14;
+    };
+    for (const e of groups.values())
+      row(e.count > 1 ? `${e.name} ×${e.count}` : e.name, `${e.xp} XP`, UI.inkDim);
+    y += 4;
+    row(t('battle.results.coins'), `+${r.coins}`);
+    row(t('battle.results.total'), `+${r.xp}`, UI.spark);
+    y += 6;
+    const lv = add(
+      pixelText(this, px + 14, y, tf('battle.results.level', { n: before.level }), 8, css(UI.ink)).setOrigin(
+        0,
+        0,
+      ),
+    );
+    y += 14;
+    // XP bar animates from where it was to where it ends, rolling over on each level up
+    const barX = px + 14;
+    const barW = pw - 28;
+    const bar = add(this.add.graphics());
+    const drawBar = (frac: number) => {
+      bar.clear().fillStyle(UI.hypeBack).fillRect(barX, y, barW, 8);
+      bar.fillStyle(UI.hype).fillRect(barX, y, Math.round(barW * Math.min(1, frac)), 8);
+    };
+    let level = before.level;
+    let xp = before.xp;
+    drawBar(xp / xpToNext(level));
+    const next = add(pixelText(this, px + 14, y + 14, '', 8, css(UI.inkDim)).setOrigin(0, 0));
+    const showNext = () => next.setText(tf('battle.results.next', { xp, need: xpToNext(level) }));
+    showNext();
+    const note = add(pixelText(this, px + pw / 2, y + 34, '', 8, css(UI.good)));
+    const note2 = add(pixelText(this, px + pw / 2, y + 48, '', 8, css(UI.good)));
+    this.inputState = 'results';
+    await this.wait(250);
+    let left = r.xp;
+    while (left > 0) {
+      const need = xpToNext(level);
+      const step = Math.min(left, need - xp);
+      const o = { v: xp };
+      await this.tween({
+        targets: o,
+        v: xp + step,
+        duration: 200 + step * 30,
+        onUpdate: () => {
+          drawBar(o.v / need);
+          next.setText(tf('battle.results.next', { xp: Math.floor(o.v), need }));
+        },
+      });
+      xp += step;
+      left -= step;
+      if (xp >= need && level < gs.data.level) {
+        level++;
+        xp = 0;
+        lv.setText(tf('battle.results.level', { n: level }));
+        note.setText(t('battle.results.levelup'));
+        note2.setText(t('battle.results.levelup_note'));
+        this.arena.cheer(2);
+        this.director.punchIn(0.12);
+        await this.tween({ targets: lv, scale: 1.3, duration: 120, yoyo: true });
+        drawBar(0);
+      } else if (xp >= need) break; // level cap
+    }
+    level = gs.data.level;
+    xp = gs.data.xp;
+    showNext();
+    if (levels > 0 && !note.text) note.setText(t('battle.results.levelup'));
+    const prompt = add(
+      pixelText(
+        this,
+        px + pw / 2,
+        py + ph - 12,
+        tf('battle.results.continue', { button: input.prompt('confirm') }),
+        8,
+        css(UI.inkDim),
+      ),
+    );
+    this.tweens.add({ targets: prompt, alpha: 0.35, duration: 500, yoyo: true, repeat: -1 });
+    await new Promise<void>((resolve) => {
+      const readyAt = this.time.now + 200;
+      const done = () => {
+        this.events.off(Phaser.Scenes.Events.UPDATE, tick);
+        this.input.off(Phaser.Input.Events.POINTER_UP, tap);
+        resolve();
+      };
+      const tick = () => {
+        if (this.time.now >= readyAt && input.justPressed('confirm')) done();
+      };
+      const tap = (p: Phaser.Input.Pointer) => {
+        if (this.time.now >= readyAt && !input.onTouchControl(p.x, p.y)) done();
+      };
+      this.events.on(Phaser.Scenes.Events.UPDATE, tick);
+      this.input.on(Phaser.Input.Events.POINTER_UP, tap);
+    });
+    this.inputState = 'busy';
+    this.tweens.killTweensOf(prompt);
+    for (const o of parts) o.destroy();
   }
 
   private async defeat(): Promise<void> {

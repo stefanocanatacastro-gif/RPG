@@ -1,6 +1,6 @@
 {
   "name": "wrestling-rpg",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Kid Chispa and the Seven Belts — a TTYD-style wrestling RPG (Phaser 3 + TypeScript)",
   "scripts": {
     "dev": "vite",
