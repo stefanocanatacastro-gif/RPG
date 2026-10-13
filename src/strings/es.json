@@ -169,5 +169,6 @@
   "hub.moves": "Creador de movimientos",
   "hub.moves.desc": "Crea ataques y curaciones: poder, golpes, Garra, carrera o aéreo, un objetivo o todos, comando de acción, cargas. Enséñalos en el creador de luchadores.",
   "hub.gallery": "Galería de la comunidad",
-  "hub.gallery.desc": "Todo lo que ha creado la gente del enlace, por creador: pruébalo, juégalo, dale me gusta o cópialo para remezclarlo."
+  "hub.gallery.desc": "Todo lo que ha creado la gente del enlace, por creador: pruébalo, juégalo, dale me gusta o cópialo para remezclarlo.",
+  "battle.unstoppable": "¡NI SE MUEVE!"
 }

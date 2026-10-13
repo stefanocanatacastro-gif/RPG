@@ -13,51 +13,10 @@
 import Phaser from 'phaser';
 import type { StageDef } from '../types/data';
 
-export const ARENA = {
-  width: 1440,
-  height: 900,
-  /** Perspective: screen centre x, horizon y, focal length, camera height (units). */
-  cx: 720,
-  horizon: 225,
-  f: 780,
-  camH: 3.2,
-  ring: { half: 3.6, near: 6.4, far: 13.6, canvasY: 1 },
-  /** Depth line the fighters stand on. */
-  fighterZ: 9.6,
-  heroX: -2.3,
-  /** The partner stands a step in front of Chispa, toward the opponents (as in TTYD). */
-  partnerX: -1.3,
-  enemyX: [0.9, 2.0, 3.1, 3.4],
-  flyerLift: 1.6,
-};
-
-export function P(X: number, Y: number, Z: number): { x: number; y: number } {
-  const s = ARENA.f / Z;
-  return { x: ARENA.cx + X * s, y: ARENA.horizon + (ARENA.camH - Y) * s };
-}
-
-/** Pixels per arena unit at a depth. */
-export const unitPx = (Z: number) => ARENA.f / Z;
+export { ARENA, P, unitPx, STAGE, homeOf, enemyXs } from './stage_layout';
+import { ARENA, P, unitPx } from './stage_layout';
 
 const ringTop = ARENA.ring.canvasY;
-const FLOOR_Y = P(0, ringTop, ARENA.fighterZ).y;
-
-export const STAGE = {
-  /** Feet line for fighters standing on the canvas. */
-  floorY: Math.round(FLOOR_Y),
-  heroX: Math.round(P(ARENA.heroX, ringTop, ARENA.fighterZ).x),
-};
-
-/** Where a fighter stands: hero on the left, enemies across the ring, flyers above it. */
-export function homeOf(side: 'hero' | 'enemy', order: number, airborne: boolean): { x: number; y: number } {
-  if (side === 'hero') {
-    if (order === 0) return { x: STAGE.heroX, y: STAGE.floorY };
-    return { x: Math.round(P(ARENA.partnerX, ringTop, ARENA.fighterZ).x), y: STAGE.floorY };
-  }
-  const X = ARENA.enemyX[Math.min(order, ARENA.enemyX.length - 1)];
-  const p = P(X, ringTop + (airborne ? ARENA.flyerLift : 0), ARENA.fighterZ);
-  return { x: Math.round(p.x), y: Math.round(p.y) };
-}
 
 // ── Drawing ────────────────────────────────────────────────────────────
 

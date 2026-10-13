@@ -61,6 +61,8 @@ export interface EnemyDef {
   title?: StringKey;
   /** Made fighters: what they shout at the start of a fight. */
   line?: StringKey;
+  /** How much room they take in the ring: big ones need more, huge bosses half the ring. Default normal. */
+  size?: 'normal' | 'big' | 'huge';
 }
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';

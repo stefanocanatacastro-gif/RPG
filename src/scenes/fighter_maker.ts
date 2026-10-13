@@ -34,7 +34,7 @@ import {
 } from '../managers/builds';
 import type { EnemyProp } from '../types/data';
 import { paintWrestler } from '../systems/custom_looks';
-import { cleanPicture, decodePicture, drawPictureLook, poseKey } from '../systems/pictures';
+import { cleanPicture, decodePicture, drawPictureLook, maxHeightFor, maxWidthFor } from '../systems/pictures';
 
 const TOP = 40;
 const LIST = { x: 6, y: TOP + 6, w: 220, h: H - TOP - 40 };
@@ -49,6 +49,21 @@ const ROW = 18;
 const PREVIEW_KEY = 'spr_maker_preview';
 const PREVIEW_PIC = 'spr_maker_picture';
 const POSE_LABEL: Record<Pose, string> = { idle: 'Standing', attack: 'Attacking', hurt: 'Getting hit' };
+type PreviewAnim = 'idle' | 'walk' | 'chop' | 'hurt';
+const PREVIEW_ANIMS: PreviewAnim[] = ['idle', 'walk', 'chop', 'hurt'];
+const ANIM_LABEL: Record<PreviewAnim, string> = {
+  idle: 'standing',
+  walk: 'walking',
+  chop: 'attacking',
+  hurt: 'getting hit',
+};
+const MOTION_LABEL = ['still', 'calm', 'normal', 'lively'];
+const SIZES = ['normal', 'big', 'huge'] as const;
+const SIZE_LABEL = {
+  normal: 'normal',
+  big: 'big (takes more room)',
+  huge: 'huge boss (half the ring)',
+};
 const RULE_WHEN: CustomAiRule['when'][] = ['opener', 'hp_below', 'ally_hurt', 'every'];
 
 /** Asks the browser for a picture file (must be called from a click). */
@@ -123,6 +138,7 @@ function fromBuiltin(kind: 'hero' | 'enemy', id: string, newId: string): CustomF
     defence: e.defence,
     moves: [...e.moves],
     props: [...e.props],
+    ...(e.size && e.size !== 'normal' ? { size: e.size } : {}),
     xp: e.xp,
     coins: e.coins,
     weights,
@@ -145,8 +161,8 @@ export class FighterMakerScene extends Phaser.Scene {
   private preview!: Phaser.GameObjects.Sprite;
   /** Clear a flat background from uploads (a maker setting, not saved with the fighter). */
   clearBackground = true;
-  /** Which picture the preview shows. */
-  previewPose: Pose = 'idle';
+  /** Which animation the preview plays. */
+  previewAnim: PreviewAnim = 'idle';
 
   constructor() {
     super('fighter_maker');
@@ -192,13 +208,13 @@ export class FighterMakerScene extends Phaser.Scene {
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
       const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
-      if (file && this.scene.isActive()) void this.usePicture(this.previewPose, file);
+      if (file && this.scene.isActive()) void this.usePicture('idle', file);
     };
     const onPaste = (e: ClipboardEvent) => {
       if (textFieldOpen || !this.scene.isActive()) return;
       const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
       const file = item?.getAsFile();
-      if (file) void this.usePicture(this.previewPose, file);
+      if (file) void this.usePicture('idle', file);
     };
     window.addEventListener('dragover', onDrag);
     window.addEventListener('drop', onDrop);
@@ -352,7 +368,7 @@ export class FighterMakerScene extends Phaser.Scene {
         pictures: { ...(f.look.pictures ?? {}), [pose]: url },
         picture: f.look.picture ?? { ...DEFAULT_PICTURE },
       };
-      this.previewPose = pose;
+      this.previewAnim = pose === 'attack' ? 'chop' : pose === 'hurt' ? 'hurt' : 'idle';
       const kb = Math.round((url.length * 0.75) / 1024);
       this.setStatus(`${POSE_LABEL[pose]} picture added (${kb} KB). SAVE to keep it.`, UI.good);
       this.changed();
@@ -615,7 +631,18 @@ export class FighterMakerScene extends Phaser.Scene {
           this.changed();
         },
       });
-      rows.push(picNum('  Height', 'height', 48, 192, 8), picNum('  Pixel size', 'pixel', 1, 4, 1));
+      rows.push(
+        picNum('  Height', 'height', 48, maxHeightFor(f.kind === 'enemy' ? f.size : 'normal'), 8),
+        picNum('  Pixel size', 'pixel', 1, 4, 1),
+      );
+      rows.push({
+        label: '  Motion',
+        value: () => MOTION_LABEL[pic().motion ?? 2],
+        step: (dir) => {
+          pic().motion = Phaser.Math.Clamp((pic().motion ?? 2) + dir, 0, 3);
+          this.changed();
+        },
+      });
       rows.push({
         label: '  Outline',
         value: () => (pic().outline ? 'yes' : 'no'),
@@ -632,16 +659,30 @@ export class FighterMakerScene extends Phaser.Scene {
           this.changed();
         },
       });
+    }
+    if (f.look.base !== 'picture' && !this.anims.exists(animKey(this.previewKey(f), 'walk'))) {
+      // nothing to preview: a still sprite
+    } else
       rows.push({
         label: '  Preview',
-        value: () => POSE_LABEL[this.previewPose],
+        value: () => ANIM_LABEL[this.previewAnim],
         step: (dir) => {
-          const ps: Pose[] = ['idle', 'attack', 'hurt'];
-          this.previewPose = ps[(ps.indexOf(this.previewPose) + dir + 3) % 3];
+          this.previewAnim = PREVIEW_ANIMS[(PREVIEW_ANIMS.indexOf(this.previewAnim) + dir + 4) % 4];
           this.refresh();
         },
       });
-    }
+    if (f.kind === 'enemy')
+      rows.push({
+        label: '  Size',
+        value: () => SIZE_LABEL[f.size ?? 'normal'],
+        step: (dir) => {
+          const i = SIZES.indexOf(f.size ?? 'normal');
+          f.size = SIZES[(i + dir + SIZES.length) % SIZES.length];
+          if (f.size === 'normal') delete f.size;
+          if (f.look.picture) f.look.picture.height = Math.min(f.look.picture.height, maxHeightFor(f.size));
+          this.changed();
+        },
+      });
 
     rows.push({ label: 'STATS', value: () => '', head: true });
     rows.push(num('HP', 'hp', 1, 99), num('Attack', 'attack', 0, 20), num('Defence', 'defence', 0, 20));
@@ -822,6 +863,9 @@ export class FighterMakerScene extends Phaser.Scene {
         `HP ${f.hp}  ATK ${f.attack}  DEF ${f.defence}`,
         f.kind === 'hero' ? `GRIT ${f.grit ?? 5}` : `XP ${f.xp ?? 0}  COINS ${f.coins ?? 0}`,
         ...(f.props?.length ? [f.props.join(', ')] : []),
+        ...(f.size && f.size !== 'normal'
+          ? [`${f.size.toUpperCase()}${f.size === 'huge' ? ' BOSS' : ''}`]
+          : []),
         ...f.moves.slice(0, 5).map((m) => `· ${t(Database.move(m).name)}`),
       ];
       lines.forEach((l, i) =>
@@ -873,47 +917,40 @@ export class FighterMakerScene extends Phaser.Scene {
     );
   }
 
-  /** Shows the fighter on the little ring, in its own colours. */
+  /** Texture the preview uses for a fighter's look. */
+  private previewKey(f: CustomFighter): string {
+    return f.look.base === 'picture' ? PREVIEW_PIC : f.look.base === 'wrestler' ? PREVIEW_KEY : f.look.base;
+  }
+
+  /** Shows the fighter on the little ring, in its own colours, playing the chosen animation. */
   private showPreview(f: CustomFighter): void {
-    let key: string;
+    // park the sprite on another texture while its own is (re)drawn
+    this.preview.stop().setTexture('spr_test_dummy', 'idle_00');
     if (f.look.base === 'picture') {
-      if (!f.look.pictures?.idle) {
-        this.preview.setVisible(false);
-        return;
-      }
-      this.preview.stop().setTexture('spr_test_dummy', 'idle_00');
-      if (!drawPictureLook(this.textures, PREVIEW_PIC, f.look)) {
+      if (!f.look.pictures?.idle) return void this.preview.setVisible(false);
+      const size = f.kind === 'enemy' ? f.size : 'normal';
+      if (!drawPictureLook(this, PREVIEW_PIC, f.look, maxWidthFor(size))) {
         // still decoding: draw again when ready
         void Promise.all(Object.values(f.look.pictures).map((u) => decodePicture(u!))).then(() =>
           this.refresh(),
         );
-        this.preview.setVisible(false);
-        return;
+        return void this.preview.setVisible(false);
       }
-      const k = this.textures.exists(poseKey(PREVIEW_PIC, this.previewPose))
-        ? poseKey(PREVIEW_PIC, this.previewPose)
-        : PREVIEW_PIC;
-      const h = this.textures.get(k).getSourceImage().height;
-      this.preview
-        .setVisible(true)
-        .setTexture(k)
-        .setScale(h <= 110 ? 2 : 1)
-        .setFlipX(f.kind === 'enemy');
-      return;
-    }
-    if (f.look.base === 'wrestler') {
-      // park the sprite on another texture while its own is repainted
-      this.preview.stop().setTexture('spr_test_dummy', 'idle_00');
-      paintWrestler(this, PREVIEW_KEY, f.look.colors ?? {});
-      key = PREVIEW_KEY;
-    } else key = f.look.base;
+    } else if (f.look.base === 'wrestler') paintWrestler(this, PREVIEW_KEY, f.look.colors ?? {});
+    const key = this.previewKey(f);
     const animated = this.anims.exists(animKey(key, 'idle'));
-    this.preview
-      .setVisible(true)
-      .setTexture(key, animated ? 'idle_00' : undefined)
-      .setScale(2);
-    if (animated) this.preview.play(animKey(key, 'idle'));
-    else this.preview.stop();
+    this.preview.setVisible(true).setTexture(key, animated ? 'idle_00' : undefined);
+    const h = this.preview.frame.height;
+    // small ones twice as big; very tall ones shrunk to fit the panel
+    this.preview.setScale(h <= 130 ? 2 : h <= 250 ? 1 : 250 / h);
+    if (animated) {
+      const anim = this.anims.exists(animKey(key, this.previewAnim)) ? this.previewAnim : 'idle';
+      this.preview.play({
+        key: animKey(key, anim),
+        repeat: -1,
+        repeatDelay: anim === 'idle' || anim === 'walk' ? 0 : 500,
+      });
+    }
     this.preview.setFlipX(f.kind === 'enemy' && animated);
   }
 }

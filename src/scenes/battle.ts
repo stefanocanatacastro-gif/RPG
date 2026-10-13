@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
 import { BattleEngine, type Fighter } from '../battle/engine';
-import { drawStage, homeOf, STAGE, ARENA, type Arena } from '../battle/stage';
+import { drawStage, enemyXs, homeOf, STAGE, ARENA, type Arena } from '../battle/stage';
 import { CameraDirector, type Shot } from '../battle/camera_director';
 import { MenuList, Bar, BAR_STYLES, drawPanel, type MenuItem } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
@@ -26,7 +26,6 @@ import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
 import { isCustomId } from '../managers/builds';
 import { ensureLook, isPictureLook } from '../systems/custom_looks';
-import { poseKey } from '../systems/pictures';
 import { makePlaceholder } from '../systems/placeholder';
 import { CROWD_DENSITY, SPECIALS, conditionLines, goalText, hazard, special } from '../battle/conditions';
 import type { RoundEvent } from '../battle/engine';
@@ -51,6 +50,8 @@ interface FighterView {
   baseFlip: boolean;
   /** Pulsing glow behind an enemy that is winding up a charged move. */
   aura?: Phaser.GameObjects.Ellipse;
+  /** Half the width of its HP bar. */
+  barHalf: number;
 }
 
 /** The hero uses the test wrestler until Kid Chispa's real sprite exists. */
@@ -87,6 +88,8 @@ export class BattleScene extends Phaser.Scene {
   private menuCursor: Record<string, number> = {};
   /** Losing this fight doesn't end the game. */
   private loseOk = false;
+  /** How far the wide shots look up, so a tall boss fits in the frame. */
+  private lookUp = 0;
   private hypeBar!: Bar;
   /** Light cone over whoever stands in the spotlight this round. */
   private spot: Phaser.GameObjects.Graphics | null = null;
@@ -151,7 +154,36 @@ export class BattleScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.POST_UPDATE, sortCameras),
     );
 
-    for (const f of this.engine.fighters) this.addFighter(f);
+    // big opponents take more room across the ring
+    const xs = enemyXs(this.engine.enemies(false).map((f) => f.size));
+    for (const f of this.engine.fighters) this.addFighter(f, f.side === 'enemy' ? xs[f.order] : undefined);
+    // HP bars never wider than the gap to the next opponent
+    const enemies = this.engine.enemies(false).sort((a, b) => a.order - b.order);
+    enemies.forEach((f, i) => {
+      const v = this.views.get(f.id)!;
+      const gaps = [enemies[i - 1], enemies[i + 1]]
+        .filter(Boolean)
+        .map((o) => Math.abs(this.views.get(o!.id)!.home.x - v.home.x));
+      if (!gaps.length || !v.bar) return;
+      const half = Math.min(v.barHalf, Math.floor(Math.min(...gaps) / 2) - 3);
+      if (half < v.barHalf) {
+        v.barHalf = Math.max(20, half);
+        v.bar.destroy();
+        v.bar = new Bar(
+          this,
+          v.home.x - v.barHalf,
+          STAGE.floorY + 9,
+          v.barHalf * 2,
+          BAR_STYLES.hp,
+          f.hp,
+          f.maxHp,
+          true,
+        ).setDepth(55);
+      }
+    });
+    // a tall boss: the wide shots look up to fit it
+    const tallest = Math.max(...[...this.views.values()].map((v) => v.sprite.displayHeight));
+    this.lookUp = Math.max(0, Math.round((tallest - 150) * 0.55));
     this.buildHud();
     sortCameras();
     this.cursor = this.add.graphics().setDepth(60).setVisible(false);
@@ -167,9 +199,8 @@ export class BattleScene extends Phaser.Scene {
 
   // ── Building the scene ──────────────────────────────────────────────
 
-  private addFighter(f: Fighter): void {
-    const home = homeOf(f.side, f.order, f.airborne);
-    const shadow = this.add.ellipse(home.x, STAGE.floorY, 60, 12, 0x000000, 0.3).setDepth(5);
+  private addFighter(f: Fighter, x?: number): void {
+    const home = homeOf(f.side, f.order, f.airborne, x);
     // Kid Chispa uses the test wrestler until his real art exists; made fighters bring their own look
     const texture = f.defId === 'chispa' ? HERO_TEXTURE : f.sprite;
     if (isCustomId(f.defId)) ensureLook(this, f.defId);
@@ -181,16 +212,24 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setDepth(10 + f.order);
     if (animated) sprite.play(animKey(texture, 'idle'));
+    // big and huge opponents: drawn bigger, unless their pictures already have the size they were made at
+    const picture = isCustomId(f.defId) && isPictureLook(f.defId);
+    if (!picture && f.size !== 'normal') sprite.setScale(f.size === 'huge' ? 2 : 1.5);
+    const sw = Math.max(60, sprite.displayWidth * 0.8);
+    const shadow = this.add
+      .ellipse(home.x, STAGE.floorY, sw, 12 * Math.sqrt(sw / 60), 0x000000, 0.3)
+      .setDepth(5);
+    const barHalf = f.size === 'huge' ? 66 : f.size === 'big' ? 50 : 33;
     // animated bodies and uploaded pictures face right: enemies turn to face the hero
-    const baseFlip = f.side === 'enemy' && (animated || (isCustomId(f.defId) && isPictureLook(f.defId)));
+    const baseFlip = f.side === 'enemy' && (animated || picture);
     sprite.setFlipX(baseFlip);
-    const view: FighterView = { f, sprite, shadow, home, texture, baseFlip };
+    const view: FighterView = { f, sprite, shadow, home, texture, baseFlip, barHalf };
     if (f.side === 'enemy') {
       view.bar = new Bar(
         this,
-        home.x - 33,
+        home.x - barHalf,
         STAGE.floorY + 9,
-        66,
+        barHalf * 2,
         BAR_STYLES.hp,
         f.hp,
         f.maxHp,
@@ -199,6 +238,12 @@ export class BattleScene extends Phaser.Scene {
       if (f.airborne) this.hover(view);
     }
     this.views.set(f.id, view);
+  }
+
+  /** A fixed framing, raised to fit the tallest fighter. */
+  private shot(name: 'wide' | 'command'): Shot {
+    const s = SHOTS[name];
+    return { ...s, y: s.y - this.lookUp };
   }
 
   /** Moves a game object onto the fixed UI layer. */
@@ -308,7 +353,7 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const v of this.views.values()) {
       v.shadow.x = v.sprite.x;
-      if (v.bar) v.bar.x = Math.round(v.sprite.x - 33);
+      if (v.bar) v.bar.x = Math.round(v.sprite.x - v.barHalf);
       if (v.aura) v.aura.setPosition(v.sprite.x, v.sprite.y - v.sprite.displayHeight / 2);
       const lift = Math.max(0, STAGE.floorY - v.sprite.y);
       v.shadow.setScale(Math.max(0.5, 1 - lift / 240));
@@ -320,7 +365,7 @@ export class BattleScene extends Phaser.Scene {
   private async run(): Promise<void> {
     const e = this.engine;
     // establishing shot: from the crowd and the lights down onto the ring
-    this.director.to(SHOTS.wide, 2.2);
+    this.director.to(this.shot('wide'), 2.2);
     await this.wait(900);
     if (this.start.firstStrike === 'player') {
       await this.banner(t('battle.first_strike'), UI.spark);
@@ -359,7 +404,7 @@ export class BattleScene extends Phaser.Scene {
         continue;
       }
       if (e.phase === 'command') {
-        this.director.to(SHOTS.command, 5);
+        this.director.to(this.shot('command'), 5);
         // with a partner out, say whose turn it is, just above the menu
         this.turnText.setText(e.partner ? tf('battle.turn', { name: t(e.acting.name).toUpperCase() }) : '');
         const choice = await this.chooseAction();
@@ -648,7 +693,7 @@ export class BattleScene extends Phaser.Scene {
       if (picked) onPick(ids[i]);
       else {
         this.menu?.focus();
-        this.director.to(SHOTS.command, 5);
+        this.director.to(this.shot('command'), 5);
         onBack();
       }
     };
@@ -725,7 +770,9 @@ export class BattleScene extends Phaser.Scene {
           this.playAnim(actor, 'walk');
           await this.tween({
             targets: s,
-            x: target.sprite.x - dir * 69,
+            // stop just short of the target, whatever the two sizes
+            x:
+              target.sprite.x - dir * Math.max(69, (s.displayWidth + target.sprite.displayWidth) * 0.42 + 10),
             y: target.home.y === STAGE.floorY ? STAGE.floorY : s.y,
             duration: 360,
           });
@@ -785,8 +832,6 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'hit': {
-          const unpose = this.pose(actor, 'attack');
-          this.time.delayedCall(420, unpose);
           // an enemy attacking the hero: wind up and strike, while the player can Block or Reverse
           let guard: GuardResult = 'none';
           if (actor.f.side === 'enemy' && target.f.side === 'hero' && !opts.firstStrike) {
@@ -795,6 +840,13 @@ export class BattleScene extends Phaser.Scene {
             const watch = this.commands.guard(this.time.now + motionMs);
             if (hovering) await drop(stomp.fallMs);
             else {
+              // made fighters swing with their attack animation
+              if (this.hasAnim(actor, 'chop')) {
+                actor.sprite.play(animKey(actor.texture, 'chop'));
+                actor.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () =>
+                  this.playAnim(actor, 'idle'),
+                );
+              }
               await this.tween({ targets: s, x: s.x - dir * 15, duration: g.windUpMs, ease: 'Sine.easeOut' });
               await this.tween({ targets: s, x: s.x + dir * 27, duration: g.strikeMs, ease: 'Quad.easeIn' });
             }
@@ -841,6 +893,8 @@ export class BattleScene extends Phaser.Scene {
             }
             // a GREAT hit knocks a charging enemy out of its wind-up
             if (great && !r.ko && this.engine.breakCharge(vid)) await this.showStagger(tv);
+            else if (great && !r.ko && tv.f.charging && tv.f.size === 'huge')
+              void this.popText(tv, t('battle.unstoppable'), UI.rope);
             if (r.ko) await this.knockOut(tv);
             else standing++;
           }
@@ -987,7 +1041,14 @@ export class BattleScene extends Phaser.Scene {
         repeat: -1,
       });
     }
-    await this.tween({ targets: v.sprite, scaleY: 0.9, scaleX: 1.08, duration: 160, yoyo: true, repeat: 1 });
+    await this.tween({
+      targets: v.sprite,
+      scaleY: v.sprite.scaleY * 0.9,
+      scaleX: v.sprite.scaleX * 1.08,
+      duration: 160,
+      yoyo: true,
+      repeat: 1,
+    });
     await this.popText(v, t('battle.charging'), UI.spark);
   }
 
@@ -1111,19 +1172,6 @@ export class BattleScene extends Phaser.Scene {
     if (this.hasAnim(v, anim)) v.sprite.play(animKey(v.texture, anim));
   }
 
-  /**
-   * Shows a made fighter's attack or hurt picture, if it has one. Returns a
-   * function that puts the standing picture back.
-   */
-  private pose(v: FighterView, pose: 'attack' | 'hurt'): () => void {
-    const k = poseKey(v.texture, pose);
-    if (this.hasAnim(v, 'idle') || !this.textures.exists(k)) return () => undefined;
-    v.sprite.setTexture(k);
-    return () => {
-      if (v.sprite.texture.key === k) v.sprite.setTexture(v.texture);
-    };
-  }
-
   /** Plays a one-shot animation; sprites without one get a quick lunge instead (in their attack pose, if any). */
   private async playAnimOnce(v: FighterView, anim: string): Promise<void> {
     if (this.hasAnim(v, anim)) {
@@ -1132,12 +1180,10 @@ export class BattleScene extends Phaser.Scene {
       this.playAnim(v, 'idle');
     } else {
       const dir = v.f.side === 'hero' ? 1 : -1;
-      const restore = this.pose(v, 'attack');
-      this.time.delayedCall(260, restore);
       await this.tween({
         targets: v.sprite,
         x: v.sprite.x + dir * 15,
-        scaleY: 0.9,
+        scaleY: v.sprite.scaleY * 0.9,
         duration: 90,
         yoyo: true,
       });
@@ -1153,8 +1199,6 @@ export class BattleScene extends Phaser.Scene {
     s.setTintFill(0xffffff);
     this.time.delayedCall(70, () => s.clearTint());
     void this.popText(target, String(damage), damage > 0 ? UI.spark : UI.inkDim);
-    // a made fighter's hurt picture, for a moment
-    if (damage > 0 && !ko) this.time.delayedCall(380, this.pose(target, 'hurt'));
     // hit-stop: everything freezes for a moment on impact
     await this.wait(damage > 0 ? 90 : 40);
     if (target.f.side === 'hero') {
@@ -1165,7 +1209,14 @@ export class BattleScene extends Phaser.Scene {
       }
     } else {
       target.bar?.setValue(target.f.hp, target.f.maxHp);
-      if (!ko) await this.tween({ targets: s, scaleX: 1.12, scaleY: 0.86, duration: 70, yoyo: true });
+      if (!ko && this.hasAnim(target, 'hurt')) {
+        // made fighters flinch with their own hurt animation
+        target.sprite.play(animKey(target.texture, 'hurt'));
+        target.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.playAnim(target, 'idle'));
+      } else if (!ko) {
+        const k = { x: s.scaleX, y: s.scaleY };
+        await this.tween({ targets: s, scaleX: k.x * 1.12, scaleY: k.y * 0.86, duration: 70, yoyo: true });
+      }
     }
   }
 
@@ -1265,7 +1316,7 @@ export class BattleScene extends Phaser.Scene {
       }
       await this.wait(500);
     } else {
-      this.director.to(SHOTS.wide, 4);
+      this.director.to(this.shot('wide'), 4);
       await this.tween({
         targets: me.sprite,
         y: me.sprite.y - 45,

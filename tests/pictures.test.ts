@@ -132,3 +132,47 @@ describe('deeper made fighters', () => {
     await expect(Builds.saveMine({ fighters: [huge] })).rejects.toThrow(/too big/);
   });
 });
+
+describe('sizes and paper animation', () => {
+  it('normal line-ups keep their spacing; big and huge ones push the rest back inside the ropes', async () => {
+    const { enemyXs, ARENA } = await import('../src/battle/stage_layout');
+    expect(enemyXs(['normal', 'normal'])).toEqual([ARENA.enemyX[0], ARENA.enemyX[1]]);
+    const xs = enemyXs(['huge', 'normal', 'normal']);
+    expect(xs[1] - xs[0]).toBeGreaterThan(xs[2] - xs[1]);
+    expect(xs[2]).toBeLessThanOrEqual(ARENA.ring.half + 0.1);
+    const crowd = enemyXs(['huge', 'big', 'normal', 'normal']);
+    expect(crowd.every((x, i) => i === 0 || x > crowd[i - 1])).toBe(true);
+    expect(crowd[3]).toBeLessThanOrEqual(ARENA.ring.half + 0.1);
+  });
+
+  it('a huge boss can’t be staggered out of its wind-up', () => {
+    const f = { ...newFighter('enemy', 'f7'), size: 'huge' as const };
+    const { foe } = toDefs('me', f);
+    expect(foe!.size).toBe('huge');
+    Database.registerCustom('c.me.', [], [foe!]);
+    const e = new BattleEngine(
+      Database,
+      Database.character('chispa'),
+      { hp: 10, maxHp: 10 },
+      { id: 't', enemies: [{ enemy: foe!.id, slot: 'front' }], stage: 'arena' },
+      1,
+    );
+    const boss = e.enemies()[0];
+    expect(boss.size).toBe('huge');
+    boss.charging = { move: 'goon_shove', turnsLeft: 1 };
+    expect(e.breakCharge(boss.id)).toBe(false);
+    expect(boss.charging).toBeDefined();
+    Database.unregisterCustom('c.me.');
+  });
+
+  it('paper animations: still at motion 0, and every animation has frames', async () => {
+    const { bends } = await import('../src/systems/pictures');
+    const still = bends(0);
+    for (const frames of Object.values(still))
+      for (const b of frames) for (const v of Object.values(b)) expect([0, 1, -0]).toContain(v);
+    const normal = bends(1);
+    expect(normal.idle).toHaveLength(4);
+    expect(normal.chop[1].lean).toBeGreaterThan(0);
+    expect(normal.hurt[0].rot).toBeLessThan(0);
+  });
+});

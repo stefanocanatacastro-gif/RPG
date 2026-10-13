@@ -51,8 +51,8 @@ export class BootScene extends Phaser.Scene {
       this.registry.set('roomStore', where);
       this.registry.set('buildStore', builds);
       // uploaded fighter pictures become textures now, and again after every save
-      await preparePictures(this.textures);
-      Builds.onChange(() => preparePictures(this.textures));
+      await preparePictures(this);
+      Builds.onChange(() => preparePictures(this));
       Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
     });
     const saves = loadSaveSlots().then((where) => this.registry.set('saveStore', where));

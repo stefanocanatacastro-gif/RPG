@@ -601,7 +601,8 @@ export class BattleSandboxScene extends Phaser.Scene {
       line(t(d.name).toUpperCase(), UI.spark);
       line(`HP ${d.hp}  ATK ${d.attack}  DEF ${d.defence}`);
       line(`XP ${d.xp}  Coins ${d.coins}`, UI.inkDim);
-      if (d.props.length) line(d.props.join(', '), UI.grit);
+      if (d.props.length || d.size)
+        line([d.size && d.size !== 'normal' ? d.size : '', ...d.props].filter(Boolean).join(', '), UI.grit);
       for (const r of d.ai.slice(0, 3)) {
         const m = Database.move(r.move);
         const cond = [

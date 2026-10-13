@@ -412,7 +412,14 @@ export class GalleryScene extends Phaser.Scene {
         if (img.height > 200) img.setVisible(false);
         this.dyn.push(img);
       }
-      line(f.kind === 'hero' ? 'HERO' : 'ENEMY', UI.grit);
+      line(
+        f.kind === 'hero'
+          ? 'HERO'
+          : f.size && f.size !== 'normal'
+            ? `${f.size.toUpperCase()} ENEMY`
+            : 'ENEMY',
+        UI.grit,
+      );
       if (f.title) line(`"${f.title}"`, UI.spark);
       if (f.line) line(`Says: ${f.line}`, UI.inkDim);
       line(`HP ${f.hp}  ATK ${f.attack}  DEF ${f.defence}`);

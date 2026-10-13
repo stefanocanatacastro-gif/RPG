@@ -41,6 +41,8 @@ export interface Fighter {
   boost?: { attack: number; defence: number; turnsLeft: number };
   /** A charged move being wound up, and how many more turns until it's released. */
   charging?: { move: string; turnsLeft: number };
+  /** How much room it takes; huge ones (bosses) can't be staggered out of a wind-up. */
+  size: 'normal' | 'big' | 'huge';
   xp: number;
   coins: number;
 }
@@ -190,6 +192,7 @@ export class BattleEngine {
       airborne: false,
       spiky: false,
       guard: 0,
+      size: 'normal',
       xp: 0,
       coins: 0,
     });
@@ -218,6 +221,7 @@ export class BattleEngine {
           airborne: def.props.includes('airborne') || e.slot === 'air',
           spiky: def.props.includes('spiky'),
           guard: 0,
+          size: def.size ?? 'normal',
           xp: def.xp,
           coins: def.coins,
         });
@@ -702,6 +706,10 @@ export class BattleEngine {
   breakCharge(id: string): boolean {
     const f = this.get(id);
     if (!f.charging || f.hp <= 0) return false;
+    if (f.size === 'huge') {
+      this.log.push(`break ${id} resisted`);
+      return false;
+    }
     f.charging = undefined;
     this.log.push(`break ${id}`);
     return true;

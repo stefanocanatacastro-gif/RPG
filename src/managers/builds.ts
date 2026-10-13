@@ -48,9 +48,20 @@ export interface PictureSettings {
   outline: boolean;
   /** The picture faces left: turn it to face right (the way heroes face). */
   flip: boolean;
+  /** How much the paper-cutout animations move: 0 still, 1 calm, 2 normal, 3 lively. */
+  motion?: number;
 }
 
-export const DEFAULT_PICTURE: PictureSettings = { height: 96, pixel: 2, outline: true, flip: false };
+/** How much room a fighter takes: huge ones are bosses that fill half the ring. */
+export type FighterSize = 'normal' | 'big' | 'huge';
+
+export const DEFAULT_PICTURE: PictureSettings = {
+  height: 96,
+  pixel: 2,
+  outline: true,
+  flip: false,
+  motion: 2,
+};
 
 export interface FighterLook {
   /** 'wrestler' = the animated wrestler body in custom colours, 'picture' = uploaded pictures, or a sprite key. */
@@ -94,6 +105,8 @@ export interface CustomFighter {
   weights?: Record<string, number>;
   /** Enemies: a move used whenever HP is at half or below. */
   lowHpMove?: string;
+  /** Enemies: how big they are (bosses can be huge). */
+  size?: FighterSize;
   /** Enemies: special rules (up to 4) on top of the weights. */
   rules?: CustomAiRule[];
   scout?: string;
@@ -178,6 +191,7 @@ let uid: string | null = null;
 /** Everyone's sets, by owner id ('me' outside the link). */
 const sets = new Map<string, BuildSet>();
 const looks = new Map<string, FighterLook>();
+const sizes = new Map<string, FighterSize>();
 
 /** Short owner tag used in fighter ids: c.<owner>.<id>. */
 function ownerTag(owner: string): string {
@@ -262,6 +276,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
     addStrings({ [extra.line]: f.line });
   }
   looks.set(gid, f.look);
+  sizes.set(gid, f.kind === 'enemy' ? (f.size ?? 'normal') : 'normal');
   if (f.kind === 'hero')
     return {
       char: {
@@ -302,6 +317,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
       ai,
       scout,
       ...extra,
+      ...(f.size && f.size !== 'normal' ? { size: f.size } : {}),
     },
   };
 }
@@ -703,9 +719,9 @@ export const Builds = {
   },
 
   /** A made fighter's look and texture key (for drawing it). */
-  lookOf(gid: string): { look: FighterLook; key: string } | null {
+  lookOf(gid: string): { look: FighterLook; key: string; size: FighterSize } | null {
     const look = looks.get(gid);
-    return look ? { look, key: textureFor(gid, look) } : null;
+    return look ? { look, key: textureFor(gid, look), size: sizes.get(gid) ?? 'normal' } : null;
   },
 };
 

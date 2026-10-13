@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import { paletteSwap } from './anim_builder';
 import { TEST_COLORS } from './test_sprites';
 import { Builds, type ColorSlot } from '../managers/builds';
-import { drawPictureLook } from './pictures';
+import { drawPictureLook, maxWidthFor } from './pictures';
 
 /** Colours each texture was last painted with, so unchanged looks aren't repainted. */
 const painted = new Map<string, string>();
@@ -46,7 +46,7 @@ export function ensureLook(scene: Phaser.Scene, gid: string): void {
   const l = Builds.lookOf(gid);
   if (!l) return;
   if (l.look.base === 'wrestler') paintWrestler(scene, l.key, l.look.colors ?? {});
-  else if (l.look.base === 'picture') drawPictureLook(scene.textures, l.key, l.look);
+  else if (l.look.base === 'picture') drawPictureLook(scene, l.key, l.look, maxWidthFor(l.size));
 }
 
 /** Whether a made fighter is drawn from uploaded pictures (they face right, and have no animations). */
