@@ -213,5 +213,50 @@
         "do": "heal"
       }
     ]
+  },
+  {
+    "id": "mic_drop",
+    "name": "move.mic_drop",
+    "category": "partner",
+    "gritCost": 0,
+    "power": 1,
+    "target": "single",
+    "command": "timed_press",
+    "reaches": {
+      "airborne": true,
+      "spiky": false
+    },
+    "steps": [
+      {
+        "do": "jump_to_target"
+      },
+      {
+        "do": "command"
+      },
+      {
+        "do": "hit"
+      },
+      {
+        "do": "return"
+      }
+    ]
+  },
+  {
+    "id": "scout",
+    "name": "move.scout",
+    "category": "partner",
+    "gritCost": 0,
+    "power": 0,
+    "target": "single",
+    "command": "none",
+    "reaches": {
+      "airborne": true,
+      "spiky": true
+    },
+    "steps": [
+      {
+        "do": "scout"
+      }
+    ]
   }
 ]

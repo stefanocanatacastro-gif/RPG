@@ -208,3 +208,98 @@ describe('levels', () => {
     expect(gs.data.level).toBe(2);
   });
 });
+
+describe('partner in battle', () => {
+  const pip = Database.character('pip');
+  const withPip = (formation = 'test_goons', seed = 42, pipHp = pip.hp) =>
+    new BattleEngine(Database, hero, fresh(), Database.formation(formation), seed, {
+      def: pip,
+      hp: pipHp,
+      maxHp: pip.hp,
+    });
+
+  it('stands with Chispa on the hero side', () => {
+    const b = withPip();
+    expect(b.party().map((f) => f.defId)).toEqual(['chispa', 'pip']);
+    expect(b.partner?.order).toBe(1);
+    expect(b.canTarget('mic_drop', 'partner')).toEqual({ ok: false, reason: 'ally' });
+  });
+
+  it('takes turns: Chispa, then Pip, then the enemies, each round', () => {
+    const b = withPip();
+    b.begin(null);
+    expect([b.phase, b.turn]).toEqual(['command', 'hero']);
+    b.beginHeroAction();
+    b.defend();
+    b.endHeroAction();
+    expect([b.phase, b.turn, b.acting.defId]).toEqual(['command', 'partner', 'pip']);
+    b.beginHeroAction();
+    b.defend();
+    b.endHeroAction();
+    expect(b.phase).toBe('enemy');
+    while (b.nextEnemyPlan()) b.endEnemyAction();
+    expect([b.phase, b.turn, b.round]).toEqual(['command', 'hero', 2]);
+  });
+
+  it('a Defend only guards the one who chose it', () => {
+    const b = withPip();
+    b.begin(null);
+    b.beginHeroAction();
+    b.defend();
+    b.endHeroAction();
+    expect(b.hero.guard).toBe(1);
+    expect(b.partner!.guard).toBe(0);
+  });
+
+  it('enemies go for Pip some of the time, and only while he is standing', () => {
+    const targets = new Set<string>();
+    for (let seed = 1; seed < 40; seed++) {
+      const b = withPip('test_goons', seed);
+      b.begin('enemy');
+      let p;
+      while ((p = b.nextEnemyPlan())) {
+        targets.add(p.target);
+        b.endEnemyAction();
+      }
+    }
+    expect(targets).toEqual(new Set(['hero', 'partner']));
+    for (let seed = 1; seed < 20; seed++) {
+      const b = withPip('test_goons', seed, 0);
+      b.begin('enemy');
+      let p;
+      while ((p = b.nextEnemyPlan())) {
+        expect(p.target).toBe('hero');
+        b.endEnemyAction();
+      }
+    }
+  });
+
+  it('a knocked-down Pip loses his turn but the fight goes on', () => {
+    const b = withPip();
+    b.begin(null);
+    b.partner!.hp = 0;
+    b.beginHeroAction();
+    b.defend();
+    b.endHeroAction();
+    expect(b.phase).toBe('enemy');
+    while (b.nextEnemyPlan()) b.endEnemyAction();
+    expect(b.phase).toBe('command');
+  });
+
+  it('the fight is lost only when Chispa goes down', () => {
+    const b = withPip();
+    b.begin('enemy');
+    b.nextEnemyPlan();
+    b.hero.hp = 0;
+    b.endEnemyAction();
+    expect(b.phase).toBe('defeat');
+  });
+
+  it('healing items work on whoever uses them, but not on a downed partner', () => {
+    const b = withPip();
+    b.partner!.hp = 3;
+    expect(b.healHero(10, 'partner')).toBe(pip.hp - 3);
+    b.partner!.hp = 0;
+    expect(b.healHero(10, 'partner')).toBe(0);
+  });
+});

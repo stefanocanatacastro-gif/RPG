@@ -2,7 +2,7 @@
 
 A turn-based wrestling RPG in the style of *Paper Mario: The Thousand-Year Door*, in pixel art, built as a web game with Phaser 3 and TypeScript. Battles happen in a ring in front of a crowd; ring props are the items.
 
-It runs in any browser on computer or phone. Every build is a single self-contained HTML file that is published as a playable link.
+It's a PC game: it runs in a desktop browser with keyboard or gamepad (the planned desktop build wraps the same code). Every build is a single self-contained HTML file that is published as a playable link.
 
 ## Status
 
@@ -118,6 +118,14 @@ The *test_crew* line-up (Bruiser, Goon, Medic) is in the debug menu's battle lis
 ## Winning
 
 After a win, the results panel lists who was beaten and their XP, the coins, and the XP bar filling toward the next level (XP to next level = 10 + 5 × (level − 1), in `battle_rules.json`). A level up fully restores HP and Grit. The panel waits for a button press.
+
+## Partners in battle
+
+A partner (Pip first) fights next to Chispa, a step in front of him. Each round Chispa acts, then the partner, then the enemies. The partner has his own HP (shown in a second panel), his own moves from `characters.json`, uses items on himself and can Defend; only Chispa can run. Grit is shared.
+
+Enemy attacks go for the partner 40% of the time while he's standing (`partnerTargetChance` in `battle_rules.json`); Block and Reversal work for either. A partner at 0 HP lies flat and skips his turns, and gets back up with 1 HP after the fight (`partnerReviveHp`). The fight is lost only when Chispa goes down.
+
+Pip's moves: **Mic Drop** (timed press, reaches flyers) and **Scout**, which shows an opponent's HP, attack, defence and Pip's notes. For testing, the debug menu's *Pip in party* switch brings him along in field fights, and the sandbox has a *Partner* row.
 
 ## Battle sandbox
 

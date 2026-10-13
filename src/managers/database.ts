@@ -35,7 +35,17 @@ export interface ValidationContext {
 const TARGETS: TargetRule[] = ['single', 'all', 'all_ground', 'front', 'self', 'partner', 'ally_lowest'];
 const CATEGORIES = ['strike', 'aerial', 'grapple', 'enemy', 'partner'];
 const COMMANDS = ['none', 'stomp', 'timed_press', 'hold_release', 'mash', 'rotate', 'sequence', 'ring'];
-const STEPS = ['walk_to_target', 'jump_to_target', 'anim', 'command', 'hit', 'heal', 'return', 'wait'];
+const STEPS = [
+  'walk_to_target',
+  'jump_to_target',
+  'anim',
+  'command',
+  'hit',
+  'heal',
+  'scout',
+  'return',
+  'wait',
+];
 const PROPS = ['spiky', 'airborne', 'armoured', 'flips', 'fiery'];
 const ITEM_CATS = ['heal', 'damage', 'buff', 'key'];
 const SLOTS = ['front', 'back', 'air'];
@@ -99,7 +109,8 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
       });
       const hasHit = m.steps.some((s) => s.do === 'hit');
       const hasHeal = m.steps.some((s) => s.do === 'heal');
-      if (!hasHit && !hasHeal) add('moves', m.id, 'never hits (no "hit" step)');
+      const hasScout = m.steps.some((s) => s.do === 'scout');
+      if (!hasHit && !hasHeal && !hasScout) add('moves', m.id, 'never hits (no "hit" step)');
       if (hasHeal && !(m.heal && m.heal > 0)) add('moves', m.id, 'has a "heal" step but no heal amount');
       if (m.target === 'ally_lowest' && !hasHeal)
         add('moves', m.id, 'targets an ally but has no "heal" step');

@@ -65,6 +65,8 @@ export type MoveStep =
   | { do: 'command' }
   | { do: 'hit'; mult?: number }
   | { do: 'heal' }
+  /** Partner Scout: shows the target's stats and Scout text. */
+  | { do: 'scout' }
   | { do: 'return' }
   | { do: 'wait'; ms: number };
 

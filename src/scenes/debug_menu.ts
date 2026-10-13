@@ -140,6 +140,7 @@ export class DebugMenuScene extends Phaser.Scene {
       { label: 'Hitboxes', value: 'hitboxes', right: onOff('hitboxes') },
       { label: 'Show FPS', value: 'fps', right: onOff('fps') },
       { label: 'Perfect commands', value: 'autoCommands', right: onOff('autoCommands') },
+      { label: 'Pip in party', value: 'pip', right: hasGame() && gameState().partner() ? 'ON' : 'off' },
       { label: 'Give 100 coins', value: 'coins' },
       { label: 'Give item', value: 'item', right: '>' },
       { label: 'Toggle flag', value: 'flag', right: '>' },
@@ -165,6 +166,11 @@ export class DebugMenuScene extends Phaser.Scene {
           case 'fps':
           case 'autoCommands':
             setDebug(item.value, !debugState[item.value]);
+            return this.showMain(i);
+          case 'pip':
+            this.ensureGame();
+            if (gameState().partner()) gameState().dismissPartner();
+            else gameState().addPartner(Database.character('pip'));
             return this.showMain(i);
           case 'coins':
             this.ensureGame();

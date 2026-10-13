@@ -100,5 +100,15 @@
   "stage.dockside": "Muelles del Puerto",
   "stage.underground": "Circuito Clandestino",
   "hub.sandbox": "Sandbox de combate",
-  "hub.sandbox.desc": "Arma cualquier pelea, juégala o simúlala 200 veces. Tu partida no se toca."
+  "hub.sandbox.desc": "Arma cualquier pelea, juégala o simúlala 200 veces. Tu partida no se toca.",
+  "char.pip": "Pip",
+  "move.mic_drop": "Micrófono",
+  "move.mic_drop.desc": "Pip salta y deja caer el micrófono sobre cualquier rival, incluso en el aire.",
+  "move.scout": "Analizar",
+  "move.scout.desc": "Pip estudia a un rival: PV, ataque, defensa y a qué prestar atención.",
+  "battle.turn": "TURNO DE {name}",
+  "battle.scout.stats": "PV {hp}/{max}   ATQ {atk}   DEF {def}",
+  "battle.down": "¡FUERA!",
+  "battle.partner_down_note": "{name} está fuera de combate y se levantará al terminar la pelea.",
+  "battle.reason.down": "No puede actuar mientras está en el suelo."
 }

@@ -37,6 +37,8 @@ interface FighterView {
   shadow: Phaser.GameObjects.Ellipse;
   bar?: Bar;
   home: { x: number; y: number };
+  /** Texture key, for looking up its animations. */
+  texture: string;
   /** Pulsing glow behind an enemy that is winding up a charged move. */
   aura?: Phaser.GameObjects.Ellipse;
 }
@@ -57,11 +59,12 @@ const SHOTS: Record<string, Shot> = {
 export class BattleScene extends Phaser.Scene {
   engine!: BattleEngine;
   /** What the battle is waiting for — read by the browser test. */
-  inputState: 'busy' | 'menu' | 'target' | 'results' = 'busy';
+  inputState: 'busy' | 'menu' | 'target' | 'results' | 'scout' = 'busy';
   private start!: BattleStart;
   private views = new Map<string, FighterView>();
   private desc!: Phaser.GameObjects.Text;
   private roundText!: Phaser.GameObjects.Text;
+  private turnText!: Phaser.GameObjects.Text;
   private menu: MenuList | null = null;
   private cursor!: Phaser.GameObjects.Graphics;
   commands!: CommandRunner;
@@ -70,7 +73,8 @@ export class BattleScene extends Phaser.Scene {
   /** HUD, menus and banners live here, drawn by a fixed camera so they never pan or zoom. */
   private uiLayer!: Phaser.GameObjects.Layer;
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
-  private menuCursor = 0;
+  /** Last menu row picked, per party member. */
+  private menuCursor: Record<string, number> = {};
 
   constructor() {
     super('battle');
@@ -80,17 +84,19 @@ export class BattleScene extends Phaser.Scene {
     this.start = start;
     this.views.clear();
     this.menu = null;
-    this.menuCursor = 0;
+    this.menuCursor = {};
     this.inputState = 'busy';
     const gs = gameState();
     const hero = Database.character(gs.hero().id);
     const formation = start.formationDef ?? Database.formation(start.formation);
+    const pm = gs.partner();
     this.engine = new BattleEngine(
       Database,
       hero,
       { hp: gs.hero().hp, maxHp: gs.hero().maxHp },
       formation,
       start.seed,
+      pm ? { def: Database.character(pm.id), hp: pm.hp, maxHp: pm.maxHp } : undefined,
     );
     if (start.hero) {
       this.engine.hero.attack = start.hero.attack;
@@ -137,14 +143,15 @@ export class BattleScene extends Phaser.Scene {
   private addFighter(f: Fighter): void {
     const home = homeOf(f.side, f.order, f.airborne);
     const shadow = this.add.ellipse(home.x, STAGE.floorY, 40, 8, 0x000000, 0.3).setDepth(5);
-    const isHero = f.side === 'hero';
+    const isHero = f.id === 'hero';
+    const texture = isHero ? HERO_TEXTURE : f.sprite;
     const sprite = this.add
-      .sprite(home.x, home.y, isHero ? HERO_TEXTURE : f.sprite, isHero ? 'idle_00' : undefined)
+      .sprite(home.x, home.y, texture, isHero ? 'idle_00' : undefined)
       .setOrigin(0.5, 1)
       .setDepth(10 + f.order);
     if (isHero) sprite.play(animKey(HERO_TEXTURE, 'idle'));
-    const view: FighterView = { f, sprite, shadow, home };
-    if (!isHero) {
+    const view: FighterView = { f, sprite, shadow, home, texture };
+    if (f.side === 'enemy') {
       view.bar = new Bar(
         this,
         home.x - 22,
@@ -194,8 +201,21 @@ export class BattleScene extends Phaser.Scene {
       bus.on('hp.changed', (e) => e.who === gs.hero().id && hp.setValue(e.hp, e.maxHp)),
       bus.on('grit.changed', (e) => grit.setValue(e.grit, e.maxGrit)),
     ];
+    const pm = gs.partner();
+    if (pm) {
+      drawPanel(g, 252, 8, 176, 48, { alpha: 0.94 });
+      this.ui(
+        pixelText(this, 264, 18, t(Database.character(pm.id).name).toUpperCase(), 8, css(UI.spark)).setOrigin(
+          0,
+          0,
+        ),
+      );
+      const php = this.ui(new Bar(this, 264, 34, 152, BAR_STYLES.hp, pm.hp, pm.maxHp));
+      offs.push(bus.on('hp.changed', (e) => e.who === pm.id && php.setValue(e.hp, e.maxHp)));
+    }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => offs.forEach((off) => off()));
 
+    this.turnText = this.ui(pixelText(this, 20, 80, '', 8, css(UI.spark)).setOrigin(0, 0));
     this.roundText = this.ui(pixelText(this, W - 14, 14, '', 8, css(UI.inkDim)).setOrigin(1, 0));
     this.desc = this.ui(
       pixelText(this, 16, H - 26, '', 8)
@@ -247,12 +267,15 @@ export class BattleScene extends Phaser.Scene {
       this.roundText.setText(tf('battle.round', { n: e.round }));
       if (e.phase === 'command') {
         this.director.to(SHOTS.command, 5);
+        // with a partner out, say whose turn it is, just above the menu
+        this.turnText.setText(e.partner ? tf('battle.turn', { name: t(e.acting.name).toUpperCase() }) : '');
         const choice = await this.chooseAction();
+        this.turnText.setText('');
         await this.perform(choice);
       } else if (e.phase === 'enemy') {
         const plan = e.nextEnemyPlan();
         if (plan) {
-          if (debugState.god) e.hero.guard = 99;
+          if (debugState.god) for (const f of e.party()) f.guard = 99;
           const v = this.views.get(plan.actor)!;
           if (plan.kind === 'charge') await this.showCharge(v);
           else {
@@ -273,27 +296,30 @@ export class BattleScene extends Phaser.Scene {
   private async perform(c: Choice): Promise<void> {
     const e = this.engine;
     const gs = gameState();
+    const me = this.views.get(e.turn)!;
     if (c.kind === 'move') {
       const m = Database.move(c.move);
       gs.spendGrit(m.gritCost);
       e.beginHeroAction();
-      await this.playMove('hero', c.move, c.target);
+      await this.playMove(e.turn, c.move, c.target);
     } else if (c.kind === 'item') {
       e.beginHeroAction();
-      this.director.track([this.views.get(c.target)!.sprite, this.views.get('hero')!.sprite], 1.2);
+      this.director.track([this.views.get(c.target)!.sprite, me.sprite], 1.2);
       await this.useItem(c.item, c.target);
     } else if (c.kind === 'defend') {
       e.defend();
-      this.director.track([this.views.get('hero')!.sprite], 1.35, 10);
-      await this.popText(this.views.get('hero')!, t('battle.guard'), UI.grit);
+      this.director.track([me.sprite], 1.35, 10);
+      await this.popText(me, t('battle.guard'), UI.grit);
     } else {
       const ok = e.tryRun();
       if (!ok) await this.banner(t('battle.run_failed'), UI.rope);
       else {
-        const hero = this.views.get('hero')!;
-        this.director.track([hero.sprite], 1.15);
-        hero.sprite.setFlipX(true).play(animKey(HERO_TEXTURE, 'walk'));
-        await this.tween({ targets: hero.sprite, x: -40, duration: 500 });
+        // the whole party makes a break for it
+        const runners = e.party(false).map((f) => this.views.get(f.id)!.sprite);
+        this.director.track([runners[0]], 1.15);
+        for (const r of runners) r.setFlipX(true);
+        runners[0].play(animKey(HERO_TEXTURE, 'walk'));
+        await this.tween({ targets: runners, x: -40, duration: 500 });
         await this.banner(t('battle.fled'), UI.ink);
       }
     }
@@ -310,7 +336,7 @@ export class BattleScene extends Phaser.Scene {
     return new Promise((resolve) => {
       const e = this.engine;
       const gs = gameState();
-      const items: MenuItem[] = e.hero.moves.map((id) => {
+      const items: MenuItem[] = e.acting.moves.map((id) => {
         const m = Database.move(id);
         const check = e.canUseMove(id, gs.data.grit);
         return {
@@ -333,8 +359,10 @@ export class BattleScene extends Phaser.Scene {
           reason: t('battle.items.empty'),
         },
         { label: t('battle.defend'), value: 'defend', desc: t('battle.defend.desc') },
-        { label: t('battle.run'), value: 'run', desc: t('battle.run.desc') },
       );
+      // only Chispa calls the retreat
+      if (e.turn === 'hero') items.push({ label: t('battle.run'), value: 'run', desc: t('battle.run.desc') });
+      const cursorKey = e.turn;
 
       const open = () => {
         this.inputState = 'menu';
@@ -347,7 +375,7 @@ export class BattleScene extends Phaser.Scene {
           descText: this.desc,
           cancellable: false,
           onSelect: (item, i) => {
-            this.menuCursor = i;
+            this.menuCursor[cursorKey] = i;
             this.menu!.active = false;
             if (item.value.startsWith('move:')) {
               const move = item.value.slice(5);
@@ -362,7 +390,8 @@ export class BattleScene extends Phaser.Scene {
           },
         });
         // keep the last choice highlighted, unless it's greyed out now
-        if (!items[this.menuCursor]?.disabled) this.menu.setCursor(this.menuCursor);
+        const last = this.menuCursor[cursorKey] ?? 0;
+        if (!items[last]?.disabled) this.menu.setCursor(last);
         this.ui(this.menu.setDepth(65));
       };
       const done = (c: Choice) => {
@@ -396,7 +425,7 @@ export class BattleScene extends Phaser.Scene {
         const id = gs.data.items[Number(item.value)];
         const def = Database.item(id);
         this.menu!.active = false;
-        if (def.target === 'self') done({ kind: 'item', item: item.value, target: 'hero' });
+        if (def.target === 'self') done({ kind: 'item', item: item.value, target: e.turn });
         else
           this.pickTarget(
             e.enemies().map((f) => f.id),
@@ -413,7 +442,7 @@ export class BattleScene extends Phaser.Scene {
     this.inputState = 'target';
     this.menu?.setVisible(false);
     let i = 0;
-    const hero = this.views.get('hero')!.sprite;
+    const hero = this.views.get(this.engine.turn)!.sprite;
     const draw = () => {
       const v = this.views.get(ids[i])!;
       this.director.track([hero, v.sprite], 1.08, 0, 5);
@@ -534,7 +563,7 @@ export class BattleScene extends Phaser.Scene {
         }
         case 'anim':
           // placeholder enemies have no animations yet; their strike comes with the hit
-          if (actor.f.side === 'hero' || this.hasAnim(actor, step.anim))
+          if (actor.f.id === 'hero' || this.hasAnim(actor, step.anim))
             await this.playAnimOnce(actor, step.anim);
           break;
         case 'command': {
@@ -624,6 +653,9 @@ export class BattleScene extends Phaser.Scene {
         case 'wait':
           await this.wait(step.ms);
           break;
+        case 'scout':
+          await this.showScout(actor, target);
+          break;
         case 'heal': {
           await this.tween({ targets: s, y: s.y - 14, duration: 120, yoyo: true, ease: 'Quad.easeOut' });
           const healed = this.engine.healFighter(targetId, move.heal ?? 0);
@@ -638,6 +670,80 @@ export class BattleScene extends Phaser.Scene {
     if (s.x !== actor.home.x || s.y !== actor.home.y) await this.returnHome(actor);
     s.setDepth(10 + actor.f.order);
     if (actor.f.airborne && actor.f.hp > 0) this.hover(actor);
+  }
+
+  /** Pip sizes up an opponent: its numbers and his Scout notes, until the player presses on. */
+  private async showScout(scout: FighterView, target: FighterView): Promise<void> {
+    this.director.track([scout.sprite, target.sprite], 1.25, 8);
+    await this.tween({ targets: scout.sprite, y: scout.sprite.y - 10, duration: 110, yoyo: true });
+    this.engine.log.push(`scout ${scout.f.id} ${target.f.id}`);
+    const def = Database.enemy(target.f.defId);
+    const pw = 440;
+    const ph = 104;
+    const px = (W - pw) / 2;
+    const py = H - ph - 20;
+    const parts: Phaser.GameObjects.GameObject[] = [];
+    const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      parts.push(this.ui(o));
+      return o;
+    };
+    drawPanel(add(this.add.graphics()), px, py, pw, ph, { alpha: 0.96 });
+    add(pixelText(this, px + 14, py + 12, t(def.name).toUpperCase(), 16, css(UI.spark)).setOrigin(0, 0));
+    add(
+      pixelText(
+        this,
+        px + 14,
+        py + 34,
+        tf('battle.scout.stats', {
+          hp: target.f.hp,
+          max: target.f.maxHp,
+          atk: target.f.attack,
+          def: target.f.defence,
+        }),
+        8,
+        css(UI.ink),
+      ).setOrigin(0, 0),
+    );
+    add(
+      pixelText(this, px + 14, py + 50, t(def.scout), 8, css(UI.inkDim))
+        .setLineSpacing(4)
+        .setOrigin(0, 0)
+        .setWordWrapWidth(pw - 28),
+    );
+    add(
+      pixelText(
+        this,
+        px + pw / 2,
+        py + ph - 12,
+        tf('battle.results.continue', { button: input.prompt('confirm') }),
+        8,
+        css(UI.inkDim),
+      ),
+    );
+    this.inputState = 'scout';
+    await this.waitForConfirm();
+    this.inputState = 'busy';
+    for (const o of parts) o.destroy();
+  }
+
+  /** Resolves on Confirm or a tap (after a short delay so the press that opened it doesn't count). */
+  private waitForConfirm(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const readyAt = this.time.now + 200;
+      const done = () => {
+        this.events.off(Phaser.Scenes.Events.UPDATE, tick);
+        this.input.off(Phaser.Input.Events.POINTER_UP, tap);
+        resolve();
+      };
+      const tick = () => {
+        if (this.time.now >= readyAt && input.justPressed('confirm')) done();
+      };
+      const tap = (p: Phaser.Input.Pointer) => {
+        if (this.time.now >= readyAt && !input.onTouchControl(p.x, p.y)) done();
+      };
+      this.events.on(Phaser.Scenes.Events.UPDATE, tick);
+      this.input.on(Phaser.Input.Events.POINTER_UP, tap);
+    });
   }
 
   /** An enemy winds up: camera on it, a warning, and a glow that stays until it lets go. */
@@ -755,17 +861,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private hasAnim(v: FighterView, anim: string): boolean {
-    return v.f.side === 'hero' && this.anims.exists(animKey(HERO_TEXTURE, anim));
+    return this.anims.exists(animKey(v.texture, anim));
   }
 
   private playAnim(v: FighterView, anim: string): void {
-    if (this.hasAnim(v, anim)) v.sprite.play(animKey(HERO_TEXTURE, anim));
+    if (this.hasAnim(v, anim)) v.sprite.play(animKey(v.texture, anim));
   }
 
   /** Plays a one-shot animation; placeholder sprites get a quick lunge instead. */
   private async playAnimOnce(v: FighterView, anim: string): Promise<void> {
     if (this.hasAnim(v, anim)) {
-      v.sprite.play(animKey(HERO_TEXTURE, anim));
+      v.sprite.play(animKey(v.texture, anim));
       await new Promise<void>((r) => v.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => r()));
       this.playAnim(v, 'idle');
     } else {
@@ -792,10 +898,9 @@ export class BattleScene extends Phaser.Scene {
     // hit-stop: everything freezes for a moment on impact
     await this.wait(damage > 0 ? 90 : 40);
     if (target.f.side === 'hero') {
-      const gs = gameState();
-      gs.setHp(gs.hero().id, this.engine.hero.hp);
+      gameState().setHp(target.f.defId, target.f.hp);
       if (this.hasAnim(target, 'hurt') && !ko) {
-        target.sprite.play(animKey(HERO_TEXTURE, 'hurt'));
+        target.sprite.play(animKey(target.texture, 'hurt'));
         target.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => this.playAnim(target, 'idle'));
       }
     } else {
@@ -805,7 +910,20 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async knockOut(v: FighterView): Promise<void> {
-    if (v.f.side === 'hero') return;
+    if (v.f.id === 'hero') return;
+    if (v.f.side === 'hero') {
+      // a partner stays down, flattened on the canvas, until the fight is over
+      void this.popText(v, t('battle.down'), UI.rope);
+      await this.tween({
+        targets: v.sprite,
+        scaleY: 0.3,
+        scaleX: 1.2,
+        alpha: 0.7,
+        duration: 200,
+        ease: 'Quad.easeIn',
+      });
+      return;
+    }
     this.clearAura(v);
     // paper flip: spin flat, fade away
     this.tweens.killTweensOf(v.sprite);
@@ -819,17 +937,18 @@ export class BattleScene extends Phaser.Scene {
     const id = gs.takeItem(Number(slot));
     if (!id) return;
     const def = Database.item(id);
-    const hero = this.views.get('hero')!;
-    bus.emit('item.used', { id, by: 'hero', target: targetId });
-    await this.popText(hero, t(def.name).toUpperCase(), UI.good);
+    const user = this.views.get(this.engine.turn)!;
+    bus.emit('item.used', { id, by: this.engine.turn, target: targetId });
+    await this.popText(user, t(def.name).toUpperCase(), UI.good);
     if (def.effect.heal) {
-      const healed = this.engine.healHero(def.effect.heal);
-      gs.setHp(gs.hero().id, this.engine.hero.hp);
-      await this.popText(hero, `+${healed}`, UI.good);
+      const who = this.engine.turn;
+      const healed = this.engine.healHero(def.effect.heal, who);
+      gs.setHp(user.f.defId, user.f.hp);
+      await this.popText(user, `+${healed}`, UI.good);
     }
     if (def.effect.grit) {
       gs.setGrit(gs.data.grit + def.effect.grit);
-      await this.popText(hero, `+${def.effect.grit}`, UI.grit);
+      await this.popText(user, `+${def.effect.grit}`, UI.grit);
     }
     if (def.effect.damage) {
       const target = this.views.get(targetId)!;
@@ -964,22 +1083,7 @@ export class BattleScene extends Phaser.Scene {
       ),
     );
     this.tweens.add({ targets: prompt, alpha: 0.35, duration: 500, yoyo: true, repeat: -1 });
-    await new Promise<void>((resolve) => {
-      const readyAt = this.time.now + 200;
-      const done = () => {
-        this.events.off(Phaser.Scenes.Events.UPDATE, tick);
-        this.input.off(Phaser.Input.Events.POINTER_UP, tap);
-        resolve();
-      };
-      const tick = () => {
-        if (this.time.now >= readyAt && input.justPressed('confirm')) done();
-      };
-      const tap = (p: Phaser.Input.Pointer) => {
-        if (this.time.now >= readyAt && !input.onTouchControl(p.x, p.y)) done();
-      };
-      this.events.on(Phaser.Scenes.Events.UPDATE, tick);
-      this.input.on(Phaser.Input.Events.POINTER_UP, tap);
-    });
+    await this.waitForConfirm();
     this.inputState = 'busy';
     this.tweens.killTweensOf(prompt);
     for (const o of parts) o.destroy();
@@ -999,6 +1103,9 @@ export class BattleScene extends Phaser.Scene {
 
   private finish(result: BattleResult): void {
     this.inputState = 'busy';
+    // a knocked-down partner gets back up once the fight is over
+    const p = this.engine.partner;
+    if (p && p.hp <= 0) gameState().setHp(p.defId, rules.partnerReviveHp);
     SceneLoader.endBattle(this, this.start.returnTo, {
       result,
       formation: this.start.formation,

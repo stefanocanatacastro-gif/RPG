@@ -8,5 +8,15 @@
     "attack": 1,
     "defence": 0,
     "moves": ["chop", "elbow_drop", "body_slam"]
+  },
+  {
+    "id": "pip",
+    "name": "char.pip",
+    "sprite": "spr_pip",
+    "hp": 8,
+    "grit": 0,
+    "attack": 1,
+    "defence": 0,
+    "moves": ["mic_drop", "scout"]
   }
 ]

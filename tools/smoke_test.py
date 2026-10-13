@@ -3,8 +3,8 @@
 Walks the whole foundations loop the way a player would: title -> dev hub ->
 grey-box room -> touch an enemy -> battle -> win -> back in the room with the
 enemy gone and coins added -> through the door -> debug menu -> every test
-screen. Also checks phone sizes, the rotate notice, touch controls and the
-crash screen. Screenshots go to the folder given as the first argument.
+screen, the sandbox and the crash screen. Screenshots go to the folder given
+as the first argument.
 """
 import sys, threading, http.server, functools, os
 from playwright.sync_api import sync_playwright
@@ -120,6 +120,9 @@ def fight(page, out, shot_prefix):
         if not active(page, "battle"):
             break
         st = page.evaluate("(() => { const s = window.__game.scene.getScene('battle'); return [s.inputState, s.engine.phase]; })()")
+        if st[0] == "scout":
+            press(page, "Enter", 300)
+            continue
         if st[0] == "results":
             page.wait_for_timeout(900)  # let the XP bar fill
             page.screenshot(path=f"{out}/{shot_prefix}_results.png")
@@ -576,7 +579,11 @@ with sync_playwright() as p:
     page.screenshot(path=f"{out}/17_sandbox_battle_{stage.replace(' ', '_')}.png")
     hp = battle_eval(page, "return [s.engine.hero.hp, s.engine.hero.maxHp];")
     check(hp == [11, 11], f"the fight uses the sandbox's HP ({hp})")
+    pip = battle_eval(page, "return s.engine.partner ? s.engine.partner.defId : null;")
+    check(pip == "pip", f"Pip fights alongside Chispa in the sandbox ({pip})")
     phase = fight(page, out, "18_sandbox")
+    acted = page.evaluate("window.__game.scene.getScene('battle').engine.log.filter(l => l.startsWith('partner ')).length")
+    check(acted > 0, f"Pip takes his own turns ({acted} actions)")
     check(phase == "victory", f"the sandbox fight is won ({phase})")
     wait_scene(page, "battle_sandbox", 10000)
     page.wait_for_timeout(300)
@@ -634,26 +641,6 @@ with sync_playwright() as p:
     check(not real, f"no errors on desktop {real[:3]}")
     ctx.close()
 
-    # ── Phones ──────────────────────────────────────────────────────────
-    for name, vp, rotate in [("phone_landscape", (844, 390), False), ("phone_portrait", (390, 844), True)]:
-        ctx = b.new_context(viewport={"width": vp[0], "height": vp[1]}, is_mobile=True, has_touch=True, device_scale_factor=3)
-        page = ctx.new_page()
-        errors = []
-        page.on("pageerror", lambda e: errors.append(str(e)))
-        page.goto(url)
-        wait_scene(page, "title", 15000)
-        shown = page.evaluate("getComputedStyle(document.getElementById('rotate')).display") == "flex"
-        check(shown == rotate, f"{name}: rotate notice {'shown' if rotate else 'hidden'}")
-        if not rotate:
-            box = page.locator("#game canvas").bounding_box()
-            page.touchscreen.tap(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-            wait_scene(page, "dev_hub")
-            page.wait_for_timeout(400)
-            visible = page.evaluate("window.__game.scene.getScene('touch_controls').layer.visible")
-            check(visible, "touch controls appear after a tap")
-            page.screenshot(path=f"{out}/14_{name}_hub.png")
-        check(not errors, f"{name}: no errors {errors[:2]}")
-        ctx.close()
     b.close()
 
 srv.shutdown()

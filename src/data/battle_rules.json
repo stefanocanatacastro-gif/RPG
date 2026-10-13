@@ -44,5 +44,7 @@
     "xpBase": 10,
     "xpGrowth": 5,
     "maxLevel": 99
-  }
+  },
+  "partnerTargetChance": 0.4,
+  "partnerReviveHp": 1
 }

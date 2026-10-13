@@ -100,5 +100,15 @@
   "stage.dockside": "Harbor Docks",
   "stage.underground": "Underground Circuit",
   "hub.sandbox": "Battle sandbox",
-  "hub.sandbox.desc": "Build any fight, play it or simulate it 200 times. Your save is never touched."
+  "hub.sandbox.desc": "Build any fight, play it or simulate it 200 times. Your save is never touched.",
+  "char.pip": "Pip",
+  "move.mic_drop": "Mic Drop",
+  "move.mic_drop.desc": "Pip bounces up and drops the mic on any opponent, even one in the air.",
+  "move.scout": "Scout",
+  "move.scout.desc": "Pip sizes up an opponent: HP, attack, defence and what to watch out for.",
+  "battle.turn": "{name}'S TURN",
+  "battle.scout.stats": "HP {hp}/{max}   ATK {atk}   DEF {def}",
+  "battle.down": "DOWN!",
+  "battle.partner_down_note": "{name} is down and will get back up after the fight.",
+  "battle.reason.down": "Can't act while knocked down."
 }

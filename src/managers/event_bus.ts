@@ -5,6 +5,7 @@
 export interface GameEvents {
   'damage.dealt': { source: string; target: string; amount: number; rating?: string };
   'hp.changed': { who: string; hp: number; maxHp: number };
+  'party.changed': { partner: string | null };
   'grit.changed': { grit: number; maxGrit: number };
   'item.added': { id: string; count: number };
   'item.used': { id: string; by: string; target?: string };

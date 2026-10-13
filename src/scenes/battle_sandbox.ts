@@ -23,7 +23,7 @@ import type { BattleScene } from './battle';
 import type { FormationDef, FormationSlot } from '../types/data';
 
 const SLOTS = 4;
-const ROW_H = 15;
+const ROW_H = 14;
 const TOP = 50;
 const LEFT_W = 344;
 const VAL_L = 132; // "<"
@@ -61,11 +61,16 @@ interface Setup {
   attack: number;
   defence: number;
   grit: number;
+  /** Index into partners(): 0 = none. */
+  partner: number;
   strike: number;
   assist: number;
   fixedSeed: boolean;
   skill: number;
 }
+
+/** Partner choices: none, then every character who isn't Chispa. */
+const partners = () => [null, ...Database.data.characters.filter((c) => c.id !== 'chispa')];
 
 /** Kept between visits so the bench remembers the last set-up. */
 let saved: Setup | null = null;
@@ -106,6 +111,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       attack: hero.attack,
       defence: hero.defence,
       grit: gameState().data.maxGrit,
+      partner: 1,
       strike: 0,
       assist: 0,
       fixedSeed: false,
@@ -120,7 +126,7 @@ export class BattleSandboxScene extends Phaser.Scene {
 
     benchBackdrop(this, 'BATTLE SANDBOX', versionLabel());
     const g = this.add.graphics();
-    const panelH = 17 * ROW_H + 10;
+    const panelH = 18 * ROW_H + 10;
     drawPanel(g, 8, TOP - 6, LEFT_W, panelH, { alpha: 0.9 });
     drawPanel(g, LEFT_W + 16, TOP - 6, W - LEFT_W - 24, panelH, { alpha: 0.9 });
     this.desc = pixelText(this, 16, H - 46, '', 8, css(UI.inkDim))
@@ -227,6 +233,16 @@ export class BattleSandboxScene extends Phaser.Scene {
         value: () => String(s.grit),
         ...step('grit', 0, 30),
         desc: 'Grit for this fight (starts full).',
+      },
+      {
+        label: 'Partner',
+        value: () => {
+          const p = partners()[s.partner];
+          return p ? `${t(p.name)} (${p.hp} HP)` : 'None';
+        },
+        left: () => (s.partner = cycle(s.partner, -1, partners().length)),
+        right: () => (s.partner = cycle(s.partner, 1, partners().length)),
+        desc: 'Who fights alongside Chispa, at full HP.',
       },
       {
         label: 'First strike',
@@ -464,6 +480,12 @@ export class BattleSandboxScene extends Phaser.Scene {
     tmp.party[0].hp = this.s.maxHp;
     tmp.maxGrit = this.s.grit;
     tmp.grit = this.s.grit;
+    const partner = partners()[this.s.partner];
+    tmp.activePartner = partner?.id ?? null;
+    if (partner) {
+      tmp.party = tmp.party.filter((m) => m.id !== partner.id);
+      tmp.party.push({ id: partner.id, hp: partner.hp, maxHp: partner.hp });
+    }
     gs.restore(tmp);
     const assist = ASSISTS[this.s.assist];
     setDebug('autoCommands', assist === 'perfect' || assist === 'both');
@@ -525,6 +547,7 @@ export class BattleSandboxScene extends Phaser.Scene {
         hero: Database.character('chispa'),
         maxHp: this.s.maxHp,
         maxGrit: this.s.grit,
+        partner: partners()[this.s.partner] ?? undefined,
         attack: this.s.attack,
         defence: this.s.defence,
         formation: f,

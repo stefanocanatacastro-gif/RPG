@@ -47,3 +47,11 @@ describe('battle simulator', () => {
     expect(r.wins + r.losses + r.timeouts).toBe(5);
   });
 });
+
+describe('simulator with a partner', () => {
+  it('Pip makes the crew fight easier', () => {
+    const solo = simulate(setup('test_crew', 'skilled'), 150);
+    const duo = simulate(setup('test_crew', 'skilled', { partner: Database.character('pip') }), 150);
+    expect(duo.wins).toBeGreaterThan(solo.wins);
+  });
+});

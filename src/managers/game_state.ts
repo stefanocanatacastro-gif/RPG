@@ -92,6 +92,25 @@ export class GameState {
     return this.d.party[0];
   }
 
+  /** The partner currently out with Chispa, or null (before Pip joins). */
+  partner(): PartyMember | null {
+    return this.d.activePartner ? this.member(this.d.activePartner) : null;
+  }
+
+  /** A partner joins (or comes back out). Joining for the first time starts at full HP. */
+  addPartner(def: CharacterDef): void {
+    if (!this.d.party.some((m) => m.id === def.id))
+      this.d.party.push({ id: def.id, hp: def.hp, maxHp: def.hp });
+    this.d.activePartner = def.id;
+    this.bus.emit('party.changed', { partner: def.id });
+  }
+
+  /** Sends the partner away (debug and story scenes). */
+  dismissPartner(): void {
+    this.d.activePartner = null;
+    this.bus.emit('party.changed', { partner: null });
+  }
+
   setHp(id: string, hp: number): void {
     const m = this.member(id);
     m.hp = Math.max(0, Math.min(m.maxHp, Math.round(hp)));

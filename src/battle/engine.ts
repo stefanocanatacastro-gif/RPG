@@ -98,6 +98,8 @@ export class BattleEngine {
   readonly fighters: Fighter[] = [];
   phase: Phase = 'intro';
   round = 0;
+  /** Which party member is choosing (during the command phase). */
+  turn: 'hero' | 'partner' = 'hero';
   readonly rng: Rng;
   /** Enemy turns still to run this round. */
   private enemyQueue: string[] = [];
@@ -110,27 +112,36 @@ export class BattleEngine {
     heroState: { hp: number; maxHp: number },
     formation: FormationDef,
     seed?: number,
+    /** The partner out with Chispa (Pip and the others), if any. */
+    partner?: { def: CharacterDef; hp: number; maxHp: number },
   ) {
     this.rng = new Rng(seed);
-    this.fighters.push({
-      id: 'hero',
+    const member = (
+      id: string,
+      def: CharacterDef,
+      st: { hp: number; maxHp: number },
+      order: number,
+    ): Fighter => ({
+      id,
       side: 'hero',
-      defId: hero.id,
-      name: hero.name,
-      sprite: hero.sprite,
-      hp: heroState.hp,
-      maxHp: heroState.maxHp,
-      attack: hero.attack,
-      defence: hero.defence,
-      moves: hero.moves,
+      defId: def.id,
+      name: def.name,
+      sprite: def.sprite,
+      hp: st.hp,
+      maxHp: st.maxHp,
+      attack: def.attack,
+      defence: def.defence,
+      moves: def.moves,
       slot: 'front',
-      order: 0,
+      order,
       airborne: false,
       spiky: false,
       guard: 0,
       xp: 0,
       coins: 0,
     });
+    this.fighters.push(member('hero', hero, heroState, 0));
+    if (partner) this.fighters.push(member('partner', partner.def, partner, 1));
     // enemies are ordered front to back: front slots, then back, with flyers by their x
     const slotRank: Record<FormationSlot, number> = { front: 0, air: 1, back: 2 };
     formation.enemies
@@ -164,6 +175,21 @@ export class BattleEngine {
     return this.fighters[0];
   }
 
+  /** The partner fighting alongside Chispa, or undefined when he's alone. */
+  get partner(): Fighter | undefined {
+    return this.fighters.find((f) => f.id === 'partner');
+  }
+
+  /** Chispa and his partner, standing ones only by default. */
+  party(aliveOnly = true): Fighter[] {
+    return this.fighters.filter((f) => f.side === 'hero' && (!aliveOnly || f.hp > 0));
+  }
+
+  /** Whose command it is: Chispa first, then the partner, each round. */
+  get acting(): Fighter {
+    return this.get(this.turn);
+  }
+
   get(id: string): Fighter {
     const f = this.fighters.find((x) => x.id === id);
     if (!f) throw new Error(`No fighter "${id}" in this battle`);
@@ -178,6 +204,7 @@ export class BattleEngine {
   begin(firstStrike: 'player' | 'enemy' | null): void {
     this.round = 1;
     this.log.push(`begin ${firstStrike ?? 'normal'}`);
+    this.turn = 'hero';
     if (firstStrike === 'enemy') this.startEnemyTurns();
     else this.phase = 'command';
   }
@@ -198,7 +225,7 @@ export class BattleEngine {
     const m = this.db.move(moveId);
     const t = this.get(targetId);
     if (t.hp <= 0) return { ok: false, reason: 'down' };
-    if (m.target === 'self') return t.id === 'hero' ? { ok: true } : { ok: false, reason: 'selfOnly' };
+    if (m.target === 'self') return t.id === this.turn ? { ok: true } : { ok: false, reason: 'selfOnly' };
     if (t.side === 'hero') return { ok: false, reason: 'ally' };
     if (t.airborne && !m.reaches.airborne) return { ok: false, reason: 'airborne' };
     if (t.spiky && !m.reaches.spiky) return { ok: false, reason: 'spiky' };
@@ -219,9 +246,10 @@ export class BattleEngine {
     return this.enemies().filter((e) => this.canTarget(moveId, e.id).ok);
   }
 
-  /** Called when the hero commits to an action (Grit is spent by the caller's GameState). */
+  /** Called when Chispa or the partner commits to an action (Grit is spent by the caller's GameState). */
   beginHeroAction(): void {
-    this.hero.guard = 0;
+    // a Defend lasts until that fighter's next turn
+    this.acting.guard = 0;
     this.phase = 'acting';
   }
 
@@ -265,16 +293,19 @@ export class BattleEngine {
     return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard > 0 };
   }
 
-  healHero(amount: number): number {
-    const before = this.hero.hp;
-    this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + amount);
-    return this.hero.hp - before;
+  /** Heals Chispa (or the partner, if given). A knocked-down partner can't be healed this way. */
+  healHero(amount: number, id: 'hero' | 'partner' = 'hero'): number {
+    const f = this.get(id);
+    if (f.hp <= 0 && id === 'partner') return 0;
+    const before = f.hp;
+    f.hp = Math.min(f.maxHp, f.hp + amount);
+    return f.hp - before;
   }
 
   defend(): void {
-    this.hero.guard = rules.defendGuard;
+    this.acting.guard = rules.defendGuard;
     this.phase = 'acting';
-    this.log.push('hero defends');
+    this.log.push(`${this.turn} defends`);
   }
 
   /** Running away: a roll against the run chance. Fleeing ends the fight. */
@@ -286,14 +317,26 @@ export class BattleEngine {
     return ok;
   }
 
-  /** After the hero's action finishes: victory, or the enemies' turns. */
+  /** After a party member's action: victory, the partner's turn, or the enemies'. */
   endHeroAction(): void {
     if (this.phase === 'fled') return;
     if (this.enemies().length === 0) {
       this.phase = 'victory';
       return;
     }
+    if (this.turn === 'hero' && (this.partner?.hp ?? 0) > 0) {
+      this.turn = 'partner';
+      this.phase = 'command';
+      return;
+    }
     this.startEnemyTurns();
+  }
+
+  /** Who an enemy attack goes for: Chispa, or now and then the partner while he's standing. */
+  private pickVictim(): string {
+    const p = this.partner;
+    if (p && p.hp > 0 && this.rng.chance(rules.partnerTargetChance)) return 'partner';
+    return 'hero';
   }
 
   // ── Enemy turns ─────────────────────────────────────────────────────
@@ -320,7 +363,7 @@ export class BattleEngine {
         const move = e.charging.move;
         e.charging = undefined;
         this.log.push(`release ${id} ${move}`);
-        return { actor: id, move, target: 'hero', kind: 'release' };
+        return { actor: id, move, target: this.pickVictim(), kind: 'release' };
       }
       const move = this.chooseEnemyMove(e);
       const m = this.db.move(move);
@@ -336,7 +379,7 @@ export class BattleEngine {
         this.log.push(`charge ${id} ${move}`);
         return { actor: id, move, target: 'hero', kind: 'charge' };
       }
-      return { actor: id, move, target: 'hero', kind: 'attack' };
+      return { actor: id, move, target: this.pickVictim(), kind: 'attack' };
     }
     return null;
   }
@@ -421,6 +464,7 @@ export class BattleEngine {
     }
     if (this.enemyQueue.length === 0) {
       this.round++;
+      this.turn = 'hero';
       this.phase = 'command';
     }
   }

@@ -30,6 +30,8 @@ export interface SimSetup {
   hero: CharacterDef;
   maxHp: number;
   maxGrit: number;
+  /** A partner fighting alongside, at full HP. */
+  partner?: CharacterDef;
   attack: number;
   defence: number;
   formation: FormationDef;
@@ -72,7 +74,15 @@ function rollGuard(rng: Rng, s: Skill): 'none' | 'block' | 'reversal' {
 /** One fight. `seed` drives both the engine and the timing rolls, so a fight replays exactly. */
 export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
   const { db, skill } = setup;
-  const e = new BattleEngine(db, setup.hero, { hp: setup.maxHp, maxHp: setup.maxHp }, setup.formation, seed);
+  const p = setup.partner;
+  const e = new BattleEngine(
+    db,
+    setup.hero,
+    { hp: setup.maxHp, maxHp: setup.maxHp },
+    setup.formation,
+    seed,
+    p ? { def: p, hp: p.hp, maxHp: p.hp } : undefined,
+  );
   e.hero.attack = setup.attack;
   e.hero.defence = setup.defence;
   const rng = new Rng(seed ^ 0x5eed);
@@ -96,7 +106,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
       skill.great * ratingMult(m.command, 'great') +
       skill.good * ratingMult(m.command, 'good') +
       (1 - skill.great - skill.good) * ratingMult(m.command, 'miss');
-    const per = computeDamage(m.power, e.hero.attack, t.defence, { mult, piercing: m.piercing });
+    const per = computeDamage(m.power, e.acting.attack, t.defence, { mult, piercing: m.piercing });
     // a double jump only keeps going on a successful press
     const keep = m.command === 'stomp' ? skill.great + skill.good : 1;
     let total = 0;
@@ -111,7 +121,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
   for (let guard = 0; guard < 1000 && e.round <= MAX_ROUNDS; guard++) {
     if (e.phase === 'command') {
       let best: { move: string; target: string; s: number } | null = null;
-      for (const id of e.hero.moves) {
+      for (const id of e.acting.moves) {
         if (!e.canUseMove(id, grit).ok) continue;
         for (const t of e.targetsFor(id)) {
           const s = score(id, t.id);
@@ -132,7 +142,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
         if (e.get(best.target).hp <= 0) break;
         const r: Rating = m.command === 'stomp' ? roll(rng, skill) : (rating ?? 'good');
         const mult = (step.mult ?? 1) * (m.command === 'none' ? 1 : ratingMult(m.command, r));
-        const res = e.hit('hero', best.target, best.move, mult);
+        const res = e.hit(e.turn, best.target, best.move, mult);
         dealt += res.damage;
         if (r === 'great' && !res.ko) e.breakCharge(best.target);
         rating = null;
@@ -146,10 +156,11 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
         if (plan.kind === 'support') e.healFighter(plan.target, m.heal ?? 0);
         else if (plan.kind !== 'charge') {
           for (const step of m.steps) {
-            if (step.do !== 'hit' || e.hero.hp <= 0 || e.get(plan.actor).hp <= 0) continue;
-            const before = e.hero.hp;
-            e.hit(plan.actor, 'hero', plan.move, step.mult ?? 1, rollGuard(rng, skill));
-            taken += before - e.hero.hp;
+            const victim = e.get(plan.target);
+            if (step.do !== 'hit' || victim.hp <= 0 || e.get(plan.actor).hp <= 0) continue;
+            const before = victim.hp;
+            e.hit(plan.actor, plan.target, plan.move, step.mult ?? 1, rollGuard(rng, skill));
+            taken += before - victim.hp;
           }
         }
       }
