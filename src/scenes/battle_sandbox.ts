@@ -12,15 +12,24 @@ import { tinyText } from '../ui/tiny_font';
 import { UI, css } from '../ui/theme';
 import { SceneLoader, type BattleEnd } from '../managers/scene_loader';
 import { Database } from '../managers/database';
-import { gameState, hasGame, newGame, type SaveData } from '../managers/game_state';
+import { gameState, hasGame, newGame } from '../managers/game_state';
 import { t } from '../managers/strings';
 import { input, type Action } from '../systems/input';
-import { debugState, setDebug } from '../systems/debug_state';
 import { Rng } from '../systems/rng';
 import { versionLabel } from '../systems/version';
 import { simulate, SKILLS, type SimReport } from '../battle/simulate';
 import type { BattleScene } from './battle';
 import type { FormationDef, FormationSlot } from '../types/data';
+import {
+  startCustomBattle,
+  finishCustomBattle,
+  fightSummary,
+  simSetupOf,
+  setupProblems,
+  type BattleSetup,
+} from '../managers/custom_battle';
+import { Builds } from '../managers/builds';
+import { editText } from '../ui/text_field';
 
 const SLOTS = 4;
 const ROW_H = 13;
@@ -90,7 +99,8 @@ export class BattleSandboxScene extends Phaser.Scene {
   private busy = false;
   private heldSince = 0;
   private lastRepeat = 0;
-  private restoreState: { save: SaveData; god: boolean; auto: boolean } | null = null;
+  /** The encounter being edited, if this fight was opened from Encounters (yours only). */
+  private editing: { id: string; title: string } | null = null;
   /** For the browser test. */
   lastSim: SimReport | null = null;
   lastFight: { result: string; rounds: number; seed: number } | null = null;
@@ -100,7 +110,11 @@ export class BattleSandboxScene extends Phaser.Scene {
   }
 
   /** `hero` / `enemy`: open with a fighter from the fighter maker already in place. */
-  create(data?: { hero?: string; enemy?: string }): void {
+  create(data?: {
+    hero?: string;
+    enemy?: string;
+    encounter?: { id?: string; title?: string; setup: BattleSetup };
+  }): void {
     if (!hasGame()) newGame(Database.character('chispa'));
     const hero = Database.character('chispa');
     this.s = saved ?? {
@@ -128,6 +142,12 @@ export class BattleSandboxScene extends Phaser.Scene {
     if (this.s.partner && !Database.data.characters.some((c) => c.id === this.s.partner))
       this.s.partner = null;
     if (data?.hero && Database.data.characters.some((c) => c.id === data.hero)) this.useHero(data.hero);
+    // opened from Encounters: yours are edited in place, anyone else's become a new one
+    this.editing = null;
+    if (data?.encounter) {
+      this.loadSetup(data.encounter.setup);
+      if (data.encounter.id) this.editing = { id: data.encounter.id, title: data.encounter.title ?? '' };
+    }
     if (data?.enemy && Database.data.enemies.some((e) => e.id === data.enemy)) {
       const def = Database.enemy(data.enemy);
       this.s.enemies[0] = { id: def.id, slot: def.props.includes('airborne') ? 'air' : 'front' };
@@ -286,10 +306,10 @@ export class BattleSandboxScene extends Phaser.Scene {
         desc: 'Random, or the last fight’s seed to replay it with the same enemy choices.',
       },
       {
-        label: 'Hazards',
-        value: () => 'None yet',
-        desc: 'Ring hazards arrive with milestone M3.',
-        disabled: true,
+        label: 'Save as…',
+        value: () => this.editing?.title ?? 'new encounter',
+        confirm: () => void this.saveEncounter(),
+        desc: 'Save this fight as an encounter anyone in the game link can play (Encounters in the dev hub).',
       },
       {
         label: 'FIGHT!',
@@ -508,101 +528,120 @@ export class BattleSandboxScene extends Phaser.Scene {
 
   // ── Fight, simulate, leave ──────────────────────────────────────────
 
+  /** The fight as set up on screen. */
+  setup(): BattleSetup {
+    return {
+      hero: this.s.hero,
+      maxHp: this.s.maxHp,
+      attack: this.s.attack,
+      defence: this.s.defence,
+      grit: this.s.grit,
+      partner: this.s.partner && this.s.partner !== this.s.hero ? this.s.partner : null,
+      enemies: this.s.enemies.filter((e): e is { id: string; slot: FormationSlot } => !!e),
+      stage: Database.data.stages[this.s.stage].id,
+      firstStrike: STRIKES[this.s.strike],
+    };
+  }
+
+  /** Puts a saved encounter's fight on screen. */
+  private loadSetup(b: BattleSetup): void {
+    Object.assign(this.s, {
+      hero: b.hero,
+      maxHp: b.maxHp,
+      attack: b.attack,
+      defence: b.defence,
+      grit: b.grit,
+      partner: b.partner,
+      strike: STRIKES.indexOf(b.firstStrike),
+      stage: Math.max(
+        0,
+        Database.data.stages.findIndex((st) => st.id === b.stage),
+      ),
+      enemies: Array.from({ length: SLOTS }, (_, i) => (b.enemies[i] ? { ...b.enemies[i] } : null)),
+    });
+  }
+
+  /** Saves (or updates, when editing one of yours) this fight as an encounter. */
+  async saveEncounter(title?: string): Promise<void> {
+    const problems = setupProblems(this.setup());
+    if (problems.length) {
+      this.desc.setText(`Can't save: ${problems[0]}.`).setColor(css(UI.rope));
+      return;
+    }
+    const name =
+      title ??
+      (await editText(this, {
+        x: 16,
+        y: H - 48,
+        w: W - 32,
+        value: this.editing?.title ?? '',
+        placeholder: 'Encounter title',
+      }));
+    if (!name?.trim()) return;
+    const mine = Builds.myEncounters();
+    let enc = this.editing ? mine.find((e) => e.id === this.editing!.id) : undefined;
+    if (!enc) {
+      const used = new Set(mine.map((e) => e.id));
+      let n = 1;
+      while (used.has(`b${n}`)) n++;
+      enc = { id: `b${n}`, title: '', setup: this.setup() };
+      mine.push(enc);
+    }
+    enc.title = name.trim().slice(0, 32);
+    enc.setup = this.setup();
+    enc.savedAt = new Date().toISOString();
+    try {
+      await Builds.saveMine({ encounters: mine });
+      this.editing = { id: enc.id, title: enc.title };
+      this.reportTitle = 'ENCOUNTER SAVED';
+      this.report = [`"${enc.title}"`, 'Play it from Encounters', '(dev hub), or share the link.'];
+    } catch (e) {
+      this.reportTitle = 'NOT SAVED';
+      this.report = [String((e as { message?: string }).message ?? e).slice(0, 32)];
+    }
+    this.render();
+  }
+
   private fight(): void {
-    const f = this.formation();
-    if (f.enemies.length === 0) {
+    const b = this.setup();
+    if (b.enemies.length === 0) {
       this.desc.setText('Add at least one enemy first.').setColor(css(UI.rope));
       return;
     }
     this.busy = true;
-    const gs = gameState();
-    const save = gs.snapshot();
-    this.restoreState = { save, god: debugState.god, auto: debugState.autoCommands };
-    // the fight uses a copy of the save with the sandbox's hero numbers
-    const tmp: SaveData = structuredClone(save);
-    tmp.party[0] = { id: this.s.hero, maxHp: this.s.maxHp, hp: this.s.maxHp };
-    tmp.maxGrit = this.s.grit;
-    tmp.grit = this.s.grit;
-    const partner =
-      this.s.partner && this.s.partner !== this.s.hero ? Database.character(this.s.partner) : null;
-    tmp.activePartner = partner?.id ?? null;
-    if (partner) {
-      tmp.party = tmp.party.filter((m, i) => i === 0 || m.id !== partner.id);
-      tmp.party.push({ id: partner.id, hp: partner.hp, maxHp: partner.hp });
-    }
-    gs.restore(tmp);
-    const assist = ASSISTS[this.s.assist];
-    setDebug('autoCommands', assist === 'perfect' || assist === 'both');
-    setDebug('god', assist === 'god' || assist === 'both');
-    const seed = this.s.fixedSeed && lastSeed !== null ? lastSeed : Rng.freshSeed();
-    lastSeed = seed;
-    SceneLoader.startBattle(this, 'battle', {
-      formation: 'sandbox',
-      formationDef: f,
-      seed,
-      hero: { attack: this.s.attack, defence: this.s.defence },
-      firstStrike: STRIKES[this.s.strike],
-      returnTo: 'battle_sandbox',
-      loseOk: true,
+    lastSeed = startCustomBattle(this, b, 'battle_sandbox', {
+      assist: ASSISTS[this.s.assist],
+      seed: this.s.fixedSeed && lastSeed !== null ? lastSeed : undefined,
     });
   }
 
   private afterFight(end: BattleEnd): void {
-    const battle = this.scene.get('battle') as BattleScene;
-    const e = battle.engine;
-    if (this.restoreState) {
-      gameState().restore(this.restoreState.save);
-      setDebug('god', this.restoreState.god);
-      setDebug('autoCommands', this.restoreState.auto);
-      this.restoreState = null;
-    }
-    const sum = (re: RegExp) =>
-      e.log.reduce((a, l) => {
-        const m = l.match(re);
-        return a + (m ? Number(m[1]) : 0);
-      }, 0);
-    const count = (re: RegExp) => e.log.filter((l) => re.test(l)).length;
-    const dealt = sum(/^hero \S+ e\d+ -(\d+)/) + sum(/^dmg e\d+ -(\d+)/) + sum(/^hero reversal e\d+ -(\d+)/);
-    const taken = sum(/^e\d+ \S+ hero -(\d+)/);
+    const e = (this.scene.get('battle') as BattleScene).engine;
+    finishCustomBattle();
+    const r = fightSummary(e);
     const word = { win: 'WON', lose: 'LOST', run: 'RAN AWAY' }[end.result] ?? end.result;
-    this.lastFight = { result: end.result, rounds: e.round, seed: e.rng.seed };
+    this.lastFight = { result: end.result, rounds: r.rounds, seed: r.seed };
     this.reportTitle = 'LAST FIGHT';
     this.report = [
-      `${word} · round ${e.round} · HP ${e.hero.hp}/${e.hero.maxHp}`,
-      `Dealt ${dealt} · taken ${taken}`,
-      `Commands: ${count(/^cmd \S+ great/)} great ${count(/^cmd \S+ good/)} nice ${count(/^cmd \S+ miss/)} miss`,
-      `Guards: ${count(/^guardcmd block/)} block ${count(/^guardcmd reversal/)} rev ${count(/^guardcmd none/)} miss`,
-      `Seed ${e.rng.seed}`,
+      `${word} · round ${r.rounds} · HP ${r.hp}/${r.maxHp}`,
+      `Dealt ${r.dealt} · taken ${r.taken}`,
+      `Commands: ${r.great} great ${r.good} nice ${r.miss} miss`,
+      `Guards: ${r.blocks} block ${r.reversals} rev ${r.unguarded} miss`,
+      `Seed ${r.seed}`,
     ];
     this.busy = false;
-    this.cursor = this.rows.findIndex((r) => r.label === 'FIGHT!');
+    this.cursor = this.rows.findIndex((row) => row.label === 'FIGHT!');
     this.render();
   }
 
   private runSim(): void {
-    const f = this.formation();
-    if (f.enemies.length === 0) {
+    const b = this.setup();
+    if (b.enemies.length === 0) {
       this.desc.setText('Add at least one enemy first.').setColor(css(UI.rope));
       return;
     }
     const skill = SKILLS[this.s.skill];
-    const r = simulate(
-      {
-        db: Database,
-        hero: Database.character(this.s.hero),
-        maxHp: this.s.maxHp,
-        maxGrit: this.s.grit,
-        partner:
-          this.s.partner && this.s.partner !== this.s.hero ? Database.character(this.s.partner) : undefined,
-        attack: this.s.attack,
-        defence: this.s.defence,
-        formation: f,
-        firstStrike: STRIKES[this.s.strike],
-        skill,
-      },
-      SIM_RUNS,
-      Rng.freshSeed(),
-    );
+    const r = simulate(simSetupOf(b, skill), SIM_RUNS, Rng.freshSeed());
     this.lastSim = r;
     const pct = (n: number) => `${Math.round((100 * n) / r.runs)}%`;
     const lose = `${100 - Math.round((100 * r.wins) / r.runs) - (r.timeouts ? Math.round((100 * r.timeouts) / r.runs) : 0)}%`;

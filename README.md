@@ -186,7 +186,20 @@ The game is growing into a Paper Mario-style **battle builder**: make your own f
 
 At start-up every saved fighter becomes normal game data (`c.<owner>.<id>`), so battles, the sandbox and the simulator treat them exactly like built-in ones.
 
-Coming next in the builder: saved encounters, items, stage conditions, the crowd and Hype, a move maker, and a community gallery.
+## Encounters
+
+An encounter is a saved fight: the hero and their numbers, a partner, up to four opponents in their rows, the arena and First Strike. In the battle sandbox, **Save as…** stores the fight on screen as one (opened from Encounters, it updates that one instead).
+
+Dev hub → **Encounters** lists yours, the community's (everyone in the game link) and the built-in test line-ups:
+
+- **PLAY** fights it for real, with no assists; your save is never touched. Your wins and fewest rounds are kept per encounter (in this browser).
+- **ODDS** asks the simulator how often a skilled and a casual player would win.
+- **EDIT** opens it in the sandbox (yours); **COPY** does the same for anyone else's and saves as a new one of yours. **RENAME** and **DELETE** for yours.
+- An encounter whose fighter was deleted by its maker says so and can't be played.
+
+Encounters are stored with your fighters (`builds/<your id>`). The fight-setup code shared by the sandbox and Encounters is in `managers/battle_setup.ts` and `managers/custom_battle.ts`.
+
+Coming next in the builder: items, stage conditions, the crowd and Hype, a move maker, and a community gallery.
 
 ## Battle sandbox
 

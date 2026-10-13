@@ -761,12 +761,38 @@ with sync_playwright() as p:
     phase = fight(page, out, "27_maker")
     check(phase == "victory", f"the made fighters fight it out ({phase})")
     wait_scene(page, "battle_sandbox", 10000)
+    page.wait_for_timeout(300)
+    page.evaluate("window.__game.scene.getScene('battle_sandbox').saveEncounter('Maker Bout')")
+    page.wait_for_timeout(400)
+    built = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.builds') || '{}')")
+    check([e["title"] for e in built.get("encounters", [])] == ["Maker Bout"] and len(built.get("fighters", [])) == 2, "the sandbox saves the fight as an encounter (fighters kept)")
     page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
+    wait_scene(page, "dev_hub")
+
+    # ── Encounters: play the saved one ──
+    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(4)")
+    press(page, "Enter")
+    wait_scene(page, "encounters")
+    page.wait_for_timeout(400)
+    en = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('encounters'); {js} }})()")
+    sel = en("return s.entries()[s.selected].title;")
+    check(sel == "Maker Bout", f"Encounters opens on your own encounter ({sel})")
+    page.screenshot(path=f"{out}/28_encounters.png")
+    en("s.play();")
+    wait_scene(page, "battle", 10000)
+    phase = fight(page, out, "29_encounter")
+    wait_scene(page, "encounters", 10000)
+    page.wait_for_timeout(300)
+    res = en("return s.lastResult;")
+    rec = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.records') || '{}')")
+    check(res and res["result"] == "win" and any(r["wins"] == 1 for r in rec.values()), f"playing an encounter records the win ({res})")
+    page.screenshot(path=f"{out}/30_encounter_result.png")
+    en("s.leave();")
     wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=4
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=5
     ):
         page.wait_for_timeout(400)
         for _ in range(i):

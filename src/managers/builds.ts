@@ -13,6 +13,7 @@ import { Database } from './database';
 import { addStrings } from './strings';
 import { registerSpriteKey } from './sprite_keys';
 import { artifactDb, viewerId, type DbLike } from './artifact_db';
+import type { BattleSetup } from './battle_setup';
 
 /** The colour slots of the wrestler body. */
 export const COLOR_SLOTS = ['skin', 'mask', 'shirt', 'trunks', 'boots'] as const;
@@ -53,8 +54,18 @@ export interface CustomFighter {
   scout?: string;
 }
 
+/** A saved fight: a sandbox setup with a title. */
+export interface Encounter {
+  /** Unique within its maker's set (b1, b2…). */
+  id: string;
+  title: string;
+  setup: BattleSetup;
+  savedAt?: string;
+}
+
 export interface BuildSet {
   fighters: CustomFighter[];
+  encounters?: Encounter[];
   savedAt?: string;
 }
 
@@ -72,6 +83,11 @@ function ownerTag(owner: string): string {
 
 export function myOwnerId(): string {
   return uid ?? 'me';
+}
+
+/** An encounter's id across everyone's sets. */
+export function encounterKey(owner: string, localId: string): string {
+  return `${ownerTag(owner)}.${localId}`;
 }
 
 export function globalId(owner: string, localId: string): string {
@@ -197,9 +213,27 @@ export const Builds = {
     return out;
   },
 
-  /** Saves this person's whole set and refreshes the game data. */
-  async saveMine(fighters: CustomFighter[]): Promise<void> {
-    const set: BuildSet = { fighters: structuredClone(fighters), savedAt: new Date().toISOString() };
+  /** This person's own encounters. */
+  myEncounters(): Encounter[] {
+    return structuredClone(sets.get(myOwnerId())?.encounters ?? []);
+  },
+
+  /** Everyone else's encounters, with their owner. */
+  otherEncounters(): { owner: string; encounter: Encounter }[] {
+    const out: { owner: string; encounter: Encounter }[] = [];
+    for (const [owner, set] of sets)
+      if (owner !== myOwnerId()) for (const e of set.encounters ?? []) out.push({ owner, encounter: e });
+    return out;
+  },
+
+  /** Saves this person's set (fighters, encounters, or both) and refreshes the game data. */
+  async saveMine(update: { fighters?: CustomFighter[]; encounters?: Encounter[] }): Promise<void> {
+    const cur = sets.get(myOwnerId());
+    const set: BuildSet = {
+      fighters: structuredClone(update.fighters ?? cur?.fighters ?? []),
+      encounters: structuredClone(update.encounters ?? cur?.encounters ?? []),
+      savedAt: new Date().toISOString(),
+    };
     if (db && uid) await db.doc(`builds/${uid}`).set({ json: JSON.stringify(set), savedAt: set.savedAt! });
     else
       try {

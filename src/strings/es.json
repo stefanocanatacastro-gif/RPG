@@ -146,5 +146,7 @@
   "gameover.title_screen": "Volver al título",
   "gameover.no_save": "Aún no hay partida guardada: empieza una nueva desde el título.",
   "hub.maker": "Creador de luchadores",
-  "hub.maker.desc": "Crea tus propios héroes y enemigos: aspecto, estadísticas, movimientos. Se guardan en el enlace del juego."
+  "hub.maker.desc": "Crea tus propios héroes y enemigos: aspecto, estadísticas, movimientos. Se guardan en el enlace del juego.",
+  "hub.encounters": "Encuentros",
+  "hub.encounters.desc": "Juega peleas guardadas: las tuyas, las de la comunidad y las de prueba. Guarda nuevas desde el sandbox."
 }

@@ -146,5 +146,7 @@
   "gameover.title_screen": "Back to title",
   "gameover.no_save": "No save yet: start a new game from the title.",
   "hub.maker": "Fighter maker",
-  "hub.maker.desc": "Make your own heroes and enemies: look, stats, moves. Saved to the game link for everyone."
+  "hub.maker.desc": "Make your own heroes and enemies: look, stats, moves. Saved to the game link for everyone.",
+  "hub.encounters": "Encounters",
+  "hub.encounters.desc": "Play saved fights: yours, the community's and the test line-ups. Save new ones from the sandbox."
 }

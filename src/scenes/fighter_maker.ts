@@ -234,7 +234,7 @@ export class FighterMakerScene extends Phaser.Scene {
     this.setStatus('Saving…');
     this.refresh();
     try {
-      await Builds.saveMine(this.mine);
+      await Builds.saveMine({ fighters: this.mine });
       this.dirty = false;
       this.setStatus(
         Builds.backend() === 'shared' ? 'Saved to the game link.' : 'Saved in this browser.',
