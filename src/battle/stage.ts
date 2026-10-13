@@ -14,12 +14,12 @@ import Phaser from 'phaser';
 import type { StageDef } from '../types/data';
 
 export const ARENA = {
-  width: 960,
-  height: 600,
+  width: 1440,
+  height: 900,
   /** Perspective: screen centre x, horizon y, focal length, camera height (units). */
-  cx: 480,
-  horizon: 150,
-  f: 520,
+  cx: 720,
+  horizon: 225,
+  f: 780,
   camH: 3.2,
   ring: { half: 3.6, near: 6.4, far: 13.6, canvasY: 1 },
   /** Depth line the fighters stand on. */
@@ -140,7 +140,7 @@ export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
     const img = ctx.createImageData(AW, AH);
     const ramp = C.sky;
     for (let y = 0; y < AH; y++) {
-      const pos = Math.min(1, y / 260) * (ramp.length - 1);
+      const pos = Math.min(1, y / 390) * (ramp.length - 1);
       const lo = Math.min(Math.floor(pos), ramp.length - 2);
       const frac = pos - lo;
       for (let x = 0; x < AW; x++) {
@@ -379,7 +379,7 @@ export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
     const tp = P(X, ringTop + postH, Z);
     const pad = Math.ceil(0.4 * unitPx(Z));
     const x0 = Math.floor(b.x - pad);
-    const y0 = Math.floor(tp.y - 4);
+    const y0 = Math.floor(tp.y - 6);
     const g = scene.make.graphics({}, false);
     g.translateCanvas(-x0, -y0);
     drawPost(g, X, Z);
@@ -396,13 +396,13 @@ export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
   const trussY = 5.6;
   const ta = P(-9, trussY, trussZ);
   const tb = P(9, trussY, trussZ);
-  rig.fillStyle(C.truss).fillRect(Math.round(ta.x), Math.round(ta.y), Math.round(tb.x - ta.x), 4);
-  rig.fillRect(Math.round(ta.x), Math.round(ta.y) + 12, Math.round(tb.x - ta.x), 4);
-  for (let x = ta.x; x < tb.x; x += 12) rig.fillRect(Math.round(x), Math.round(ta.y) + 4, 2, 8);
+  rig.fillStyle(C.truss).fillRect(Math.round(ta.x), Math.round(ta.y), Math.round(tb.x - ta.x), 6);
+  rig.fillRect(Math.round(ta.x), Math.round(ta.y) + 18, Math.round(tb.x - ta.x), 6);
+  for (let x = ta.x; x < tb.x; x += 18) rig.fillRect(Math.round(x), Math.round(ta.y) + 6, 3, 12);
   const lamps = [-6, -3.4, 3.4, 6].map((X) => P(X, trussY - 0.35, trussZ));
   for (const l of lamps) {
     rig.fillStyle(0x14101b).fillRect(Math.round(l.x) - 6, Math.round(l.y) + 2, 12, 10);
-    rig.fillStyle(C.light).fillRect(Math.round(l.x) - 4, Math.round(l.y) + 11, 8, 2);
+    rig.fillStyle(C.light).fillRect(Math.round(l.x) - 6, Math.round(l.y) + 16, 12, 3);
   }
   // spotlight cones, baked into one image that sways gently (live shapes cost a lot every frame)
   const beamsG = scene.add.graphics().setDepth(-70);
@@ -410,8 +410,8 @@ export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
     const c = P(i < 2 ? -1.2 : 1.2, ringTop, ARENA.fighterZ);
     const spread = 1.5 * unitPx(ARENA.fighterZ);
     beamsG.fillStyle(C.light, 0.045);
-    beamsG.fillTriangle(l.x - 3, l.y + 12, l.x + 3, l.y + 12, c.x + spread, c.y);
-    beamsG.fillTriangle(l.x - 3, l.y + 12, c.x - spread, c.y, c.x + spread, c.y);
+    beamsG.fillTriangle(l.x - 4, l.y + 18, l.x + 4, l.y + 18, c.x + spread, c.y);
+    beamsG.fillTriangle(l.x - 4, l.y + 18, c.x - spread, c.y, c.x + spread, c.y);
   });
   const beams = bake(scene, beamsG, '__arena_beams').setBlendMode(Phaser.BlendModes.ADD);
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;

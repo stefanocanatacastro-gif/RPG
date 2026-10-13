@@ -26,23 +26,23 @@ export function pickSlot(scene: Phaser.Scene, mode: 'save' | 'load'): Promise<Sl
       desc: m ? tf('save.when', { date: new Date(m.savedAt).toLocaleString() }) : '',
     };
   });
-  const pw = 500;
-  const ph = 60 + items.length * 26;
+  const pw = 750;
+  const ph = 96 + items.length * 39 + 24;
   const px = (W - pw) / 2;
-  const py = 60;
+  const py = 90;
   const g = scene.add.graphics().setScrollFactor(0).setDepth(TOP);
   drawPanel(g, px, py, pw, ph, { alpha: 0.97 });
   const title = pixelText(
     scene,
     W / 2,
-    py + 16,
+    py + 24,
     t(mode === 'save' ? 'save.title' : 'save.load_title'),
-    16,
+    24,
     css(UI.spark),
   )
     .setScrollFactor(0)
     .setDepth(TOP);
-  const desc = pixelText(scene, px + 16, py + ph - 20, '', 8, css(UI.inkDim))
+  const desc = pixelText(scene, px + 24, py + ph - 32, '', 16, css(UI.inkDim))
     .setOrigin(0, 0)
     .setScrollFactor(0)
     .setDepth(TOP);
@@ -54,8 +54,8 @@ export function pickSlot(scene: Phaser.Scene, mode: 'save' | 'load'): Promise<Sl
       desc.destroy();
       resolve(v);
     };
-    const menu = new MenuList(scene, px + 12, py + 34, {
-      width: pw - 24,
+    const menu = new MenuList(scene, px + 18, py + 60, {
+      width: pw - 36,
       rows: items.length,
       items,
       descText: desc,

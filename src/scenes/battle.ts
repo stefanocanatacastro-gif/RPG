@@ -57,11 +57,11 @@ const HERO_TEXTURE = 'spr_test_dummy';
 /** Fixed camera framings. Moves use tracking shots instead (see playMove). */
 const SHOTS: Record<string, Shot> = {
   /** Opening: high on the crowd and the lights, before sweeping down to the ring. */
-  intro: { x: ARENA.cx, y: 150, zoom: 1.7 },
+  intro: { x: ARENA.cx, y: 225, zoom: 1.7 },
   /** The whole ring. */
-  wide: { x: ARENA.cx, y: STAGE.floorY - 8, zoom: 1 },
+  wide: { x: ARENA.cx, y: STAGE.floorY - 12, zoom: 1 },
   /** Your turn: Chispa just right of the command menu, the opponents across the ring. */
-  command: { x: STAGE.heroX + 20, y: STAGE.floorY - 8, zoom: 1 },
+  command: { x: STAGE.heroX + 30, y: STAGE.floorY - 12, zoom: 1 },
 };
 
 export class BattleScene extends Phaser.Scene {
@@ -167,7 +167,7 @@ export class BattleScene extends Phaser.Scene {
 
   private addFighter(f: Fighter): void {
     const home = homeOf(f.side, f.order, f.airborne);
-    const shadow = this.add.ellipse(home.x, STAGE.floorY, 40, 8, 0x000000, 0.3).setDepth(5);
+    const shadow = this.add.ellipse(home.x, STAGE.floorY, 60, 12, 0x000000, 0.3).setDepth(5);
     // Kid Chispa uses the test wrestler until his real art exists; made fighters bring their own look
     const texture = f.defId === 'chispa' ? HERO_TEXTURE : f.sprite;
     if (isCustomId(f.defId)) ensureLook(this, f.defId);
@@ -184,9 +184,9 @@ export class BattleScene extends Phaser.Scene {
     if (f.side === 'enemy') {
       view.bar = new Bar(
         this,
-        home.x - 22,
-        STAGE.floorY + 6,
-        44,
+        home.x - 33,
+        STAGE.floorY + 9,
+        66,
         BAR_STYLES.hp,
         f.hp,
         f.maxHp,
@@ -223,68 +223,68 @@ export class BattleScene extends Phaser.Scene {
     const gs = gameState();
     this.vignette();
     const g = this.ui(this.add.graphics());
-    drawPanel(g, 8, 8, 236, 66, { alpha: 0.94 });
+    drawPanel(g, 12, 12, 354, 99, { alpha: 0.94 });
     this.ui(
       pixelText(
         this,
-        20,
-        18,
-        t(Database.character(gs.hero().id).name).toUpperCase().slice(0, 26),
-        8,
+        30,
+        25,
+        t(Database.character(gs.hero().id).name).toUpperCase().slice(0, 20),
+        16,
         css(UI.spark),
       ).setOrigin(0, 0),
     );
-    const hp = this.ui(new Bar(this, 20, 34, 212, BAR_STYLES.hp, gs.hero().hp, gs.hero().maxHp));
-    const grit = this.ui(new Bar(this, 20, 52, 212, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit));
+    const hp = this.ui(new Bar(this, 30, 52, 318, BAR_STYLES.hp, gs.hero().hp, gs.hero().maxHp));
+    const grit = this.ui(new Bar(this, 30, 78, 318, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit));
     const offs = [
       bus.on('hp.changed', (e) => e.who === gs.hero().id && hp.setValue(e.hp, e.maxHp)),
       bus.on('grit.changed', (e) => grit.setValue(e.grit, e.maxGrit)),
     ];
     const pm = gs.partner();
     if (pm) {
-      drawPanel(g, 252, 8, 176, 48, { alpha: 0.94 });
+      drawPanel(g, 378, 12, 264, 72, { alpha: 0.94 });
       this.ui(
         pixelText(
           this,
-          264,
-          18,
-          t(Database.character(pm.id).name).toUpperCase().slice(0, 18),
-          8,
+          396,
+          25,
+          t(Database.character(pm.id).name).toUpperCase().slice(0, 13),
+          16,
           css(UI.spark),
         ).setOrigin(0, 0),
       );
-      const php = this.ui(new Bar(this, 264, 34, 152, BAR_STYLES.hp, pm.hp, pm.maxHp));
+      const php = this.ui(new Bar(this, 396, 52, 228, BAR_STYLES.hp, pm.hp, pm.maxHp));
       offs.push(bus.on('hp.changed', (e) => e.who === pm.id && php.setValue(e.hp, e.maxHp)));
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => offs.forEach((off) => off()));
 
     // round and Hype, top right; the match's conditions listed under them
-    const hx = 436;
-    const hw = W - hx - 8;
-    drawPanel(g, hx, 8, hw, 48, { alpha: 0.94 });
-    this.roundText = this.ui(pixelText(this, hx + 12, 18, '', 8, css(UI.ink)).setOrigin(0, 0));
-    this.hypeBar = this.ui(new Bar(this, hx + 12, 34, hw - 24, BAR_STYLES.hype, 0, this.engine.maxHype));
+    const hx = 654;
+    const hw = W - hx - 12;
+    drawPanel(g, hx, 12, hw, 72, { alpha: 0.94 });
+    this.roundText = this.ui(pixelText(this, hx + 18, 25, '', 16, css(UI.ink)).setOrigin(0, 0));
+    this.hypeBar = this.ui(new Bar(this, hx + 18, 52, hw - 36, BAR_STYLES.hype, 0, this.engine.maxHype));
     const lines = conditionLines(this.engine.cond);
     if (lines.length) {
-      const lw = Math.max(...lines.map((l) => tinyTextWidth(l.toUpperCase()))) * 2 + 16;
-      drawPanel(g, W - 8 - lw, 58, lw, lines.length * 12 + 8, { alpha: 0.8 });
+      const lw = Math.max(...lines.map((l) => tinyTextWidth(l.toUpperCase()))) * 3 + 24;
+      drawPanel(g, W - 12 - lw, 90, lw, lines.length * 18 + 12, { alpha: 0.8 });
     }
     lines.forEach((l, i) =>
       this.ui(
-        tinyText(this, W - 10, 62 + i * 12, l.toUpperCase(), css(UI.inkDim), css(UI.void))
+        tinyText(this, W - 24, 96 + i * 18, l.toUpperCase(), css(UI.inkDim), css(UI.void))
           .setOrigin(1, 0)
-          .setScale(2),
+          .setScale(3),
       ),
     );
-    this.turnText = this.ui(pixelText(this, 20, 80, '', 8, css(UI.spark)).setOrigin(0, 0));
+    this.turnText = this.ui(pixelText(this, 30, 120, '', 16, css(UI.spark)).setOrigin(0, 0));
     this.desc = this.ui(
-      pixelText(this, 16, H - 26, '', 8)
+      pixelText(this, 24, H - 42, '', 16)
         .setOrigin(0, 0)
-        .setWordWrapWidth(W - 32),
+        .setWordWrapWidth(W - 48),
     );
     const seed = `SEED ${this.engine.rng.seed}`;
     this.ui(
-      tinyText(this, W - 8 - tinyTextWidth(seed) * 2, H - 12, seed, css(UI.border))
+      tinyText(this, W - 12 - tinyTextWidth(seed) * 2, H - 14, seed, css(UI.border))
         .setOrigin(0)
         .setScale(2),
     );
@@ -304,10 +304,10 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const v of this.views.values()) {
       v.shadow.x = v.sprite.x;
-      if (v.bar) v.bar.x = Math.round(v.sprite.x - 22);
+      if (v.bar) v.bar.x = Math.round(v.sprite.x - 33);
       if (v.aura) v.aura.setPosition(v.sprite.x, v.sprite.y - v.sprite.displayHeight / 2);
       const lift = Math.max(0, STAGE.floorY - v.sprite.y);
-      v.shadow.setScale(Math.max(0.5, 1 - lift / 160));
+      v.shadow.setScale(Math.max(0.5, 1 - lift / 240));
     }
   }
 
@@ -402,13 +402,13 @@ export class BattleScene extends Phaser.Scene {
     } else if (c.kind === 'appeal') {
       e.beginHeroAction();
       const got = e.appeal();
-      this.director.track([me.sprite], 1.3, 10);
-      await this.tween({ targets: me.sprite, y: me.sprite.y - 12, duration: 110, yoyo: true, repeat: 1 });
+      this.director.track([me.sprite], 1.3, 15);
+      await this.tween({ targets: me.sprite, y: me.sprite.y - 18, duration: 110, yoyo: true, repeat: 1 });
       this.arena.cheer(2);
       await this.popText(me, `${t('battle.hype')} +${Math.round(got * 10) / 10}`, UI.hype);
     } else if (c.kind === 'defend') {
       e.defend();
-      this.director.track([me.sprite], 1.35, 10);
+      this.director.track([me.sprite], 1.35, 15);
       await this.popText(me, t('battle.guard'), UI.grit);
     } else {
       const ok = e.tryRun();
@@ -419,7 +419,7 @@ export class BattleScene extends Phaser.Scene {
         this.director.track([runners[0]], 1.15);
         for (const r of runners) r.setFlipX(true);
         this.playAnim(this.views.get('hero')!, 'walk');
-        await this.tween({ targets: runners, x: -40, duration: 500 });
+        await this.tween({ targets: runners, x: -60, duration: 500 });
         await this.banner(t('battle.fled'), UI.ink);
       }
     }
@@ -487,10 +487,10 @@ export class BattleScene extends Phaser.Scene {
       const open = () => {
         this.inputState = 'menu';
         this.menu?.destroy();
-        this.menu = new MenuList(this, 16, 94, {
-          width: 250,
+        this.menu = new MenuList(this, 24, 141, {
+          width: 375,
           rows: items.length,
-          rowHeight: 24,
+          rowHeight: 36,
           items,
           descText: this.desc,
           cancellable: false,
@@ -548,10 +548,10 @@ export class BattleScene extends Phaser.Scene {
       };
     });
     this.inputState = 'menu';
-    this.menu = new MenuList(this, 16, 94, {
-      width: 250,
+    this.menu = new MenuList(this, 24, 141, {
+      width: 375,
       rows: Math.min(8, items.length),
-      rowHeight: 24,
+      rowHeight: 36,
       items,
       descText: this.desc,
       onCancel: back,
@@ -586,10 +586,10 @@ export class BattleScene extends Phaser.Scene {
       reason: t('battle.specials.low'),
     }));
     this.inputState = 'menu';
-    this.menu = new MenuList(this, 16, 94, {
-      width: 250,
+    this.menu = new MenuList(this, 24, 141, {
+      width: 375,
       rows: items.length,
-      rowHeight: 24,
+      rowHeight: 36,
       items,
       descText: this.desc,
       onCancel: back,
@@ -607,12 +607,19 @@ export class BattleScene extends Phaser.Scene {
     const draw = () => {
       const v = this.views.get(ids[i])!;
       this.director.track([hero, v.sprite], 1.08, 0, 5);
-      const top = v.sprite.y - v.sprite.displayHeight - 14;
+      const top = v.sprite.y - v.sprite.displayHeight - 21;
       this.cursor.clear().setVisible(true);
       const bob = Math.floor(this.time.now / 250) % 2;
       this.cursor
         .fillStyle(UI.spark)
-        .fillTriangle(v.sprite.x - 8, top - 10 + bob, v.sprite.x + 8, top - 10 + bob, v.sprite.x, top + bob);
+        .fillTriangle(
+          v.sprite.x - 12,
+          top - 15 + bob * 2,
+          v.sprite.x + 12,
+          top - 15 + bob * 2,
+          v.sprite.x,
+          top + bob * 2,
+        );
       this.desc
         .setText(
           `${t('battle.pick_target')}: ${t(v.f.name)}  ${v.f.hp}/${v.f.maxHp}` +
@@ -673,7 +680,7 @@ export class BattleScene extends Phaser.Scene {
     const dir = actor.f.side === 'hero' ? 1 : -1;
     const s = actor.sprite;
     // the camera follows the attacker across the ring to the target
-    this.director.track([s, target.sprite], actor.f.side === 'hero' ? 1.22 : 1.18, 6);
+    this.director.track([s, target.sprite], actor.f.side === 'hero' ? 1.22 : 1.18, 9);
     const runsCommands = actor.f.side === 'hero' && !opts.firstStrike && move.command !== 'none';
     const stomp = COMMANDS.stomp;
     s.setDepth(40);
@@ -694,7 +701,7 @@ export class BattleScene extends Phaser.Scene {
     let rating: Rating | undefined;
     let pendingStomp: Promise<CommandResult> | null = null;
     const hitsLeft = (from: number) => move.steps.slice(from).some((x) => x.do === 'hit');
-    const topOf = (v: FighterView) => v.sprite.y - v.sprite.displayHeight + 6;
+    const topOf = (v: FighterView) => v.sprite.y - v.sprite.displayHeight + 9;
     const drop = (ms: number) =>
       this.tween({ targets: s, y: topOf(target), duration: ms, ease: 'Quad.easeIn' });
 
@@ -706,7 +713,7 @@ export class BattleScene extends Phaser.Scene {
           this.playAnim(actor, 'walk');
           await this.tween({
             targets: s,
-            x: target.sprite.x - dir * 46,
+            x: target.sprite.x - dir * 69,
             y: target.home.y === STAGE.floorY ? STAGE.floorY : s.y,
             duration: 360,
           });
@@ -726,8 +733,8 @@ export class BattleScene extends Phaser.Scene {
           // arc up to a point above the target; the fall comes with the next command or hit
           const sx = s.x;
           const sy = s.y;
-          const tx = target.sprite.x - dir * 4;
-          const ty = topOf(target) - 64;
+          const tx = target.sprite.x - dir * 6;
+          const ty = topOf(target) - 96;
           const o = { p: 0 };
           await this.tween({
             targets: o,
@@ -736,7 +743,7 @@ export class BattleScene extends Phaser.Scene {
             ease: 'Sine.easeOut',
             onUpdate: () => {
               s.x = sx + (tx - sx) * o.p;
-              s.y = sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 40;
+              s.y = sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 60;
             },
           });
           hovering = true;
@@ -774,8 +781,8 @@ export class BattleScene extends Phaser.Scene {
             const watch = this.commands.guard(this.time.now + motionMs);
             if (hovering) await drop(stomp.fallMs);
             else {
-              await this.tween({ targets: s, x: s.x - dir * 10, duration: g.windUpMs, ease: 'Sine.easeOut' });
-              await this.tween({ targets: s, x: s.x + dir * 18, duration: g.strikeMs, ease: 'Quad.easeIn' });
+              await this.tween({ targets: s, x: s.x - dir * 15, duration: g.windUpMs, ease: 'Sine.easeOut' });
+              await this.tween({ targets: s, x: s.x + dir * 27, duration: g.strikeMs, ease: 'Quad.easeIn' });
             }
             hovering = false;
             const j = await watch;
@@ -829,7 +836,7 @@ export class BattleScene extends Phaser.Scene {
               // bounce back up for the next hit
               await this.tween({
                 targets: s,
-                y: topOf(target) - 64,
+                y: topOf(target) - 96,
                 duration: stomp.bounceMs,
                 ease: 'Quad.easeOut',
               });
@@ -849,7 +856,7 @@ export class BattleScene extends Phaser.Scene {
           await this.showScout(actor, target);
           break;
         case 'heal': {
-          await this.tween({ targets: s, y: s.y - 14, duration: 120, yoyo: true, ease: 'Quad.easeOut' });
+          await this.tween({ targets: s, y: s.y - 21, duration: 120, yoyo: true, ease: 'Quad.easeOut' });
           const healed = this.engine.healFighter(targetId, move.heal ?? 0);
           target.sprite.setTintFill(0x9ff0a8);
           this.time.delayedCall(120, () => target.sprite.clearTint());
@@ -867,49 +874,49 @@ export class BattleScene extends Phaser.Scene {
 
   /** Pip sizes up an opponent: its numbers and his Scout notes, until the player presses on. */
   private async showScout(scout: FighterView, target: FighterView): Promise<void> {
-    this.director.track([scout.sprite, target.sprite], 1.25, 8);
-    await this.tween({ targets: scout.sprite, y: scout.sprite.y - 10, duration: 110, yoyo: true });
+    this.director.track([scout.sprite, target.sprite], 1.25, 12);
+    await this.tween({ targets: scout.sprite, y: scout.sprite.y - 15, duration: 110, yoyo: true });
     this.engine.log.push(`scout ${scout.f.id} ${target.f.id}`);
     const def = Database.enemy(target.f.defId);
-    const pw = 440;
-    const ph = 104;
+    const pw = 660;
+    const ph = 168;
     const px = (W - pw) / 2;
-    const py = H - ph - 20;
+    const py = H - ph - 30;
     const parts: Phaser.GameObjects.GameObject[] = [];
     const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
       parts.push(this.ui(o));
       return o;
     };
     drawPanel(add(this.add.graphics()), px, py, pw, ph, { alpha: 0.96 });
-    add(pixelText(this, px + 14, py + 12, t(def.name).toUpperCase(), 16, css(UI.spark)).setOrigin(0, 0));
+    add(pixelText(this, px + 21, py + 18, t(def.name).toUpperCase(), 24, css(UI.spark)).setOrigin(0, 0));
     add(
       pixelText(
         this,
-        px + 14,
-        py + 34,
+        px + 21,
+        py + 54,
         tf('battle.scout.stats', {
           hp: target.f.hp,
           max: target.f.maxHp,
           atk: target.f.attack,
           def: target.f.defence,
         }),
-        8,
+        16,
         css(UI.ink),
       ).setOrigin(0, 0),
     );
     add(
-      pixelText(this, px + 14, py + 50, t(def.scout), 8, css(UI.inkDim))
-        .setLineSpacing(4)
+      pixelText(this, px + 21, py + 80, t(def.scout), 16, css(UI.inkDim))
+        .setLineSpacing(6)
         .setOrigin(0, 0)
-        .setWordWrapWidth(pw - 28),
+        .setWordWrapWidth(pw - 42),
     );
     add(
       pixelText(
         this,
         px + pw / 2,
-        py + ph - 12,
+        py + ph - 24,
         tf('battle.results.continue', { button: input.prompt('confirm') }),
-        8,
+        16,
         css(UI.inkDim),
       ),
     );
@@ -941,14 +948,14 @@ export class BattleScene extends Phaser.Scene {
 
   /** An enemy winds up: camera on it, a warning, and a glow that stays until it lets go. */
   private async showCharge(v: FighterView): Promise<void> {
-    this.director.track([v.sprite], 1.35, 10);
+    this.director.track([v.sprite], 1.35, 15);
     if (!v.aura) {
       v.aura = this.add
         .ellipse(
           v.sprite.x,
           v.sprite.y - v.sprite.displayHeight / 2,
-          v.sprite.displayWidth + 26,
-          v.sprite.displayHeight + 18,
+          v.sprite.displayWidth + 39,
+          v.sprite.displayHeight + 27,
           UI.spark,
           0.35,
         )
@@ -985,10 +992,10 @@ export class BattleScene extends Phaser.Scene {
 
   /** Names an enemy's move in a small panel at the top of the screen. */
   private async caption(text: string, color: number): Promise<void> {
-    const w = Math.max(160, text.length * 8 + 32);
+    const w = Math.max(240, text.length * 16 + 48);
     const g = this.ui(this.add.graphics());
-    drawPanel(g, W / 2 - w / 2, 84, w, 26, { alpha: 0.94 });
-    const label = this.ui(pixelText(this, W / 2, 97, text.toUpperCase(), 8, css(color)));
+    drawPanel(g, W / 2 - w / 2, 126, w, 39, { alpha: 0.94 });
+    const label = this.ui(pixelText(this, W / 2, 138, text.toUpperCase(), 16, css(color)));
     await this.wait(420);
     this.tween({ targets: [g, label], alpha: 0, delay: 600, duration: 200 }).then(() => {
       g.destroy();
@@ -1013,10 +1020,10 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.shake(120, 0.012);
     this.director.punchIn(0.22);
     this.arena.cheer(1);
-    await this.tween({ targets: hero.sprite, x: hero.sprite.x + 14, duration: 70, yoyo: true });
+    await this.tween({ targets: hero.sprite, x: hero.sprite.x + 21, duration: 70, yoyo: true });
     await this.tween({
       targets: attacker.sprite,
-      x: attacker.sprite.x + 30,
+      x: attacker.sprite.x + 45,
       duration: 160,
       ease: 'Quad.easeOut',
     });
@@ -1037,7 +1044,7 @@ export class BattleScene extends Phaser.Scene {
     v.sprite.setY(v.home.y);
     this.tweens.add({
       targets: v.sprite,
-      y: v.home.y - 6,
+      y: v.home.y - 9,
       duration: 420,
       yoyo: true,
       repeat: -1,
@@ -1073,7 +1080,7 @@ export class BattleScene extends Phaser.Scene {
       const dir = v.f.side === 'hero' ? 1 : -1;
       await this.tween({
         targets: v.sprite,
-        x: v.sprite.x + dir * 10,
+        x: v.sprite.x + dir * 15,
         scaleY: 0.9,
         duration: 90,
         yoyo: true,
@@ -1123,7 +1130,7 @@ export class BattleScene extends Phaser.Scene {
     // paper flip: spin flat, fade away
     this.tweens.killTweensOf(v.sprite);
     await this.tween({ targets: v.sprite, scaleX: 0, duration: 90, yoyo: true, repeat: 2 });
-    await this.tween({ targets: [v.sprite, v.shadow], alpha: 0, y: '-=12', duration: 220 });
+    await this.tween({ targets: [v.sprite, v.shadow], alpha: 0, y: '-=18', duration: 220 });
     v.bar?.setVisible(false);
   }
 
@@ -1184,7 +1191,7 @@ export class BattleScene extends Phaser.Scene {
         1.2,
         8,
       );
-      await this.tween({ targets: party.map((v) => v.sprite), y: '-=14', duration: 140, yoyo: true });
+      await this.tween({ targets: party.map((v) => v.sprite), y: '-=21', duration: 140, yoyo: true });
       for (const h of r.heals) {
         const v = this.views.get(h.id)!;
         gameState().setHp(v.f.defId, v.f.hp);
@@ -1203,7 +1210,7 @@ export class BattleScene extends Phaser.Scene {
       this.director.to(SHOTS.wide, 4);
       await this.tween({
         targets: me.sprite,
-        y: me.sprite.y - 30,
+        y: me.sprite.y - 45,
         duration: 200,
         yoyo: true,
         ease: 'Quad.easeOut',
@@ -1222,21 +1229,21 @@ export class BattleScene extends Phaser.Scene {
     const v = this.views.get(ev.target)!;
     if (ev.kind === 'spotlight') {
       this.drawSpot();
-      this.director.track([v.sprite], 1.25, 8);
+      this.director.track([v.sprite], 1.25, 12);
       await this.popText(v, t('battle.spotlight'), UI.spark);
       return;
     }
     if (ev.kind === 'falling') {
-      this.director.track([v.sprite], 1.15, 8);
+      this.director.track([v.sprite], 1.15, 12);
       await this.caption(hazard('falling_light').name, UI.rope);
       // a light rig drops from the rafters
       const rig = this.add.graphics().setDepth(70);
-      rig.fillStyle(0x2a2a33).fillRect(-14, -6, 28, 8);
-      rig.fillStyle(0xfff2b0).fillRect(-10, 2, 20, 4);
-      rig.setPosition(v.sprite.x, v.sprite.y - 220);
+      rig.fillStyle(0x2a2a33).fillRect(-21, -9, 42, 12);
+      rig.fillStyle(0xfff2b0).fillRect(-15, 3, 30, 6);
+      rig.setPosition(v.sprite.x, v.sprite.y - 330);
       await this.tween({
         targets: rig,
-        y: v.sprite.y - v.sprite.displayHeight + 4,
+        y: v.sprite.y - v.sprite.displayHeight + 6,
         duration: 320,
         ease: 'Quad.easeIn',
       });
@@ -1247,11 +1254,11 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     // the crowd throws something
-    this.director.track([v.sprite], 1.15, 8);
+    this.director.track([v.sprite], 1.15, 12);
     const thing = this.add.graphics().setDepth(70);
-    thing.fillStyle(ev.heal !== undefined ? 0x7fd6ff : 0x8a7a5a).fillRect(-3, -3, 6, 6);
-    const sx = v.sprite.x + (v.f.side === 'hero' ? -120 : 120);
-    const sy = STAGE.floorY - 160;
+    thing.fillStyle(ev.heal !== undefined ? 0x7fd6ff : 0x8a7a5a).fillRect(-5, -5, 9, 9);
+    const sx = v.sprite.x + (v.f.side === 'hero' ? -180 : 180);
+    const sy = STAGE.floorY - 240;
     thing.setPosition(sx, sy);
     const o = { p: 0 };
     const tx = v.sprite.x;
@@ -1261,7 +1268,7 @@ export class BattleScene extends Phaser.Scene {
       p: 1,
       duration: 420,
       onUpdate: () =>
-        thing.setPosition(sx + (tx - sx) * o.p, sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 50),
+        thing.setPosition(sx + (tx - sx) * o.p, sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 75),
     });
     thing.destroy();
     if (ev.heal !== undefined) {
@@ -1280,9 +1287,9 @@ export class BattleScene extends Phaser.Scene {
     if (this.spot) return;
     const g = this.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
     g.fillStyle(0xfff2c0, 0.16)
-      .fillTriangle(-10, -260, 10, -260, 34, 4)
-      .fillTriangle(-10, -260, -34, 4, 34, 4);
-    g.fillStyle(0xfff2c0, 0.22).fillEllipse(0, 2, 72, 12);
+      .fillTriangle(-15, -390, 15, -390, 51, 6)
+      .fillTriangle(-15, -390, -51, 6, 51, 6);
+    g.fillStyle(0xfff2c0, 0.22).fillEllipse(0, 3, 108, 18);
     this.spot = g;
   }
 
@@ -1296,7 +1303,7 @@ export class BattleScene extends Phaser.Scene {
     const levels = gs.addXp(r.xp);
     const hero = this.views.get('hero')!;
     // close-up on the winner while the crowd goes wild
-    this.director.to({ x: hero.sprite.x + 30, y: STAGE.floorY - 48, zoom: 1.6 }, 3);
+    this.director.to({ x: hero.sprite.x + 45, y: STAGE.floorY - 72, zoom: 1.6 }, 3);
     this.arena.cheer(2);
     this.playAnim(hero, 'chop');
     await this.banner(t('battle.victory'), UI.spark, 700);
@@ -1318,10 +1325,10 @@ export class BattleScene extends Phaser.Scene {
       g.xp += f.xp;
       groups.set(f.defId, g);
     }
-    const pw = 300;
+    const pw = 450;
     const rows = groups.size;
-    const ph = 164 + rows * 14;
-    const px = W - pw - 20;
+    const ph = 246 + rows * 21;
+    const px = W - pw - 30;
     const py = Math.round((H - ph) / 2);
     const parts: Phaser.GameObjects.GameObject[] = [];
     const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
@@ -1330,42 +1337,42 @@ export class BattleScene extends Phaser.Scene {
     };
     const g = add(this.add.graphics());
     drawPanel(g, px, py, pw, ph, { alpha: 0.96 });
-    add(pixelText(this, px + pw / 2, py + 14, t('battle.results.title'), 16, css(UI.spark)));
-    let y = py + 34;
+    add(pixelText(this, px + pw / 2, py + 21, t('battle.results.title'), 24, css(UI.spark)));
+    let y = py + 54;
     const row = (left: string, right: string, color: number = UI.ink) => {
-      add(pixelText(this, px + 14, y, left, 8, css(color)).setOrigin(0, 0));
-      add(pixelText(this, px + pw - 14, y, right, 8, css(color)).setOrigin(1, 0));
-      y += 14;
+      add(pixelText(this, px + 21, y, left, 16, css(color)).setOrigin(0, 0));
+      add(pixelText(this, px + pw - 21, y, right, 16, css(color)).setOrigin(1, 0));
+      y += 21;
     };
     for (const e of groups.values())
       row(e.count > 1 ? `${e.name} ×${e.count}` : e.name, `${e.xp} XP`, UI.inkDim);
-    y += 4;
+    y += 6;
     row(t('battle.results.coins'), `+${r.coins}`);
     row(t('battle.results.total'), `+${r.xp}`, UI.spark);
-    y += 6;
+    y += 9;
     const lv = add(
-      pixelText(this, px + 14, y, tf('battle.results.level', { n: before.level }), 8, css(UI.ink)).setOrigin(
+      pixelText(this, px + 21, y, tf('battle.results.level', { n: before.level }), 16, css(UI.ink)).setOrigin(
         0,
         0,
       ),
     );
-    y += 14;
+    y += 21;
     // XP bar animates from where it was to where it ends, rolling over on each level up
-    const barX = px + 14;
-    const barW = pw - 28;
+    const barX = px + 21;
+    const barW = pw - 42;
     const bar = add(this.add.graphics());
     const drawBar = (frac: number) => {
-      bar.clear().fillStyle(UI.hypeBack).fillRect(barX, y, barW, 8);
-      bar.fillStyle(UI.hype).fillRect(barX, y, Math.round(barW * Math.min(1, frac)), 8);
+      bar.clear().fillStyle(UI.hypeBack).fillRect(barX, y, barW, 12);
+      bar.fillStyle(UI.hype).fillRect(barX, y, Math.round(barW * Math.min(1, frac)), 12);
     };
     let level = before.level;
     let xp = before.xp;
     drawBar(xp / xpToNext(level));
-    const next = add(pixelText(this, px + 14, y + 14, '', 8, css(UI.inkDim)).setOrigin(0, 0));
+    const next = add(pixelText(this, px + 21, y + 21, '', 16, css(UI.inkDim)).setOrigin(0, 0));
     const showNext = () => next.setText(tf('battle.results.next', { xp, need: xpToNext(level) }));
     showNext();
-    const note = add(pixelText(this, px + pw / 2, y + 34, '', 8, css(UI.good)));
-    const note2 = add(pixelText(this, px + pw / 2, y + 48, '', 8, css(UI.good)));
+    const note = add(pixelText(this, px + pw / 2, y + 51, '', 16, css(UI.good)));
+    const note2 = add(pixelText(this, px + pw / 2, y + 72, '', 16, css(UI.good)));
     this.inputState = 'results';
     await this.wait(250);
     let left = r.xp;
@@ -1404,9 +1411,9 @@ export class BattleScene extends Phaser.Scene {
       pixelText(
         this,
         px + pw / 2,
-        py + ph - 12,
+        py + ph - 24,
         tf('battle.results.continue', { button: input.prompt('confirm') }),
-        8,
+        16,
         css(UI.inkDim),
       ),
     );
@@ -1419,8 +1426,8 @@ export class BattleScene extends Phaser.Scene {
 
   private async defeat(): Promise<void> {
     const hero = this.views.get('hero')!;
-    this.director.to({ x: hero.sprite.x, y: STAGE.floorY - 30, zoom: 1.45 }, 2.5);
-    await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 8, duration: 300 });
+    this.director.to({ x: hero.sprite.x, y: STAGE.floorY - 45, zoom: 1.45 }, 2.5);
+    await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 12, duration: 300 });
     await this.banner(t('battle.defeat'), UI.rope, 900);
     await this.wait(700);
     if (this.loseOk) {
@@ -1445,7 +1452,7 @@ export class BattleScene extends Phaser.Scene {
     e.log.push(`revive hero ${id} +${e.hero.hp}`);
     gs.setHp(gs.hero().id, e.hero.hp);
     const hero = this.views.get('hero')!;
-    this.director.track([hero.sprite], 1.35, 10);
+    this.director.track([hero.sprite], 1.35, 15);
     void this.popText(hero, t(Database.item(id).name).toUpperCase(), UI.good);
     await this.tween({ targets: hero.sprite, angle: -90, duration: 160 });
     await this.wait(300);
@@ -1482,8 +1489,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async banner(text: string, color: number, hold = 550): Promise<void> {
-    const shadow = this.ui(pixelText(this, W / 2 + 3, 135, text, 32, '#1b0a10'));
-    const b = this.ui(pixelText(this, W / 2, 132, text, 32, css(color)));
+    const shadow = this.ui(pixelText(this, W / 2 + 4, 202, text, 48, '#1b0a10'));
+    const b = this.ui(pixelText(this, W / 2, 198, text, 48, css(color)));
     b.setScale(1, 0);
     shadow.setScale(1, 0);
     await this.tween({ targets: [b, shadow], scaleY: 1, duration: 120, ease: 'Back.easeOut' });
@@ -1494,10 +1501,10 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private popText(v: FighterView, text: string, color: number): Promise<void> {
-    const y = v.sprite.y - v.sprite.displayHeight - 8;
-    const p = pixelText(this, v.sprite.x, y, text, 16, css(color)).setDepth(85);
-    const outline = pixelText(this, v.sprite.x + 2, y + 2, text, 16, '#1b0a10').setDepth(84);
-    return this.tween({ targets: [p, outline], y: '-=22', alpha: 0, delay: 380, duration: 320 }).then(() => {
+    const y = v.sprite.y - v.sprite.displayHeight - 12;
+    const p = pixelText(this, v.sprite.x, y, text, 24, css(color)).setDepth(85);
+    const outline = pixelText(this, v.sprite.x + 3, y + 3, text, 24, '#1b0a10').setDepth(84);
+    return this.tween({ targets: [p, outline], y: '-=33', alpha: 0, delay: 380, duration: 320 }).then(() => {
       p.destroy();
       outline.destroy();
     });

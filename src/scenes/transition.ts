@@ -33,19 +33,19 @@ export class TransitionScene extends Phaser.Scene {
       const left = dir === 1 ? x0 : x0 - half;
       g.fillStyle(RED).fillRect(left, 0, half, H);
       // folds
-      for (let i = 0; i < half; i += 16) {
-        const fx = dir === 1 ? x0 + i : x0 - i - 6;
-        g.fillStyle(RED_DARK).fillRect(fx, 0, 4, H);
-        g.fillStyle(RED_HI).fillRect(fx + 5, 0, 2, H);
+      for (let i = 0; i < half; i += 24) {
+        const fx = dir === 1 ? x0 + i : x0 - i - 9;
+        g.fillStyle(RED_DARK).fillRect(fx, 0, 6, H);
+        g.fillStyle(RED_HI).fillRect(fx + 7, 0, 3, H);
       }
       // gold trim on the leading edge and along the top
-      const edge = dir === 1 ? x0 + half - 4 : x0 - half;
-      g.fillStyle(GOLD).fillRect(edge, 0, 4, H);
+      const edge = dir === 1 ? x0 + half - 6 : x0 - half;
+      g.fillStyle(GOLD).fillRect(edge, 0, 6, H);
     };
     curtain(0, 1);
     curtain(W, -1);
-    g.fillStyle(RED_DARK).fillRect(0, 0, W, 14);
-    g.fillStyle(GOLD).fillRect(0, 14, W, 2);
+    g.fillStyle(RED_DARK).fillRect(0, 0, W, 21);
+    g.fillStyle(GOLD).fillRect(0, 21, W, 3);
   }
 
   private animate(to: 0 | 1): Promise<void> {

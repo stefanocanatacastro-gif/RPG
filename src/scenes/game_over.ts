@@ -26,16 +26,16 @@ export class GameOverScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x07050a);
     // a single spotlight on an empty ring floor
     const g = this.add.graphics();
-    g.fillStyle(0x1b1526).fillEllipse(W / 2, H - 70, 420, 70);
-    g.fillStyle(0x2a2236, 0.8).fillEllipse(W / 2, H - 70, 260, 40);
-    g.fillStyle(0xfff1c4, 0.05).fillTriangle(W / 2 - 20, 0, W / 2 + 20, 0, W / 2 + 160, H - 70);
-    g.fillStyle(0xfff1c4, 0.05).fillTriangle(W / 2 - 20, 0, W / 2 - 160, H - 70, W / 2 + 160, H - 70);
+    g.fillStyle(0x1b1526).fillEllipse(W / 2, H - 105, 630, 105);
+    g.fillStyle(0x2a2236, 0.8).fillEllipse(W / 2, H - 105, 390, 60);
+    g.fillStyle(0xfff1c4, 0.05).fillTriangle(W / 2 - 30, 0, W / 2 + 30, 0, W / 2 + 240, H - 105);
+    g.fillStyle(0xfff1c4, 0.05).fillTriangle(W / 2 - 30, 0, W / 2 - 240, H - 105, W / 2 + 240, H - 105);
 
-    const shadow = pixelText(this, W / 2 + 3, 92 + 3, t('gameover.title'), 32, '#1b0a10');
-    const title = pixelText(this, W / 2, 92, t('gameover.title'), 32, css(UI.rope));
+    const shadow = pixelText(this, W / 2 + 4, 138 + 4, t('gameover.title'), 48, '#1b0a10');
+    const title = pixelText(this, W / 2, 138, t('gameover.title'), 48, css(UI.rope));
     for (const o of [shadow, title]) o.setScale(1, 0);
     this.tweens.add({ targets: [shadow, title], scaleY: 1, duration: 260, delay: 200, ease: 'Back.easeOut' });
-    pixelText(this, W / 2, 132, t('gameover.note'), 8, css(UI.inkDim));
+    pixelText(this, W / 2, 198, t('gameover.note'), 16, css(UI.inkDim));
 
     const latest = SaveManager.latest();
     const items: MenuItem[] = [
@@ -47,12 +47,12 @@ export class GameOverScene extends Phaser.Scene {
       },
       { label: t('gameover.title_screen'), value: 'title' },
     ];
-    const desc = pixelText(this, W / 2, H - 30, '', 8, css(UI.inkDim));
+    const desc = pixelText(this, W / 2, H - 45, '', 16, css(UI.inkDim));
     this.time.delayedCall(600, () => {
-      this.menu = new MenuList(this, W / 2 - 150, 176, {
-        width: 300,
+      this.menu = new MenuList(this, W / 2 - 225, 264, {
+        width: 450,
         rows: items.length,
-        rowHeight: 24,
+        rowHeight: 36,
         items,
         descText: desc,
         cancellable: false,

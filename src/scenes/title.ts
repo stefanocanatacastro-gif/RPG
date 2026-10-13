@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
+import { GAME_WIDTH as GW, GAME_HEIGHT as GH } from '../systems/integer_scale';
 import { pixelText } from '../ui/pixel_text';
 import { tinyText, tinyTextWidth } from '../ui/tiny_font';
 import { versionLabel } from '../systems/version';
@@ -13,7 +13,9 @@ import { Database } from '../managers/database';
 import { SceneLoader } from '../managers/scene_loader';
 import { input } from '../systems/input';
 
-// Title card at 640×360: an arena at night. Dithered sky, lighting truss, an
+// Title card, drawn on a 640×360 design grid and shown 1.5× on the 960×540
+// screen (the main camera zooms); the menu sits on a second, unzoomed camera.
+// An arena at night. Dithered sky, lighting truss, an
 // entrance portal with chasing bulbs, four rows of crowd, spotlights crossing on
 // the ring, and Kid Chispa (placeholder box until his sprite exists) centre-ring.
 
@@ -52,6 +54,11 @@ const C = {
   stepsHi: 0x7a6e8a,
   ink: 0xf4ead2,
 };
+
+/** The design grid the title art is drawn on. */
+const W = 640;
+const H = 360;
+const ZOOM = GW / W;
 
 function rng(seed: number): () => number {
   return () => {
@@ -330,7 +337,11 @@ export class TitleScene extends Phaser.Scene {
 
     // ── Kid Chispa (placeholder) with a stepped idle bob ──────────────
     this.add.ellipse(ringCX, 266, 40, 8, 0x000000, 0.25);
-    const chispa = this.add.image(ringCX, 266, 'spr_chispa').setOrigin(0.5, 1);
+    // art is made for the 960×540 screen; the title is drawn on a 640×360 grid
+    const chispa = this.add
+      .image(ringCX, 266, 'spr_chispa')
+      .setOrigin(0.5, 1)
+      .setScale(1 / ZOOM);
     if (!reduced) {
       this.tweens.add({
         targets: chispa,
@@ -435,9 +446,21 @@ export class TitleScene extends Phaser.Scene {
     // ── Input: keyboard, mouse/touch and gamepad all start ────────────
     this.input.keyboard?.on('keydown-F8', () => this.testCrash());
     this.input.on(Phaser.Input.Events.POINTER_UP, (p: Phaser.Input.Pointer) => {
-      const debugCorner = p.x < 44 && p.y < 44;
+      const debugCorner = p.x < 66 && p.y < 66;
       if (!debugCorner && !input.onTouchControl(p.x, p.y) && !this.started) this.start();
     });
+
+    // the art is drawn at 640×360 and zoomed to fill the screen; anything made
+    // from here on (the menu, the save slots) goes on an unzoomed camera instead
+    const art = [...this.children.list];
+    this.cameras.main.setOrigin(0, 0).setZoom(ZOOM);
+    const ui = this.cameras.add(0, 0, GW, GH).setName('ui');
+    ui.ignore(art);
+    const onAdd = (go: Phaser.GameObjects.GameObject) => this.cameras.main.ignore(go);
+    this.sys.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, onAdd);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
+      this.sys.events.off(Phaser.Scenes.Events.ADDED_TO_SCENE, onAdd),
+    );
 
     this.cameras.main.fadeIn(400, 11, 9, 16);
   }
@@ -462,13 +485,13 @@ export class TitleScene extends Phaser.Scene {
     items.push({ label: t('title.new_game'), value: 'new' });
     if (saved) items.push({ label: t('title.load'), value: 'load' });
     items.push({ label: t('title.dev_hub'), value: 'dev' });
-    const w = 220;
-    const x = (W - w) / 2;
-    const y = H - items.length * 22 - 40;
+    const w = 330;
+    const x = (GW - w) / 2;
+    const y = GH - items.length * 36 - 54;
     this.menu = new MenuList(this, x, y, {
       width: w,
       rows: items.length,
-      rowHeight: 22,
+      rowHeight: 36,
       items,
       cancellable: false,
       onSelect: (item) => void this.choose(item.value),

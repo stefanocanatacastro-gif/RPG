@@ -29,10 +29,10 @@ import {
 import { computeDamage } from '../battle/engine';
 import { ratingMult } from '../battle/commands';
 
-const TOP = 26;
-const LIST = { x: 4, y: TOP + 4, w: 170, h: H - TOP - 26 };
-const CARD = { x: LIST.x + LIST.w + 6, y: TOP + 4, w: W - (LIST.x + LIST.w + 6) - 4, h: H - TOP - 26 };
-const ROW = 13;
+const TOP = 40;
+const LIST = { x: 6, y: TOP + 6, w: 230, h: H - TOP - 40 };
+const CARD = { x: LIST.x + LIST.w + 6, y: TOP + 6, w: W - (LIST.x + LIST.w + 6) - 4, h: H - TOP - 40 };
+const ROW = 18;
 
 const APPROACH_LABEL: Record<CustomMove['approach'], string> = {
   run: 'Runs in',
@@ -130,7 +130,7 @@ export class MoveMakerScene extends Phaser.Scene {
         this.scroll = Phaser.Math.Clamp(
           this.scroll + (dy > 0 ? 3 : -3),
           0,
-          Math.max(0, this.listRows().length - 20),
+          Math.max(0, this.listRows().length - Math.floor((LIST.h - 8) / ROW)),
         );
         this.refresh();
       },
@@ -258,10 +258,10 @@ export class MoveMakerScene extends Phaser.Scene {
       ['TRY', () => void this.tryIt()],
       ['BACK', () => this.leave()],
     ];
-    let x = W - 4;
+    let x = W - 8;
     const out: { label: string; x: number; act: () => void }[] = [];
     for (const [label, act] of defs.reverse()) {
-      x -= label.length * 8 + 14;
+      x -= label.length * 8 + 22;
       out.unshift({ label, x, act });
     }
     return out;
@@ -288,35 +288,35 @@ export class MoveMakerScene extends Phaser.Scene {
     const big = (p.event as MouseEvent).shiftKey;
     if (p.y < TOP) {
       for (const b of this.topButtons())
-        if (p.x >= b.x && p.x < b.x + b.label.length * 8 + 12) return b.act();
+        if (p.x >= b.x && p.x < b.x + b.label.length * 8 + 16) return b.act();
       return;
     }
     if (p.x < LIST.x + LIST.w) {
-      const r = this.listRows()[Math.floor((p.y - LIST.y - 2) / ROW) + this.scroll];
+      const r = this.listRows()[Math.floor((p.y - LIST.y - 1) / ROW) + this.scroll];
       if (r?.pick) {
         this.pick = r.pick;
         this.refresh();
       }
       return;
     }
-    const by = CARD.y + CARD.h - 22;
-    if (p.y >= by && p.y < by + 18) {
-      if (p.x < CARD.x + 100) this.copy();
-      else if (p.x < CARD.x + 200) this.remove();
+    const by = CARD.y + CARD.h - 32;
+    if (p.y >= by && p.y < by + 24) {
+      if (p.x < CARD.x + 120) this.copy();
+      else if (p.x < CARD.x + 240) this.remove();
       return;
     }
     if (this.pick?.src !== 'mine') return;
     const i = Math.floor((p.y - this.propsTop()) / ROW);
     const row = this.rows[i];
     if (!row) return;
-    if (row.step && p.x < CARD.x + 120) row.step(-1, big);
-    else if (row.step && p.x > CARD.x + CARD.w - 16) row.step(1, big);
+    if (row.step && p.x < CARD.x + 160) row.step(-1, big);
+    else if (row.step && p.x > CARD.x + CARD.w - 24) row.step(1, big);
     else if (row.edit) row.edit();
     else row.step?.(1, big);
   }
 
   private propsTop(): number {
-    return CARD.y + 96;
+    return CARD.y + 136;
   }
 
   /** Lets a browser test change a property row directly. */
@@ -365,7 +365,7 @@ export class MoveMakerScene extends Phaser.Scene {
       label: 'Name',
       value: () => m.name,
       edit: async () => {
-        const v = await editText(this, { x: CARD.x + 120, y: y(), w: CARD.w - 126, value: m.name });
+        const v = await editText(this, { x: CARD.x + 164, y: y(), w: CARD.w - 176, value: m.name });
         if (v?.trim()) {
           m.name = v.trim().slice(0, 18);
           this.changed();
@@ -377,9 +377,9 @@ export class MoveMakerScene extends Phaser.Scene {
       value: () => m.desc || '(automatic)',
       edit: async () => {
         const v = await editText(this, {
-          x: CARD.x + 120,
+          x: CARD.x + 164,
           y: y(),
-          w: CARD.w - 126,
+          w: CARD.w - 176,
           value: m.desc,
           placeholder: 'empty = describe it automatically',
         });
@@ -476,20 +476,20 @@ export class MoveMakerScene extends Phaser.Scene {
     const g = add(this.add.graphics());
     g.fillStyle(UI.panel).fillRect(0, 0, W, TOP);
     g.fillStyle(UI.rope).fillRect(0, TOP - 2, W, 2);
-    txt(6, 9, 'MOVE MAKER', UI.spark);
+    txt(12, 12, 'MOVE MAKER', UI.spark, 16);
     for (const b of this.topButtons()) {
       const hot = b.label === 'SAVE' && this.dirty;
-      g.fillStyle(hot ? 0x5a3a10 : UI.panelHi).fillRect(b.x, 4, b.label.length * 8 + 12, 17);
-      txt(b.x + 6, 9, b.label, hot ? UI.spark : UI.ink);
+      g.fillStyle(hot ? 0x5a3a10 : UI.panelHi).fillRect(b.x, 8, b.label.length * 8 + 16, 24);
+      txt(b.x + 8, 16, b.label, hot ? UI.spark : UI.ink);
     }
 
     this.listRows()
-      .slice(this.scroll, this.scroll + 20)
+      .slice(this.scroll, this.scroll + Math.floor((LIST.h - 8) / ROW))
       .forEach((r, k) => {
-        const y = LIST.y + 2 + k * ROW;
+        const y = LIST.y + 6 + k * ROW;
         const sel = r.pick && JSON.stringify(r.pick) === JSON.stringify(this.pick);
-        if (sel) add(this.add.rectangle(LIST.x, y - 2, LIST.w, ROW, UI.panelHi).setOrigin(0));
-        txt(LIST.x + 4, y, fit(r.label, 20), r.head || sel ? UI.spark : r.pick ? UI.ink : UI.inkDim);
+        if (sel) add(this.add.rectangle(LIST.x, y - 5, LIST.w, ROW, UI.panelHi).setOrigin(0));
+        txt(LIST.x + 4, y, fit(r.label, 27), r.head || sel ? UI.spark : r.pick ? UI.ink : UI.inkDim);
       });
 
     const m = this.current();
@@ -502,7 +502,7 @@ export class MoveMakerScene extends Phaser.Scene {
       tinyText(
         this,
         ix,
-        iy + 22,
+        iy + 30,
         `${m.user === 'hero' ? 'HERO' : 'ENEMY'} ${m.kind.toUpperCase()} · ${owner}`,
         css(UI.inkDim),
       )
@@ -510,10 +510,10 @@ export class MoveMakerScene extends Phaser.Scene {
         .setScale(2),
     );
     add(
-      pixelText(this, ix, iy + 36, m.desc || moveSummary(m), 8, css(UI.ink))
+      pixelText(this, ix, iy + 52, m.desc || moveSummary(m), 8, css(UI.ink))
         .setOrigin(0, 0)
         .setWordWrapWidth(CARD.w - 24)
-        .setLineSpacing(4),
+        .setLineSpacing(6),
     );
     // what it does in numbers, against a fighter with 0 defence, from a user with 1 attack
     if (m.kind === 'attack') {
@@ -526,35 +526,35 @@ export class MoveMakerScene extends Phaser.Scene {
         def.command === 'none'
           ? `${each}${per('good')} damage`
           : `${each}${per('good')} damage, ${per('great')} on GREAT`;
-      txt(ix, iy + 64, `ATK 1 vs DEF 0: ${line}`, UI.grit);
+      txt(ix, iy + 84, `ATK 1 vs DEF 0: ${line}`, UI.grit);
     }
 
     this.rows = this.buildRows(m);
     const mine = this.pick?.src === 'mine';
-    if (!mine) txt(CARD.x + 10, this.propsTop() - 14, 'COPY it to change it.', UI.inkDim);
+    if (!mine) txt(CARD.x + 14, this.propsTop() - 20, 'COPY it to change it.', UI.inkDim);
     this.rows.forEach((r, k) => {
       const y = this.propsTop() + k * ROW;
-      txt(CARD.x + 10, y, r.label, UI.inkDim);
+      txt(CARD.x + 14, y, r.label, UI.inkDim);
       if (r.step && mine) {
-        txt(CARD.x + 118, y, '<', UI.spark);
-        txt(CARD.x + CARD.w - 14, y, '>', UI.spark);
+        txt(CARD.x + 148, y, '<', UI.spark);
+        txt(CARD.x + CARD.w - 20, y, '>', UI.spark);
       }
-      txt(CARD.x + 132, y, fit(r.value(), 30), r.edit && mine ? 0x9fd8ff : UI.ink);
+      txt(CARD.x + 166, y, fit(r.value(), 46), r.edit && mine ? 0x9fd8ff : UI.ink);
     });
 
-    const by = CARD.y + CARD.h - 22;
-    g.fillStyle(UI.panelHi).fillRect(CARD.x + 6, by, 88, 18);
-    txt(CARD.x + 14, by + 5, mine ? 'DUPLICATE' : 'COPY');
+    const by = CARD.y + CARD.h - 32;
+    g.fillStyle(UI.panelHi).fillRect(CARD.x + 8, by, 104, 24);
+    txt(CARD.x + 16, by + 8, mine ? 'DUPLICATE' : 'COPY');
     if (mine) {
-      g.fillStyle(0x3a1018).fillRect(CARD.x + 104, by, 88, 18);
-      txt(CARD.x + 120, by + 5, 'DELETE', UI.rope);
+      g.fillStyle(0x3a1018).fillRect(CARD.x + 128, by, 104, 24);
+      txt(CARD.x + 148, by + 8, 'DELETE', UI.rope);
     }
-    txt(6, H - 18, fit(this.status, 78), this.statusColor);
+    txt(10, H - 26, fit(this.status, 110), this.statusColor);
     add(
       tinyText(
         this,
-        W - 6,
-        H - 6,
+        W - 8,
+        H - 8,
         `SAVES: ${Builds.backend() === 'shared' ? 'LINK' : 'BROWSER'}${this.dirty ? ' · UNSAVED' : ''}`,
         css(this.dirty ? UI.spark : UI.border),
       ).setOrigin(1, 1),

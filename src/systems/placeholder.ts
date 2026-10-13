@@ -52,16 +52,16 @@ export function makePlaceholder(scene: Phaser.Scene, spec: PlaceholderSpec): voi
   }
   const label = (spec.label ?? key.replace(/^[a-z]+_/, '')).toUpperCase();
   if (w >= 12 && h >= 8) {
-    ctx.font = '5px monospace';
+    ctx.font = '7px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    const maxChars = Math.max(1, Math.floor((w - 2) / 3));
+    const maxChars = Math.max(1, Math.floor((w - 2) / 4.5));
     const lines: string[] = [];
-    for (let i = 0; i < label.length && lines.length < Math.floor((h - 2) / 6); i += maxChars) {
+    for (let i = 0; i < label.length && lines.length < Math.floor((h - 2) / 9); i += maxChars) {
       lines.push(label.slice(i, i + maxChars));
     }
-    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, h / 2 + (i - (lines.length - 1) / 2) * 6));
+    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, h / 2 + (i - (lines.length - 1) / 2) * 9));
   }
   tex.refresh();
   generated.add(key);

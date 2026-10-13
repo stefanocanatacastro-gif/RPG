@@ -70,6 +70,10 @@ class InputManager {
   private zones: { x: number; y: number; r: number }[] = [];
   private touchDown = new Set<Action>();
   private scripted: { action: Action; from: number; to: number; seen: boolean }[] = [];
+  /** When each key went down (event time), so timing can be judged between frames. */
+  private keyDownAt = new Map<string, number>();
+  /** When each action pressed this frame actually went down. */
+  private pressAt = new Map<Action, number>();
   private now = new Set<Action>();
   private prev = new Set<Action>();
   private _device: InputDevice = 'keyboard';
@@ -94,6 +98,7 @@ class InputManager {
       // typing in a text box (the room editor's panel) isn't game input
       if (isTyping(e.target)) return;
       if (gameCodes.has(e.code)) e.preventDefault(); // stop Space/arrows scrolling the page
+      if (!this.keysDown.has(e.code)) this.keyDownAt.set(e.code, e.timeStamp);
       this.keysDown.add(e.code);
       this.keysTapped.add(e.code);
       this.setDevice('keyboard');
@@ -118,16 +123,23 @@ class InputManager {
   private poll(time = 0): void {
     this.prev = this.now;
     const next = new Set<Action>();
+    const at = new Map<Action, number>();
     // scripted presses (browser tests): held from `from` until `to`, at least one frame
     this.scripted = this.scripted.filter((h) => {
       if (time >= h.from && (time < h.to || !h.seen)) {
         next.add(h.action);
+        if (!h.seen) at.set(h.action, h.from);
         h.seen = true;
       }
       return !(h.seen && time >= h.to);
     });
     for (const a of ACTIONS) {
-      if (KEYS[a].some((k) => this.keysDown.has(k) || this.keysTapped.has(k))) next.add(a);
+      const keys = KEYS[a].filter((k) => this.keysDown.has(k) || this.keysTapped.has(k));
+      if (keys.length) {
+        next.add(a);
+        const t = Math.min(...keys.map((k) => this.keyDownAt.get(k) ?? time));
+        if (!at.has(a)) at.set(a, t);
+      }
       if (this.touchDown.has(a)) next.add(a);
     }
     const pads = navigator.getGamepads?.() ?? [];
@@ -149,6 +161,8 @@ class InputManager {
     }
     this.keysTapped.clear();
     this.now = next;
+    this.pressAt.clear();
+    for (const a of next) if (!this.prev.has(a)) this.pressAt.set(a, Math.min(time, at.get(a) ?? time));
     for (const a of next) {
       if (!this.prev.has(a)) {
         this.history.unshift({ action: a, device: this._device, t: performance.now() });
@@ -165,6 +179,15 @@ class InputManager {
   /** Pressed this frame (wasn't held last frame). */
   justPressed(a: Action): boolean {
     return this.now.has(a) && !this.prev.has(a);
+  }
+
+  /**
+   * When an action pressed this frame really went down (the key event's time),
+   * so action commands are judged fairly even at a low frame rate. Null when it
+   * wasn't pressed this frame.
+   */
+  pressTime(a: Action): number | null {
+    return this.justPressed(a) ? (this.pressAt.get(a) ?? null) : null;
   }
 
   justReleased(a: Action): boolean {

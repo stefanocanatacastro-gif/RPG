@@ -9,7 +9,7 @@ export function pixelText(
   x: number,
   y: number,
   text: string,
-  size: 8 | 16 | 24 | 32 = 16,
+  size: 8 | 16 | 24 | 32 | 48 = 16,
   color = '#f4ead2',
 ): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, text, {

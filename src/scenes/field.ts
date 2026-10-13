@@ -162,7 +162,7 @@ export class FieldScene extends Phaser.Scene {
     this.placeObjects();
     this.view.update(this.cx, this.time.now);
     this.autosave();
-    this.marker = pixelText(this, 0, 0, '!', 16, css(UI.spark)).setVisible(false).setDepth(950000);
+    this.marker = pixelText(this, 0, 0, '!', 24, css(UI.spark)).setVisible(false).setDepth(950000);
     const offFlag = bus.on('flag.set', () => this.refreshObjects());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, offFlag);
 
@@ -297,21 +297,21 @@ export class FieldScene extends Phaser.Scene {
   private buildHud(): void {
     const gs = gameState();
     const top = 1000000;
-    const hud = this.add.container(8, 8).setDepth(top).setScrollFactor(0);
+    const hud = this.add.container(12, 12).setDepth(top).setScrollFactor(0);
     const g = this.add.graphics();
-    drawPanel(g, 0, 0, 230, 64, { alpha: 0.92 });
+    drawPanel(g, 0, 0, 384, 96, { alpha: 0.92 });
     const hero = gs.hero();
-    const hp = new Bar(this, 12, 12, 206, BAR_STYLES.hp, hero.hp, hero.maxHp);
-    const grit = new Bar(this, 12, 30, 206, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit);
-    const coins = pixelText(this, 12, 46, '', 8, css(UI.spark)).setOrigin(0, 0);
+    const hp = new Bar(this, 18, 18, 348, BAR_STYLES.hp, hero.hp, hero.maxHp);
+    const grit = new Bar(this, 18, 45, 348, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit);
+    const coins = pixelText(this, 18, 70, '', 16, css(UI.spark)).setOrigin(0, 0);
     const setCoins = () => coins.setText(`COINS ${gs.data.coins}   ITEMS ${gs.data.items.length}/10`);
     setCoins();
     hud.add([g, hp, grit, coins]);
-    pixelText(this, W - 12, 12, this.room.name.toUpperCase(), 8, css(UI.ink))
+    pixelText(this, W - 18, 18, this.room.name.toUpperCase(), 16, css(UI.ink))
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(top);
-    const pos = pixelText(this, W - 12, 26, '', 8, css(UI.inkDim))
+    const pos = pixelText(this, W - 18, 42, '', 8, css(UI.inkDim))
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(top);
@@ -530,8 +530,8 @@ export class FieldScene extends Phaser.Scene {
       this.marker.setVisible(false);
       return;
     }
-    const bob = Math.floor(this.time.now / 250) % 2 ? 2 : 0;
-    this.marker.setVisible(true).setPosition(o.sprite.x, o.sprite.y - o.sprite.displayHeight - 14 - bob);
+    const bob = Math.floor(this.time.now / 250) % 2 ? 3 : 0;
+    this.marker.setVisible(true).setPosition(o.sprite.x, o.sprite.y - o.sprite.displayHeight - 21 - bob);
   }
 
   /** Shows lines in the message box; the player stands still meanwhile. */
@@ -658,10 +658,10 @@ export class FieldScene extends Phaser.Scene {
   }
 
   private emote(s: Phaser.GameObjects.Sprite, mark: '!' | '?'): void {
-    const bang = pixelText(this, s.x, s.y - s.displayHeight - 20, mark, 16, css(UI.spark)).setDepth(950000);
+    const bang = pixelText(this, s.x, s.y - s.displayHeight - 30, mark, 24, css(UI.spark)).setDepth(950000);
     this.tweens.add({
       targets: bang,
-      y: bang.y - 6,
+      y: bang.y - 9,
       alpha: 0,
       delay: mark === '?' ? 900 : 450,
       duration: 250,

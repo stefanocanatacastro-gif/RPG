@@ -48,7 +48,7 @@ npm run format
 
 ```
 src/
-  main.ts            game config: 640×360, pixel art, integer scaling
+  main.ts            game config: 960×540, pixel art, integer scaling (2× on 1080p, 4× on 4K)
   scenes/            title, dev hub, field, battle, battle sandbox, room editor, overlays (debug, curtain)
   field/             the 3D world: units, projection, movement, room drawing
   battle/            battle system (M1)

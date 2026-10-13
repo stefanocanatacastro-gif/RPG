@@ -4,38 +4,38 @@
   "images": [
     {
       "key": "spr_pip",
-      "w": 32,
-      "h": 32
+      "w": 48,
+      "h": 48
     },
     {
       "key": "spr_c0_dock_goon",
-      "w": 48,
-      "h": 64
+      "w": 72,
+      "h": 96
     },
     {
       "key": "spr_c0_spiky_bouncer",
-      "w": 48,
-      "h": 56
+      "w": 72,
+      "h": 84
     },
     {
       "key": "spr_c0_gull_flyer",
-      "w": 40,
-      "h": 32
+      "w": 60,
+      "h": 48
     },
     {
       "key": "spr_c0_agent_brick",
-      "w": 64,
-      "h": 80
+      "w": 96,
+      "h": 120
     },
     {
       "key": "spr_c0_ringside_bruiser",
-      "w": 56,
-      "h": 72
+      "w": 84,
+      "h": 108
     },
     {
       "key": "spr_c0_corner_medic",
-      "w": 40,
-      "h": 60
+      "w": 60,
+      "h": 90
     }
   ],
   "audio": []

@@ -165,7 +165,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(args=["--use-gl=swiftshader", "--enable-unsafe-swiftshader"])
 
     # ── Desktop walkthrough ─────────────────────────────────────────────
-    ctx = b.new_context(viewport={"width": 1280, "height": 720})
+    ctx = b.new_context(viewport={"width": 1920, "height": 1080})
     page = ctx.new_page()
     errors = ERRORS
     page.on("pageerror", lambda e: errors.append(str(e)))
@@ -174,7 +174,7 @@ with sync_playwright() as p:
     wait_scene(page, "title", 15000)
     page.wait_for_timeout(500)
     zoom = page.evaluate("window.__game.registry.get('zoom')")
-    check(zoom == 2, f"desktop 1280x720 uses 2x zoom (got {zoom})")
+    check(zoom == 2, f"desktop 1920x1080 uses 2x zoom (got {zoom})")
     problems = page.evaluate("window.__game.scene.getScene('dev_hub') && 0")
     page.screenshot(path=f"{out}/01_title.png")
 
@@ -605,7 +605,7 @@ with sync_playwright() as p:
     # a slanted wall: walk into the front-left diagonal and slide along it
     page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 12; s.player.body.z = 3; s.graceMs = 99999; }")
     page.keyboard.down("ArrowLeft")
-    page.wait_for_timeout(1600)
+    page.wait_for_timeout(2800)
     page.keyboard.up("ArrowLeft")
     pos = page.evaluate("(() => { const b = window.__game.scene.getScene('field').player.body; return [b.x, b.z]; })()")
     check(pos[0] + pos[1] >= 10 and pos[1] > 3.3, f"slanted wall holds and slides you ({pos[0]:.1f}, {pos[1]:.1f})")

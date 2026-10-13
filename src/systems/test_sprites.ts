@@ -15,8 +15,10 @@ export const TEST_COLORS = {
   boots: 0xf4ead2,
 };
 
-const FW = 48;
-const FH = 64;
+/** Drawn on a 48×64 design grid, scaled up to the 960×540 game's size. */
+const S = 1.5;
+const FW = 72;
+const FH = 96;
 
 type Pose = { bob: number; legL: number; legR: number; arm: number; lean: number };
 
@@ -51,7 +53,9 @@ function drawFrame(ctx: CanvasRenderingContext2D, ox: number, p: Pose): void {
   const C = TEST_COLORS;
   const r = (x: number, y: number, w: number, h: number, c: number) => {
     ctx.fillStyle = hex(c);
-    ctx.fillRect(ox + x, y, w, h);
+    const x0 = Math.round(x * S);
+    const y0 = Math.round(y * S);
+    ctx.fillRect(ox + x0, y0, Math.round((x + w) * S) - x0, Math.round((y + h) * S) - y0);
   };
   const cx = 24 + p.lean;
   const top = 6 + p.bob;

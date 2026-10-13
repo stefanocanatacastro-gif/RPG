@@ -35,9 +35,9 @@ export class DebugMenuScene extends Phaser.Scene {
   create(): void {
     this.layer = this.add.container(0, 0).setVisible(false).setDepth(10);
     const shade = this.add.rectangle(0, 0, W, H, UI.void, 0.72).setOrigin(0);
-    const box = panel(this, 140, 24, 360, 312, { fill: UI.panelHi, border: UI.rope });
-    const title = pixelText(this, W / 2, 36, 'DEBUG', 16, css(UI.spark));
-    this.status = pixelText(this, W / 2, 312, '', 8, css(UI.inkDim));
+    const box = panel(this, 210, 36, 540, 468, { fill: UI.panelHi, border: UI.rope });
+    const title = pixelText(this, W / 2, 54, 'DEBUG', 24, css(UI.spark));
+    this.status = pixelText(this, W / 2, 468, '', 16, css(UI.inkDim));
     this.layer.add([shade, box, title, this.status]);
 
     this.fpsText = pixelText(this, W - 6, 6, '', 8, css(UI.good))
@@ -50,7 +50,7 @@ export class DebugMenuScene extends Phaser.Scene {
       this.toggle();
     });
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (p: Phaser.Input.Pointer) => {
-      if (p.x > 44 || p.y > 44) return;
+      if (p.x > 66 || p.y > 66) return;
       const now = this.time.now;
       this.taps = [...this.taps.filter((ts) => now - ts < 700), now];
       if (this.taps.length >= 3) {
@@ -116,9 +116,10 @@ export class DebugMenuScene extends Phaser.Scene {
     cursor = 0,
   ): void {
     this.menu?.destroy();
-    this.menu = new MenuList(this, 160, 62, {
-      width: 320,
+    this.menu = new MenuList(this, 240, 93, {
+      width: 480,
       rows: 9,
+      rowHeight: 36,
       items,
       onSelect,
       onCancel,

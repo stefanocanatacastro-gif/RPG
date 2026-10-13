@@ -43,11 +43,11 @@ import { Builds } from '../managers/builds';
 import { editText } from '../ui/text_field';
 
 const SLOTS = 4;
-const ROW_H = 12;
-const TOP = 50;
-const LEFT_W = 344;
-const VAL_L = 132; // "<"
-const VAL_R = 300; // ">"
+const ROW_H = 18;
+const TOP = 74;
+const LEFT_W = 480;
+const VAL_L = 200; // "<"
+const VAL_R = 452; // ">"
 const SIM_RUNS = 200;
 
 const ASSISTS = ['off', 'perfect', 'god', 'both'] as const;
@@ -192,13 +192,14 @@ export class BattleSandboxScene extends Phaser.Scene {
 
     benchBackdrop(this, 'BATTLE SANDBOX', versionLabel());
     const g = this.add.graphics();
-    const panelH = 22 * ROW_H + 10;
-    drawPanel(g, 8, TOP - 6, LEFT_W, panelH, { alpha: 0.9 });
-    drawPanel(g, LEFT_W + 16, TOP - 6, W - LEFT_W - 24, panelH, { alpha: 0.9 });
-    this.desc = pixelText(this, 16, H - 40, '', 8, css(UI.inkDim))
+    const panelH = 22 * ROW_H + 12;
+    drawPanel(g, 12, TOP - 8, LEFT_W, panelH, { alpha: 0.9 });
+    drawPanel(g, LEFT_W + 24, TOP - 8, W - LEFT_W - 36, panelH, { alpha: 0.9 });
+    this.desc = pixelText(this, 24, H - 66, '', 8, css(UI.inkDim))
       .setOrigin(0, 0)
-      .setWordWrapWidth(W - 32);
-    const hint = pixelText(this, W / 2, H - 20, '', 8, css(UI.inkDim));
+      .setLineSpacing(6)
+      .setWordWrapWidth(W - 48);
+    const hint = pixelText(this, W / 2, H - 28, '', 16, css(UI.inkDim));
     const arrows = { keyboard: 'ARROWS', gamepad: 'D-PAD', touch: 'TAP < >' } as const;
     const drawHint = () =>
       hint.setText(
@@ -546,8 +547,8 @@ export class BattleSandboxScene extends Phaser.Scene {
       const y = TOP + i * ROW_H;
       const sel = i === this.cursor;
       const ink = r.disabled ? UI.border : sel ? UI.spark : UI.ink;
-      if (sel) add(this.add.rectangle(12, y - 3, LEFT_W - 8, ROW_H, UI.panelHi).setOrigin(0));
-      add(pixelText(this, 20, y, `${sel ? '>' : ' '}${r.label}`, 8, css(ink)).setOrigin(0, 0));
+      if (sel) add(this.add.rectangle(18, y - 5, LEFT_W - 12, ROW_H, UI.panelHi).setOrigin(0));
+      add(pixelText(this, 28, y, `${sel ? '>' : ' '}${r.label}`, 8, css(ink)).setOrigin(0, 0));
       if (r.value) {
         const arrows = !!(r.left && !r.disabled);
         if (arrows) {
@@ -566,12 +567,7 @@ export class BattleSandboxScene extends Phaser.Scene {
         );
       }
       const tag = r.tag?.();
-      if (tag)
-        add(
-          tinyText(this, 90, y + 1, tag, css(UI.grit))
-            .setOrigin(0, 0)
-            .setScale(2),
-        );
+      if (tag) add(tinyText(this, 120, y, tag, css(UI.grit)).setOrigin(0, 0).setScale(2));
     });
     const r = this.rows[this.cursor];
     this.desc.setText(r.desc);
@@ -582,11 +578,11 @@ export class BattleSandboxScene extends Phaser.Scene {
   private renderSide(): void {
     for (const o of this.side) o.destroy();
     this.side = [];
-    const x = LEFT_W + 26;
+    const x = LEFT_W + 40;
     let y = TOP;
     const line = (text: string, color: number = UI.ink, size: 8 | 16 = 8) => {
       this.side.push(pixelText(this, x, y, text, size, css(color)).setOrigin(0, 0));
-      y += size === 16 ? 20 : 12;
+      y += size === 16 ? 28 : 18;
     };
     const slot =
       this.page === 'fight' && this.cursor >= 1 && this.cursor <= SLOTS
@@ -597,7 +593,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       const lines = conditionLines(this.s.cond);
       if (!lines.length) line('Plain match', UI.inkDim);
       for (const l of lines.slice(0, 7)) line(l);
-      y = TOP + 104;
+      y = TOP + 156;
       line('HYPE SPECIALS', UI.hype);
       for (const sp of SPECIALS) line(`${sp.name} · ${sp.cost} Hype`, UI.inkDim);
     } else if (slot) {
@@ -630,7 +626,7 @@ export class BattleSandboxScene extends Phaser.Scene {
         UI.inkDim,
       );
     }
-    y = TOP + 130;
+    y = TOP + 200;
     if (this.reportTitle && this.page === 'fight') {
       line(this.reportTitle, UI.spark);
       for (const l of this.report) line(l, UI.ink);
@@ -677,15 +673,15 @@ export class BattleSandboxScene extends Phaser.Scene {
 
   private tap(p: Phaser.Input.Pointer): void {
     if (this.busy || SceneLoader.isBusy() || input.onTouchControl(p.x, p.y)) return;
-    if (p.x > LEFT_W + 8) return;
-    const i = Math.floor((p.y - TOP + 3) / ROW_H);
+    if (p.x > LEFT_W + 12) return;
+    const i = Math.floor((p.y - TOP + 5) / ROW_H);
     if (i < 0 || i >= this.rows.length) return;
     const was = this.cursor === i;
     this.cursor = i;
     const r = this.rows[i];
     let kind: 'left' | 'right' | 'confirm' | null = null;
-    if (r.left && p.x >= VAL_L - 10 && p.x < VAL_L + 20) kind = 'left';
-    else if (r.right && p.x >= VAL_R - 12 && p.x < VAL_R + 18) kind = 'right';
+    if (r.left && p.x >= VAL_L - 15 && p.x < VAL_L + 30) kind = 'left';
+    else if (r.right && p.x >= VAL_R - 18 && p.x < VAL_R + 27) kind = 'right';
     else if (was) kind = 'confirm';
     if (kind) this.act(kind);
     else this.render();
@@ -746,9 +742,9 @@ export class BattleSandboxScene extends Phaser.Scene {
     const name =
       title ??
       (await editText(this, {
-        x: 16,
-        y: H - 48,
-        w: W - 32,
+        x: 24,
+        y: H - 72,
+        w: W - 48,
         value: this.editing?.title ?? '',
         placeholder: 'Encounter title',
       }));

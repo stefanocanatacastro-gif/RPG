@@ -52,6 +52,12 @@ export class CommandRunner {
     return this.scene.time.now;
   }
 
+  /** When the confirm press of this frame really happened (no earlier than a frame ago). */
+  private pressTime(now: number, a: 'confirm' | 'cancel' = 'confirm'): number {
+    const t = input.pressTime(a);
+    return t === null ? now : Math.max(now - 100, Math.min(now, t));
+  }
+
   private pressed(): boolean {
     return input.justPressed('confirm') || this.pointerPressed;
   }
@@ -78,10 +84,10 @@ export class CommandRunner {
   /** A small round button with the confirm key's name ("Z", "A"). */
   private buttonIcon(x: number, y: number): Phaser.GameObjects.Container {
     const g = this.scene.add.graphics();
-    g.fillStyle(0x1b0a10).fillCircle(1, 1, 10);
-    g.fillStyle(UI.rope).fillCircle(0, 0, 10);
-    g.fillStyle(0xffffff, 0.25).fillCircle(-3, -3, 4);
-    const label = pixelText(this.scene, 0, -4, input.prompt('confirm'), 8, '#ffffff');
+    g.fillStyle(0x1b0a10).fillCircle(2, 2, 15);
+    g.fillStyle(UI.rope).fillCircle(0, 0, 15);
+    g.fillStyle(0xffffff, 0.25).fillCircle(-5, -5, 6);
+    const label = pixelText(this.scene, 0, -8, input.prompt('confirm'), 16, '#ffffff');
     return this.scene.add.container(x, y, [g, label]).setDepth(DEPTH);
   }
 
@@ -94,12 +100,12 @@ export class CommandRunner {
   stomp(attacker: Phaser.GameObjects.Sprite, landAt: number): Promise<CommandResult> {
     const cfg = COMMANDS.stomp;
     const presses: number[] = [];
-    const icon = this.buttonIcon(attacker.x + 26, attacker.y - attacker.displayHeight - 4).setAlpha(0.8);
+    const icon = this.buttonIcon(attacker.x + 39, attacker.y - attacker.displayHeight - 6).setAlpha(0.8);
     this.state = { kind: 'stomp', startAt: this.now(), keyAt: landAt };
     return this.loop((now) => {
-      icon.setPosition(attacker.x + 26, attacker.y - attacker.displayHeight - 4);
+      icon.setPosition(attacker.x + 39, attacker.y - attacker.displayHeight - 6);
       if (this.pressed()) {
-        presses.push(now);
+        presses.push(this.pressTime(now));
         icon.setScale(0.8);
       }
       if (debugState.autoCommands && presses.length === 0 && now >= landAt - 20) presses.push(landAt - 10);
@@ -119,28 +125,28 @@ export class CommandRunner {
     const cx = target.x;
     const cy = target.y - target.displayHeight / 2;
     const g = this.scene.add.graphics().setDepth(DEPTH);
-    const icon = this.buttonIcon(cx + cfg.startRadius + 14, cy - cfg.startRadius + 4);
+    const icon = this.buttonIcon(cx + cfg.startRadius + 21, cy - cfg.startRadius + 6);
     this.state = { kind: 'timed_press', startAt: start, keyAt: perfectAt };
     let pressAt: number | null = null;
     return this.loop((now) => {
-      if (pressAt === null && this.pressed()) pressAt = now;
+      if (pressAt === null && this.pressed()) pressAt = this.pressTime(now);
       if (pressAt === null && debugState.autoCommands && now >= perfectAt) pressAt = perfectAt;
-      const r = Math.max(2, ringRadius(now, start));
+      const r = Math.max(3, ringRadius(now, start));
       g.clear();
       // the target ring, the closing ring, and crosshair ticks
-      g.lineStyle(3, UI.spark, 0.9).strokeCircle(cx, cy, cfg.targetRadius);
-      g.lineStyle(2, 0xffffff, now > perfectAt ? 0.4 : 0.95).strokeCircle(cx, cy, r);
+      g.lineStyle(4, UI.spark, 0.9).strokeCircle(cx, cy, cfg.targetRadius);
+      g.lineStyle(3, 0xffffff, now > perfectAt ? 0.4 : 0.95).strokeCircle(cx, cy, r);
       for (const [dx, dy] of [
         [1, 0],
         [-1, 0],
         [0, 1],
         [0, -1],
       ]) {
-        g.lineStyle(2, UI.spark).lineBetween(
-          cx + dx * (cfg.targetRadius + 3),
-          cy + dy * (cfg.targetRadius + 3),
-          cx + dx * (cfg.targetRadius + 8),
-          cy + dy * (cfg.targetRadius + 8),
+        g.lineStyle(3, UI.spark).lineBetween(
+          cx + dx * (cfg.targetRadius + 4),
+          cy + dy * (cfg.targetRadius + 4),
+          cx + dx * (cfg.targetRadius + 12),
+          cy + dy * (cfg.targetRadius + 12),
         );
       }
       const timedOut = now > perfectAt + cfg.timeoutMs;
@@ -157,25 +163,25 @@ export class CommandRunner {
   hold(attacker: Phaser.GameObjects.Sprite): Promise<CommandResult> {
     const cfg = COMMANDS.hold_release;
     const start = this.now();
-    const w = 84;
-    const h = 10;
+    const w = 126;
+    const h = 15;
     const x = Math.round(attacker.x - w / 2);
-    const y = Math.round(attacker.y - attacker.displayHeight - 30);
+    const y = Math.round(attacker.y - attacker.displayHeight - 45);
     const g = this.scene.add.graphics().setDepth(DEPTH);
     const label = pixelText(
       this.scene,
-      x + w / 2 - 12,
-      y - 20,
+      x + w / 2 - 18,
+      y - 30,
       t('battle.cmd.hold'),
-      8,
+      16,
       css(UI.ink),
     ).setDepth(DEPTH);
-    const icon = this.buttonIcon(x + w / 2 + 30, y - 16);
+    const icon = this.buttonIcon(x + w / 2 + 45, y - 24);
     this.state = { kind: 'hold_release', startAt: start, keyAt: 0 };
     let heldFrom: number | null = null;
     const draw = (fill: number, over: boolean) => {
       g.clear();
-      g.fillStyle(0x1b0a10).fillRect(x - 2, y - 2, w + 4, h + 4);
+      g.fillStyle(0x1b0a10).fillRect(x - 3, y - 3, w + 6, h + 6);
       g.fillStyle(0x3a3045).fillRect(x, y, w, h);
       g.fillStyle(0x7a5a1a).fillRect(
         x + Math.round(w * cfg.goodFrom),
@@ -192,13 +198,13 @@ export class CommandRunner {
       const inZone = fill >= cfg.goodFrom;
       g.fillStyle(over ? UI.rope : inZone ? UI.spark : UI.grit).fillRect(
         x,
-        y + 2,
+        y + 3,
         Math.round(w * fill),
-        h - 4,
+        h - 6,
       );
-      g.fillStyle(0xffffff, 0.3).fillRect(x, y + 2, Math.round(w * fill), 1);
+      g.fillStyle(0xffffff, 0.3).fillRect(x, y + 3, Math.round(w * fill), 2);
       // zone edge ticks
-      g.fillStyle(UI.ink).fillRect(x + Math.round(w * cfg.goodFrom) - 1, y - 3, 2, h + 6);
+      g.fillStyle(UI.ink).fillRect(x + Math.round(w * cfg.goodFrom) - 1, y - 5, 3, h + 10);
     };
     draw(0, false);
     return this.loop((now) => {
@@ -242,8 +248,8 @@ export class CommandRunner {
       const fn = () => {
         const now = this.now();
         if (!first) {
-          if (input.justPressed('cancel')) first = { button: 'reversal', t: now };
-          else if (this.pressed()) first = { button: 'block', t: now };
+          if (input.justPressed('cancel')) first = { button: 'reversal', t: this.pressTime(now, 'cancel') };
+          else if (this.pressed()) first = { button: 'block', t: this.pressTime(now) };
           else if (debugState.autoCommands && now >= contactAt - 30) first = { button: 'block', t: now };
         }
         if (now < contactAt + cfg.lateMs) return;

@@ -1,12 +1,12 @@
-// Integer scaling: the 640×360 game is drawn at the largest whole-number zoom that
+// Integer scaling: the 960×540 game is drawn at the largest whole-number zoom that
 // fits the window (2×, 3×, 4×…), so every game pixel is the same size on screen.
 // The leftover space is letterboxed in the page background. On screens smaller
 // than 640×360 it falls back to a fractional fit so the game is never cut off.
 
 import Phaser from 'phaser';
 
-export const GAME_WIDTH = 640;
-export const GAME_HEIGHT = 360;
+export const GAME_WIDTH = 960;
+export const GAME_HEIGHT = 540;
 
 export function computeZoom(viewW: number, viewH: number): number {
   const fit = Math.min(viewW / GAME_WIDTH, viewH / GAME_HEIGHT);

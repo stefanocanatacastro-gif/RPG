@@ -36,20 +36,20 @@ export class InputTestScene extends Phaser.Scene {
     this.leaving = false;
     this.cells = [];
     benchBackdrop(this, 'INPUT TESTER', 'keyboard · gamepad · touch');
-    this.device = pixelText(this, 16, 56, '', 16, css(UI.spark)).setOrigin(0, 0);
+    this.device = pixelText(this, 24, 84, '', 24, css(UI.spark)).setOrigin(0, 0);
     ACTIONS.forEach((a, i) => {
       const col = i % 5;
       const row = Math.floor(i / 5);
-      const x = 16 + col * 122;
-      const y = 92 + row * 60;
+      const x = 24 + col * 183;
+      const y = 138 + row * 90;
       const box = this.add.graphics();
       box.setPosition(x, y);
-      const label = pixelText(this, x + 56, y + 14, '', 8).setOrigin(0.5, 0);
+      const label = pixelText(this, x + 84, y + 21, '', 16).setOrigin(0.5, 0);
       this.cells.push({ action: a, box, label });
     });
-    pixelText(this, 16, 220, 'Last presses (newest first):', 8, css(UI.inkDim)).setOrigin(0, 0);
-    this.log = pixelText(this, 16, 238, '', 8).setOrigin(0, 0).setLineSpacing(4);
-    pixelText(this, W / 2, H - 20, 'Press MENU (Esc / Start / M) to go back', 8, css(UI.inkDim));
+    pixelText(this, 24, 330, 'Last presses (newest first):', 16, css(UI.inkDim)).setOrigin(0, 0);
+    this.log = pixelText(this, 24, 357, '', 16).setOrigin(0, 0).setLineSpacing(6);
+    pixelText(this, W / 2, H - 30, 'Press MENU (Esc / Start / M) to go back', 16, css(UI.inkDim));
   }
 
   update(): void {
@@ -57,7 +57,7 @@ export class InputTestScene extends Phaser.Scene {
     for (const c of this.cells) {
       const down = input.isDown(c.action as never);
       c.box.clear();
-      drawPanel(c.box, 0, 0, 112, 48, {
+      drawPanel(c.box, 0, 0, 168, 72, {
         fill: down ? UI.spark : UI.panel,
         border: down ? UI.ink : UI.border,
       });
@@ -89,21 +89,21 @@ export class UiKitScene extends Phaser.Scene {
     let hp = 10;
     let grit = 5;
     let hype = 2;
-    const bars = this.add.container(368, 64);
+    const bars = this.add.container(552, 96);
     const g = this.add.graphics();
-    drawPanel(g, 0, 0, 256, 92);
-    const hpBar = new Bar(this, 14, 16, 228, BAR_STYLES.hp, hp, 10);
-    const gritBar = new Bar(this, 14, 38, 228, BAR_STYLES.grit, grit, 5);
-    const hypeBar = new Bar(this, 14, 60, 228, BAR_STYLES.hype, hype, 6);
+    drawPanel(g, 0, 0, 384, 138);
+    const hpBar = new Bar(this, 21, 24, 342, BAR_STYLES.hp, hp, 10);
+    const gritBar = new Bar(this, 21, 57, 342, BAR_STYLES.grit, grit, 5);
+    const hypeBar = new Bar(this, 21, 90, 342, BAR_STYLES.hype, hype, 6);
     bars.add([g, hpBar, gritBar, hypeBar]);
 
-    panel(this, 368, 172, 256, 64, { fill: UI.panelHi });
-    pixelText(this, 496, 186, 'A raised panel', 8);
-    pixelText(this, 496, 206, 'for pop-ups and notes', 8, css(UI.inkDim));
+    panel(this, 552, 258, 384, 96, { fill: UI.panelHi });
+    pixelText(this, 744, 279, 'A raised panel', 16);
+    pixelText(this, 744, 309, 'for pop-ups and notes', 16, css(UI.inkDim));
 
-    const desc = pixelText(this, 16, 300, '', 8)
+    const desc = pixelText(this, 24, 450, '', 16)
       .setOrigin(0, 0)
-      .setWordWrapWidth(W - 32);
+      .setWordWrapWidth(W - 48);
     const filler: MenuItem[] = ['Steel Chair', 'Water Bottle', 'Protein Shake', 'Ring Bell', 'Sandwich'].map(
       (n, i) => ({
         label: n,
@@ -133,8 +133,8 @@ export class UiKitScene extends Phaser.Scene {
       menu.setItems(items);
       menu.setCursor(c);
     };
-    const menu = new MenuList(this, 16, 64, {
-      width: 336,
+    const menu = new MenuList(this, 24, 96, {
+      width: 504,
       rows: 8,
       items,
       descText: desc,
@@ -178,9 +178,9 @@ export class AnimTestScene extends Phaser.Scene {
     const tex = 'spr_test_dummy';
     const anims = ['idle', 'walk', 'chop', 'hurt'];
     anims.forEach((a, i) => {
-      const x = 90 + i * 120;
-      this.add.sprite(x, 160, tex, `${a}_00`).setOrigin(0.5, 1).setScale(2).play(animKey(tex, a));
-      pixelText(this, x, 170, a.toUpperCase(), 8);
+      const x = 135 + i * 180;
+      this.add.sprite(x, 220, tex, `${a}_00`).setOrigin(0.5, 1).play(animKey(tex, a));
+      pixelText(this, x, 230, a.toUpperCase(), 16);
     });
 
     // palette swaps: same frames, different colours
@@ -205,11 +205,11 @@ export class AnimTestScene extends Phaser.Scene {
       ['spr_test_dummy_shadow', 'SHADOW (CH. 8)'],
     ];
     variants.forEach(([key, label], i) => {
-      const x = 130 + i * 190;
-      this.add.sprite(x, 322, key, 'walk_00').setOrigin(0.5, 1).setScale(2).play(animKey(key, 'walk'));
-      pixelText(this, x, 326, label, 8, css(UI.inkDim));
+      const x = 195 + i * 285;
+      this.add.sprite(x, 420, key, 'walk_00').setOrigin(0.5, 1).play(animKey(key, 'walk'));
+      pixelText(this, x, 430, label, 16, css(UI.inkDim));
     });
-    pixelText(this, W / 2, 182, 'Palette swaps: one sprite, many variants', 8, css(UI.spark));
+    pixelText(this, W / 2, 280, 'Palette swaps: one sprite, many variants', 16, css(UI.spark));
 
     const leave = () => backToHub(this, 3);
     let gone = false;
@@ -246,13 +246,13 @@ export class DataReportScene extends Phaser.Scene {
       `still placeholder ${missingArt.length}`,
       `strings (EN)      ${englishKeys().size}`,
     ];
-    pixelText(this, 24, 60, lines.join('\n'), 8).setOrigin(0, 0).setLineSpacing(6);
+    pixelText(this, 36, 90, lines.join('\n'), 8).setOrigin(0, 0).setLineSpacing(9);
 
     const problems = Database.problems();
     pixelText(
       this,
-      340,
-      60,
+      510,
+      90,
       problems.length ? `${problems.length} PROBLEMS` : 'NO PROBLEMS',
       16,
       css(problems.length ? UI.rope : UI.good),
@@ -263,10 +263,10 @@ export class DataReportScene extends Phaser.Scene {
           .map((p) => `${p.file} · ${p.id}\n  ${p.message}`)
           .join('\n')
       : 'Every reference checks out:\nmoves, sprites, enemies,\nformations and text keys.\n\nBreak something in a JSON\nfile and it shows up here\nwith the file and the id.';
-    pixelText(this, 340, 88, body, 8, css(UI.inkDim))
+    pixelText(this, 510, 132, body, 8, css(UI.inkDim))
       .setOrigin(0, 0)
       .setLineSpacing(4)
-      .setWordWrapWidth(W - 356);
+      .setWordWrapWidth(W - 534);
 
     let gone = false;
     this.events.on(Phaser.Scenes.Events.UPDATE, () => {

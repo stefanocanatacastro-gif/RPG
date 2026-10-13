@@ -36,11 +36,13 @@ import { ensureLook } from '../systems/custom_looks';
 import { tryMoveInSandbox } from './move_maker';
 import { setupProblems } from '../managers/battle_setup';
 
-const TOP = 26;
-const MAKERS = { x: 4, y: TOP + 4, w: 132, h: H - TOP - 26 };
-const LIST = { x: MAKERS.x + MAKERS.w + 6, y: TOP + 4, w: 196, h: H - TOP - 26 };
-const CARD = { x: LIST.x + LIST.w + 6, y: TOP + 4, w: W - (LIST.x + LIST.w + 6) - 4, h: H - TOP - 26 };
-const ROW = 13;
+const TOP = 40;
+const ROW = 18;
+const MAKERS = { x: 6, y: TOP + 6, w: 180, h: H - TOP - 40 };
+const LIST = { x: MAKERS.x + MAKERS.w + 8, y: TOP + 6, w: 272, h: H - TOP - 40 };
+const CARD = { x: LIST.x + LIST.w + 8, y: TOP + 6, w: W - (LIST.x + LIST.w + 8) - 6, h: H - TOP - 40 };
+/** Creation rows that fit under the tabs. */
+const VISIBLE = Math.floor((LIST.h - 34) / ROW);
 const KINDS: CreationKind[] = ['encounter', 'fighter', 'move', 'item'];
 const KIND_TAB: Record<CreationKind, string> = {
   encounter: 'FIGHTS',
@@ -88,7 +90,7 @@ export class GalleryScene extends Phaser.Scene {
         this.scroll = Phaser.Math.Clamp(
           this.scroll + (dy > 0 ? 3 : -3),
           0,
-          Math.max(0, this.list().length - 19),
+          Math.max(0, this.list().length - VISIBLE),
         );
         this.refresh();
       },
@@ -219,7 +221,7 @@ export class GalleryScene extends Phaser.Scene {
     const pick = (i: number) => {
       this.selected = i;
       if (i < this.scroll) this.scroll = i;
-      if (i >= this.scroll + 19) this.scroll = i - 18;
+      if (i >= this.scroll + VISIBLE) this.scroll = i - VISIBLE + 1;
       this.refresh();
     };
     if (n && input.justPressed('down')) pick((this.selected + 1) % n);
@@ -242,28 +244,28 @@ export class GalleryScene extends Phaser.Scene {
       ],
       ['BACK', () => this.leave()],
     ];
-    let x = W - 4;
+    let x = W - 8;
     const out: { label: string; x: number; act: () => void }[] = [];
     for (const [label, act] of defs.reverse()) {
-      x -= label.length * 8 + 14;
+      x -= label.length * 8 + 22;
       out.unshift({ label, x, act });
     }
     return out;
   }
 
   private tabX(i: number): number {
-    return LIST.x + 2 + i * 49;
+    return LIST.x + 2 + i * 67;
   }
 
   private onDown(p: Phaser.Input.Pointer): void {
     if (this.busy) return;
     if (p.y < TOP) {
       for (const b of this.topButtons())
-        if (p.x >= b.x && p.x < b.x + b.label.length * 8 + 12) return b.act();
+        if (p.x >= b.x && p.x < b.x + b.label.length * 8 + 16) return b.act();
       return;
     }
     if (p.x < MAKERS.x + MAKERS.w) {
-      const m = this.makers()[Math.floor((p.y - MAKERS.y - 18) / ROW)];
+      const m = this.makers()[Math.floor((p.y - MAKERS.y - 23) / ROW)];
       if (m) {
         this.maker = m.owner;
         this.selected = 0;
@@ -273,12 +275,12 @@ export class GalleryScene extends Phaser.Scene {
       return;
     }
     if (p.x < LIST.x + LIST.w) {
-      if (p.y < LIST.y + 16) {
-        const i = Math.floor((p.x - LIST.x - 2) / 49);
+      if (p.y < LIST.y + 24) {
+        const i = Math.floor((p.x - LIST.x - 2) / 67);
         if (KINDS[i]) this.setKind(KINDS[i]);
         return;
       }
-      const i = Math.floor((p.y - LIST.y - 20) / ROW) + this.scroll;
+      const i = Math.floor((p.y - LIST.y - 29) / ROW) + this.scroll;
       if (i >= 0 && i < this.list().length) {
         if (i === this.selected) this.play();
         else {
@@ -288,9 +290,9 @@ export class GalleryScene extends Phaser.Scene {
       }
       return;
     }
-    const by = CARD.y + CARD.h - 22;
-    if (p.y >= by && p.y < by + 18) {
-      const i = Math.floor((p.x - CARD.x - 6) / 84);
+    const by = CARD.y + CARD.h - 32;
+    if (p.y >= by && p.y < by + 24) {
+      const i = Math.floor((p.x - CARD.x - 8) / 116);
       if (i === 0) void this.like();
       else if (i === 1) this.play();
       else if (i === 2) void this.copy();
@@ -315,54 +317,54 @@ export class GalleryScene extends Phaser.Scene {
     const g = add(this.add.graphics());
     g.fillStyle(UI.panel).fillRect(0, 0, W, TOP);
     g.fillStyle(UI.rope).fillRect(0, TOP - 2, W, 2);
-    txt(6, 9, 'COMMUNITY GALLERY', UI.spark);
+    txt(12, 12, 'COMMUNITY GALLERY', UI.spark, 16);
     for (const b of this.topButtons()) {
-      g.fillStyle(UI.panelHi).fillRect(b.x, 4, b.label.length * 8 + 12, 17);
-      txt(b.x + 6, 9, b.label);
+      g.fillStyle(UI.panelHi).fillRect(b.x, 8, b.label.length * 8 + 16, 24);
+      txt(b.x + 8, 16, b.label);
     }
 
     // makers
-    txt(MAKERS.x + 4, MAKERS.y + 2, 'MAKERS', UI.spark);
+    txt(MAKERS.x + 6, MAKERS.y + 6, 'MAKERS', UI.spark);
     this.makers().forEach((m, k) => {
-      const y = MAKERS.y + 20 + k * ROW;
+      const y = MAKERS.y + 28 + k * ROW;
       const sel = m.owner === this.maker;
-      if (sel) add(this.add.rectangle(MAKERS.x, y - 2, MAKERS.w, ROW, UI.panelHi).setOrigin(0));
-      txt(MAKERS.x + 4, y, fit(m.label, 12), sel ? UI.spark : UI.ink);
+      if (sel) add(this.add.rectangle(MAKERS.x, y - 5, MAKERS.w, ROW, UI.panelHi).setOrigin(0));
+      txt(MAKERS.x + 6, y, fit(m.label, 17), sel ? UI.spark : UI.ink);
       add(
-        tinyText(this, MAKERS.x + MAKERS.w - 4, y + 1, String(m.n), css(UI.inkDim))
+        tinyText(this, MAKERS.x + MAKERS.w - 6, y, String(m.n), css(UI.inkDim))
           .setOrigin(1, 0)
           .setScale(2),
       );
     });
-    if (!this.ready) tiny(MAKERS.x + 4, MAKERS.y + MAKERS.h - 12, 'LOADING LIKES…');
+    if (!this.ready) tiny(MAKERS.x + 6, MAKERS.y + MAKERS.h - 16, 'LOADING LIKES…');
 
     // tabs and list
     KINDS.forEach((k, i) => {
       const on = k === this.kind;
       const x = this.tabX(i);
-      g.fillStyle(on ? UI.panelHi : UI.panel).fillRect(x, LIST.y, 47, 14);
+      g.fillStyle(on ? UI.panelHi : UI.panel).fillRect(x, LIST.y, 64, 22);
       tiny(
-        x + Math.round((47 - KIND_TAB[k].length * 8) / 2),
-        LIST.y + 4,
+        x + Math.round((64 - KIND_TAB[k].length * 8) / 2),
+        LIST.y + 6,
         KIND_TAB[k],
         on ? UI.spark : UI.inkDim,
       );
     });
     const list = this.list();
     if (!list.length)
-      txt(LIST.x + 6, LIST.y + 24, this.maker === null ? 'Nothing made yet.' : 'None of these.', UI.inkDim);
-    list.slice(this.scroll, this.scroll + 19).forEach((c, k) => {
+      txt(LIST.x + 8, LIST.y + 34, this.maker === null ? 'Nothing made yet.' : 'None of these.', UI.inkDim);
+    list.slice(this.scroll, this.scroll + VISIBLE).forEach((c, k) => {
       const i = k + this.scroll;
-      const y = LIST.y + 20 + k * ROW;
+      const y = LIST.y + 34 + k * ROW;
       const sel = i === this.selected;
-      if (sel) add(this.add.rectangle(LIST.x, y - 2, LIST.w, ROW, UI.panelHi).setOrigin(0));
-      txt(LIST.x + 4, y, fit(c.name, 16), sel ? UI.spark : UI.ink);
+      if (sel) add(this.add.rectangle(LIST.x, y - 5, LIST.w, ROW, UI.panelHi).setOrigin(0));
+      txt(LIST.x + 6, y, fit(c.name, 20), sel ? UI.spark : UI.ink);
       const n = Likes.count(c.key);
       add(
         tinyText(
           this,
-          LIST.x + LIST.w - 4,
-          y + 1,
+          LIST.x + LIST.w - 6,
+          y,
           n ? `${n} LIKE${n > 1 ? 'S' : ''}` : '',
           css(Likes.mine(c.key) ? UI.good : UI.inkDim),
         )
@@ -374,7 +376,7 @@ export class GalleryScene extends Phaser.Scene {
     // card
     const c = this.current();
     if (c) this.drawCard(c, g, txt, tiny, fit);
-    txt(6, H - 18, fit(this.status, 78), this.statusColor);
+    txt(10, H - 26, fit(this.status, 110), this.statusColor);
   }
 
   private drawCard(
@@ -384,16 +386,16 @@ export class GalleryScene extends Phaser.Scene {
     tiny: (x: number, y: number, s: string, color?: number) => unknown,
     fit: (s: string, n: number) => string,
   ): void {
-    const x = CARD.x + 8;
-    let y = CARD.y + 6;
-    txt(x, y, fit(c.name.toUpperCase(), 17), UI.spark, 16);
-    y += 22;
+    const x = CARD.x + 12;
+    let y = CARD.y + 10;
+    txt(x, y, fit(c.name.toUpperCase(), 24), UI.spark, 16);
+    y += 28;
     const likes = Likes.count(c.key);
     tiny(x, y, `BY ${this.makerName(c.owner).toUpperCase()} · ${likes} LIKE${likes === 1 ? '' : 'S'}`);
-    y += 14;
+    y += 22;
     const line = (s: string, color: number = UI.ink) => {
-      txt(x, y, fit(s, 34), color);
-      y += 12;
+      txt(x, y, fit(s, 40), color);
+      y += 18;
     };
     const gid = globalId(c.owner, c.id);
     const moveName = (id: string) =>
@@ -405,10 +407,7 @@ export class GalleryScene extends Phaser.Scene {
       const key = Builds.lookOf(gid)?.key;
       if (key && this.textures.exists(key)) {
         const frame = this.textures.get(key).has('idle_00') ? 'idle_00' : undefined;
-        const img = this.add
-          .image(CARD.x + CARD.w - 44, CARD.y + 150, key, frame)
-          .setOrigin(0.5, 1)
-          .setScale(2);
+        const img = this.add.image(CARD.x + CARD.w - 70, CARD.y + 180, key, frame).setOrigin(0.5, 1);
         if (f.kind === 'enemy') img.setFlipX(true);
         this.dyn.push(img);
       }
@@ -420,7 +419,7 @@ export class GalleryScene extends Phaser.Scene {
           `XP ${f.xp ?? 1}  Coins ${f.coins ?? 0}${f.props?.length ? `  · ${f.props.join(', ')}` : ''}`,
           UI.inkDim,
         );
-      y += 4;
+      y += 6;
       line('MOVES', UI.spark);
       for (const m of f.moves.slice(0, 6)) line(`· ${moveName(m)}`);
     } else if (c.kind === 'move') {
@@ -447,7 +446,7 @@ export class GalleryScene extends Phaser.Scene {
       if (problems.length) line(`Can't be played: ${problems[0]}`, UI.rope);
     }
 
-    const by = CARD.y + CARD.h - 22;
+    const by = CARD.y + CARD.h - 32;
     const mine = this.isMine(c);
     const buttons: [string, number][] = [
       [Likes.mine(c.key) ? 'LIKED' : 'LIKE', mine ? UI.border : Likes.mine(c.key) ? UI.good : UI.ink],
@@ -455,9 +454,9 @@ export class GalleryScene extends Phaser.Scene {
       [mine ? 'DUPLICATE' : 'COPY', UI.ink],
     ];
     buttons.forEach(([label, color], i) => {
-      const bx = CARD.x + 6 + i * 84;
-      g.fillStyle(UI.panelHi).fillRect(bx, by, 78, 18);
-      txt(bx + 6, by + 5, label, color);
+      const bx = CARD.x + 8 + i * 116;
+      g.fillStyle(UI.panelHi).fillRect(bx, by, 108, 24);
+      txt(bx + 10, by + 8, label, color);
     });
   }
 

@@ -101,34 +101,34 @@ export class MenuList extends Phaser.GameObjects.Container {
     // Panels grow to fit the longest label, so text never spills out.
     const longest = Math.max(0, ...opts.items.map((i) => i.label.length));
     const longestRight = Math.max(0, ...opts.items.map((i) => (i.right ?? '').length));
-    const fit = 34 + longest * 16 + (longestRight ? longestRight * 16 + 20 : 0) + 14;
+    const fit = 51 + longest * 24 + (longestRight ? longestRight * 24 + 30 : 0) + 21;
     this.opts = {
       ...opts,
       rows: Math.min(opts.items.length, opts.rows ?? 6),
-      rowHeight: opts.rowHeight ?? 26,
+      rowHeight: opts.rowHeight ?? 39,
       width: Math.max(opts.width, fit),
     };
     const { width, rowHeight } = this.opts;
     const rows = Math.max(1, this.opts.rows);
     this.opts.rows = rows;
-    const h = rows * rowHeight + 16;
+    const h = rows * rowHeight + 24;
 
     this.bg = scene.add.graphics();
     drawPanel(this.bg, 0, 0, width, h);
     this.add(this.bg);
 
     for (let i = 0; i < rows; i++) {
-      const y = 8 + i * rowHeight + Math.floor((rowHeight - 16) / 2);
-      const txt = pixelText(scene, 0, y, '', 16).setOrigin(0, 0).setX(34);
-      const right = pixelText(scene, 0, y, '', 16)
+      const y = 12 + i * rowHeight + Math.floor((rowHeight - 24) / 2);
+      const txt = pixelText(scene, 0, y, '', 24).setOrigin(0, 0).setX(51);
+      const right = pixelText(scene, 0, y, '', 24)
         .setOrigin(1, 0)
-        .setX(width - 14);
+        .setX(width - 21);
       this.rowTexts.push(txt);
       this.rightTexts.push(right);
       this.add([txt, right]);
     }
     this.arrow = scene.add.graphics();
-    this.arrow.fillStyle(UI.spark).fillTriangle(0, 0, 0, 12, 8, 6);
+    this.arrow.fillStyle(UI.spark).fillTriangle(0, 0, 0, 18, 12, 9);
     this.add(this.arrow);
     this.scrollMarks = scene.add.graphics();
     this.add(this.scrollMarks);
@@ -156,7 +156,7 @@ export class MenuList extends Phaser.GameObjects.Container {
   }
 
   get boxHeight(): number {
-    return this.opts.rows * this.opts.rowHeight + 16;
+    return this.opts.rows * this.opts.rowHeight + 24;
   }
 
   setItems(items: MenuItem[]): void {
@@ -200,7 +200,7 @@ export class MenuList extends Phaser.GameObjects.Container {
   private tick(time: number): void {
     if (!this.active || !this.visible) return;
     // gentle 2-step cursor bob
-    this.arrow.x = 14 + (Math.floor(time / 300) % 2);
+    this.arrow.x = 21 + (Math.floor(time / 300) % 2) * 2;
     if (time < this.readyAt) return;
     const dir = input.isDown('up') ? -1 : input.isDown('down') ? 1 : 0;
     if (dir !== 0 && (input.justPressed('up') || input.justPressed('down'))) {
@@ -224,7 +224,7 @@ export class MenuList extends Phaser.GameObjects.Container {
     if (input.onTouchControl(p.x, p.y)) return;
     const m = this.getWorldTransformMatrix();
     const lx = p.x - m.tx;
-    const ly = p.y - m.ty - 8;
+    const ly = p.y - m.ty - 12;
     if (lx < 0 || lx > this.opts.width || ly < 0) return;
     const row = Math.floor(ly / this.opts.rowHeight);
     if (row >= this.opts.rows) return;
@@ -249,14 +249,14 @@ export class MenuList extends Phaser.GameObjects.Container {
       txt.setColor(col);
       right.setColor(item?.disabled ? css(UI.inkDim) : css(UI.spark));
     }
-    this.arrow.y = 8 + (this.cursor - this.top) * rowHeight + Math.floor((rowHeight - 12) / 2);
+    this.arrow.y = 12 + (this.cursor - this.top) * rowHeight + Math.floor((rowHeight - 18) / 2);
     this.scrollMarks.clear();
     this.scrollMarks.fillStyle(UI.inkDim);
-    const cx = width - 10;
-    if (this.top > 0) this.scrollMarks.fillTriangle(cx - 4, 8, cx + 4, 8, cx, 3);
+    const cx = width - 15;
+    if (this.top > 0) this.scrollMarks.fillTriangle(cx - 6, 12, cx + 6, 12, cx, 4);
     if (this.top + rows < this.items.length) {
-      const by = this.boxHeight - 8;
-      this.scrollMarks.fillTriangle(cx - 4, by, cx + 4, by, cx, by + 5);
+      const by = this.boxHeight - 12;
+      this.scrollMarks.fillTriangle(cx - 6, by, cx + 6, by, cx, by + 8);
     }
     const item = this.items[this.cursor];
     if (this.opts.descText && item) {
@@ -306,14 +306,14 @@ export class Bar extends Phaser.GameObjects.Container {
     this.ghost = value;
     this.gfx = scene.add.graphics();
     if (!compact)
-      this.add(tinyText(scene, 0, 0, style.label, css(UI.ink), css(UI.void)).setOrigin(0).setScale(2));
+      this.add(tinyText(scene, 0, 0, style.label, css(UI.ink), css(UI.void)).setOrigin(0).setScale(3));
     this.add(this.gfx);
     scene.add.existing(this);
     this.draw();
   }
 
   private labelW(): number {
-    return this.compact ? 2 : tinyTextWidth(this.style.label) * 2 + 8;
+    return this.compact ? 3 : tinyTextWidth(this.style.label) * 3 + 12;
   }
 
   setValue(value: number, max = this.max, animate = true): void {
@@ -341,21 +341,21 @@ export class Bar extends Phaser.GameObjects.Container {
   private draw(): void {
     const g = this.gfx;
     const x0 = this.labelW();
-    const bw = this.barW - x0 - (this.compact ? 2 : 52);
-    const h = this.compact ? 6 : 10;
+    const bw = this.barW - x0 - (this.compact ? 3 : 78);
+    const h = this.compact ? 9 : 15;
     g.clear();
-    g.fillStyle(UI.void).fillRect(x0 - 2, -1, bw + 4, h + 4);
+    g.fillStyle(UI.void).fillRect(x0 - 3, -1, bw + 6, h + 5);
     g.fillStyle(this.style.back).fillRect(x0, 1, bw, h);
     const frac = (v: number) => (this.max > 0 ? Math.round((bw * v) / this.max) : 0);
     g.fillStyle(UI.ghost, 0.85).fillRect(x0, 1, frac(this.ghost), h);
     g.fillStyle(this.style.fill).fillRect(x0, 1, frac(this.value), h);
-    g.fillStyle(0xffffff, 0.25).fillRect(x0, 1, frac(this.value), 2);
+    g.fillStyle(0xffffff, 0.25).fillRect(x0, 1, frac(this.value), 3);
     this.readout?.destroy();
     if (this.compact) return;
     const txt = `${this.value}/${this.max}`;
-    this.readout = tinyText(this.scene, this.barW - tinyTextWidth(txt) * 2, 0, txt, css(UI.ink), css(UI.void))
+    this.readout = tinyText(this.scene, this.barW - tinyTextWidth(txt) * 3, 0, txt, css(UI.ink), css(UI.void))
       .setOrigin(0)
-      .setScale(2);
+      .setScale(3);
     this.add(this.readout);
   }
 }
@@ -369,23 +369,23 @@ export function confirmDialog(
   onAnswer: (yes: boolean) => void,
 ): () => void {
   const { width: W, height: H } = scene.scale;
-  const w = 400;
-  const q = pixelText(scene, W / 2, 0, question, 16);
-  q.setWordWrapWidth(w - 40)
+  const w = 600;
+  const q = pixelText(scene, W / 2, 0, question, 24);
+  q.setWordWrapWidth(w - 60)
     .setAlign('center')
-    .setLineSpacing(6);
-  const boxH = Math.ceil(q.height) + 32;
-  const menuH = 2 * 26 + 16;
-  const top = Math.round((H - boxH - 8 - menuH) / 2);
-  q.setY(top + 16);
+    .setLineSpacing(9);
+  const boxH = Math.ceil(q.height) + 48;
+  const menuH = 2 * 39 + 24;
+  const top = Math.round((H - boxH - 12 - menuH) / 2);
+  q.setY(top + 24);
   const shade = scene.add.rectangle(0, 0, W, H, UI.void, 0.6).setOrigin(0).setInteractive();
   const g = panel(scene, (W - w) / 2, top, w, boxH, { fill: UI.panelHi });
   const parts: Phaser.GameObjects.GameObject[] = [shade, g, q];
   const close = () => {
     for (const p of parts) p.destroy();
   };
-  const menu = new MenuList(scene, (W - 160) / 2, top + boxH + 8, {
-    width: 160,
+  const menu = new MenuList(scene, (W - 240) / 2, top + boxH + 12, {
+    width: 240,
     items: [
       { label: t('common.yes'), value: 'yes' },
       { label: t('common.no'), value: 'no' },

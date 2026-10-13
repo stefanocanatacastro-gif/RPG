@@ -1,8 +1,8 @@
 {
-  "unitPx": 32,
+  "unitPx": 48,
   "depthScale": 0.5,
   "screenUnits": 20,
-  "floorFrontY": 340,
+  "floorFrontY": 510,
   "gravity": 30,
   "jumpSpeed": 10,
   "walkSpeed": 5,

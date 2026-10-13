@@ -16,7 +16,7 @@ export interface Line {
 }
 
 const CHARS_PER_SEC = 60;
-const BOX = { x: 16, w: W - 32, h: 84, y: H - 84 - 14 };
+const BOX = { x: 24, w: W - 48, h: 126, y: H - 126 - 21 };
 
 export class MessageBox {
   /** True while a message is on screen (the browser test reads it). */
@@ -33,17 +33,17 @@ export class MessageBox {
     const g = s.add.graphics().setScrollFactor(0).setDepth(top);
     drawPanel(g, BOX.x, BOX.y, BOX.w, BOX.h, { alpha: 0.97 });
     const tagG = s.add.graphics().setScrollFactor(0).setDepth(top);
-    const tag = pixelText(s, BOX.x + 20, BOX.y - 12, '', 8, css(UI.spark))
+    const tag = pixelText(s, BOX.x + 30, BOX.y - 20, '', 16, css(UI.spark))
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(top + 1);
-    const body = pixelText(s, BOX.x + 16, BOX.y + 14, '', 16, css(UI.ink))
+    const body = pixelText(s, BOX.x + 24, BOX.y + 21, '', 24, css(UI.ink))
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(top + 1)
-      .setWordWrapWidth(BOX.w - 32)
-      .setLineSpacing(6);
-    const more = pixelText(s, BOX.x + BOX.w - 18, BOX.y + BOX.h - 14, '>', 8, css(UI.spark))
+      .setWordWrapWidth(BOX.w - 48)
+      .setLineSpacing(9);
+    const more = pixelText(s, BOX.x + BOX.w - 27, BOX.y + BOX.h - 24, '>', 16, css(UI.spark))
       .setScrollFactor(0)
       .setDepth(top + 1);
     const parts = [g, tagG, tag, body, more];
@@ -51,7 +51,7 @@ export class MessageBox {
     for (const line of lines) {
       tagG.clear();
       tag.setText(line.name ? line.name.toUpperCase() : '');
-      if (line.name) drawPanel(tagG, BOX.x + 8, BOX.y - 20, tag.width + 24, 22, { alpha: 0.97 });
+      if (line.name) drawPanel(tagG, BOX.x + 12, BOX.y - 30, tag.width + 36, 33, { alpha: 0.97 });
       await this.typeLine(body, more, line.text);
     }
     for (const p of parts) p.destroy();

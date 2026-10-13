@@ -42,6 +42,16 @@ export interface BattleEnd {
 
 let busy = false;
 
+/**
+ * A change asked for while the curtain is still moving waits for it, rather
+ * than being lost. False when the asking scene went away meanwhile.
+ */
+async function settled(from: Phaser.Scene): Promise<boolean> {
+  if (!busy) return true;
+  while (busy) await new Promise((r) => setTimeout(r, 16));
+  return from.scene.isActive() || from.scene.isPaused();
+}
+
 function curtain(game: Phaser.Game): TransitionScene {
   return game.scene.getScene('transition') as TransitionScene;
 }
@@ -60,7 +70,7 @@ export const SceneLoader = {
 
   /** Replaces the current scene with another (title → hub, room → room). */
   async goto(from: Phaser.Scene, to: string, data?: object): Promise<void> {
-    if (busy) return;
+    if (!(await settled(from))) return;
     busy = true;
     try {
       await wipe(from.game, () => {
@@ -79,7 +89,7 @@ export const SceneLoader = {
 
   /** Field → battle. The field sleeps so its state is exactly as left. */
   async startBattle(field: Phaser.Scene, battleKey: string, start: BattleStart): Promise<void> {
-    if (busy) return;
+    if (!(await settled(field))) return;
     busy = true;
     try {
       field.scene.pause(); // freeze immediately so nothing moves during the wipe
@@ -97,7 +107,7 @@ export const SceneLoader = {
 
   /** Battle → field, waking the field where it was. */
   async endBattle(battle: Phaser.Scene, returnTo: string, end: BattleEnd): Promise<void> {
-    if (busy) return;
+    if (!(await settled(battle))) return;
     busy = true;
     try {
       await wipe(battle.game, () => {
@@ -112,7 +122,7 @@ export const SceneLoader = {
 
   /** Battle lost for real: the battle and the sleeping room close, and the Game Over screen opens. */
   async gameOver(battle: Phaser.Scene, returnTo: string): Promise<void> {
-    if (busy) return;
+    if (!(await settled(battle))) return;
     busy = true;
     try {
       await wipe(battle.game, () => {

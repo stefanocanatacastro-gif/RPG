@@ -17,12 +17,12 @@ interface Button {
   label: string;
 }
 
-const PAD = { x: 70, y: H - 74, r: 50 };
+const PAD = { x: 105, y: H - 111, r: 75 };
 const BUTTONS: Button[] = [
-  { action: 'confirm', x: W - 52, y: H - 84, r: 28, label: 'A' },
-  { action: 'cancel', x: W - 112, y: H - 50, r: 24, label: 'B' },
-  { action: 'partner', x: W - 108, y: H - 118, r: 18, label: 'C' },
-  { action: 'menu', x: W - 30, y: 28, r: 18, label: 'M' },
+  { action: 'confirm', x: W - 78, y: H - 126, r: 42, label: 'A' },
+  { action: 'cancel', x: W - 168, y: H - 75, r: 36, label: 'B' },
+  { action: 'partner', x: W - 162, y: H - 177, r: 27, label: 'C' },
+  { action: 'menu', x: W - 45, y: 42, r: 27, label: 'M' },
 ];
 
 export class TouchControlsScene extends Phaser.Scene {
@@ -37,12 +37,12 @@ export class TouchControlsScene extends Phaser.Scene {
   create(): void {
     this.input.addPointer(3);
     this.gfx = this.add.graphics();
-    const labels = BUTTONS.map((b) => pixelText(this, b.x, b.y - 8, b.label, 16, '#f4ead2').setAlpha(0.8));
+    const labels = BUTTONS.map((b) => pixelText(this, b.x, b.y - 12, b.label, 24, '#f4ead2').setAlpha(0.8));
     this.layer = this.add.container(0, 0, [this.gfx, ...labels]);
     this.draw(new Set());
 
     const zones = [
-      { x: PAD.x, y: PAD.y, r: PAD.r + 14 },
+      { x: PAD.x, y: PAD.y, r: PAD.r + 21 },
       ...BUTTONS.map((b) => ({ x: b.x, y: b.y, r: b.r + 8 })),
     ];
     const show = (on: boolean) => {
@@ -84,8 +84,8 @@ export class TouchControlsScene extends Phaser.Scene {
     const dx = x - PAD.x;
     const dy = y - PAD.y;
     const dist = Math.hypot(dx, dy);
-    if (dist <= PAD.r + 14) {
-      if (dist < 10) return [];
+    if (dist <= PAD.r + 21) {
+      if (dist < 15) return [];
       const ang = Math.atan2(dy, dx); // 0 = right
       const out: Action[] = [];
       const deg = (ang * 180) / Math.PI;
@@ -103,7 +103,7 @@ export class TouchControlsScene extends Phaser.Scene {
     const g = this.gfx;
     g.clear();
     // d-pad: a plus shape
-    const arm = 18;
+    const arm = 27;
     const len = PAD.r;
     g.fillStyle(UI.void, 0.45).fillCircle(PAD.x, PAD.y, PAD.r + 6);
     const dirs: [Action, number, number, number, number][] = [

@@ -17,8 +17,8 @@
     },
     "timed_press": {
       "closeMs": 900,
-      "startRadius": 46,
-      "targetRadius": 12,
+      "startRadius": 69,
+      "targetRadius": 18,
       "greatMs": 45,
       "goodMs": 110,
       "timeoutMs": 500

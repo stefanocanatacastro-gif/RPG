@@ -29,7 +29,7 @@ export function editText(scene: Phaser.Scene, o: TextFieldOptions): Promise<stri
     left: `${rect.left + o.x * k}px`,
     top: `${rect.top + o.y * k}px`,
     width: `${o.w * k}px`,
-    height: `${(o.h ?? 14) * k}px`,
+    height: `${(o.h ?? 20) * k}px`,
     zIndex: '1000',
     font: `${Math.max(12, Math.round(8 * k))}px "Press Start 2P", monospace`,
     lineHeight: '1.6',
