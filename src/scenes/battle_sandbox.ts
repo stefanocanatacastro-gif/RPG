@@ -19,7 +19,18 @@ import { Rng } from '../systems/rng';
 import { versionLabel } from '../systems/version';
 import { simulate, SKILLS, type SimReport } from '../battle/simulate';
 import type { BattleScene } from './battle';
-import type { FormationDef, FormationSlot } from '../types/data';
+import type { BattleConditions, FormationDef, FormationSlot } from '../types/data';
+import {
+  HAZARDS,
+  CROWD_SIZES,
+  CROWD_MOODS,
+  CROWD_LABEL,
+  MOOD_LABEL,
+  MOOD_DESC,
+  SPECIALS,
+  cleanConditions,
+  conditionLines,
+} from '../battle/conditions';
 import {
   startCustomBattle,
   finishCustomBattle,
@@ -82,7 +93,12 @@ interface Setup {
   assist: number;
   fixedSeed: boolean;
   skill: number;
+  /** Hazards, goal, house rules and crowd (the Ring & crowd page). */
+  cond: BattleConditions;
 }
+
+const GOALS = ['ko', 'timed', 'survive'] as const;
+const GOAL_NAME = { ko: 'Knock them all out', timed: 'Win within N rounds', survive: 'Survive N rounds' };
 
 /** Partner choices: none, then every character who isn't the hero. */
 const partners = (hero: string) => [null, ...Database.data.characters.filter((c) => c.id !== hero)];
@@ -105,6 +121,8 @@ export class BattleSandboxScene extends Phaser.Scene {
   private lastRepeat = 0;
   /** The encounter being edited, if this fight was opened from Encounters (yours only). */
   private editing: { id: string; title: string } | null = null;
+  /** Which page of rows is showing: the fight itself, or the ring & crowd. */
+  page: 'fight' | 'ring' = 'fight';
   /** For the browser test. */
   lastSim: SimReport | null = null;
   lastFight: { result: string; rounds: number; seed: number } | null = null;
@@ -141,6 +159,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       assist: 0,
       fixedSeed: false,
       skill: 1,
+      cond: {},
     };
     if (!saved) this.loadPreset();
     saved = this.s;
@@ -150,6 +169,8 @@ export class BattleSandboxScene extends Phaser.Scene {
       this.s.partner = null;
     this.s.items = (this.s.items ?? []).filter((i) => Database.data.items.some((x) => x.id === i));
     this.s.itemPick ??= 0;
+    this.s.cond ??= {};
+    this.page = 'fight';
     if (data?.hero && Database.data.characters.some((c) => c.id === data.hero)) this.useHero(data.hero);
     // opened from the item maker: the item goes in the bag
     if (data?.item && Database.data.items.some((i) => i.id === data.item) && this.s.items.length < 10)
@@ -171,10 +192,10 @@ export class BattleSandboxScene extends Phaser.Scene {
 
     benchBackdrop(this, 'BATTLE SANDBOX', versionLabel());
     const g = this.add.graphics();
-    const panelH = 21 * ROW_H + 10;
+    const panelH = 22 * ROW_H + 10;
     drawPanel(g, 8, TOP - 6, LEFT_W, panelH, { alpha: 0.9 });
     drawPanel(g, LEFT_W + 16, TOP - 6, W - LEFT_W - 24, panelH, { alpha: 0.9 });
-    this.desc = pixelText(this, 16, H - 46, '', 8, css(UI.inkDim))
+    this.desc = pixelText(this, 16, H - 40, '', 8, css(UI.inkDim))
       .setOrigin(0, 0)
       .setWordWrapWidth(W - 32);
     const hint = pixelText(this, W / 2, H - 20, '', 8, css(UI.inkDim));
@@ -200,6 +221,7 @@ export class BattleSandboxScene extends Phaser.Scene {
   // ── Rows ────────────────────────────────────────────────────────────
 
   private buildRows(): void {
+    if (this.page === 'ring') return this.buildRingRows();
     const s = this.s;
     const enemies = Database.data.enemies;
     const stages = Database.data.stages;
@@ -342,6 +364,15 @@ export class BattleSandboxScene extends Phaser.Scene {
         desc: 'Random, or the last fight’s seed to replay it with the same enemy choices.',
       },
       {
+        label: 'Ring & crowd',
+        value: () => {
+          const n = conditionLines(s.cond).length;
+          return n ? `${n} change${n > 1 ? 's' : ''}` : 'Plain match';
+        },
+        confirm: () => this.openPage('ring'),
+        desc: 'Hazards, a survival or timed goal, no items or running, and how big and whose the crowd is.',
+      },
+      {
         label: 'Save as…',
         value: () => this.editing?.title ?? 'new encounter',
         confirm: () => void this.saveEncounter(),
@@ -362,6 +393,99 @@ export class BattleSandboxScene extends Phaser.Scene {
       },
       { label: 'Back', confirm: () => this.leave(), desc: 'Back to the dev hub.' },
     ];
+  }
+
+  private buildRingRows(): void {
+    const c = this.s.cond;
+    const cycle = (n: number, d: number, len: number) => (n + d + len) % len;
+    const goalIdx = () => GOALS.indexOf(c.goal ?? 'ko');
+    const toggle = (key: 'noItems' | 'noRun') => () => {
+      if (c[key]) delete c[key];
+      else c[key] = true;
+    };
+    this.rows = [
+      {
+        label: 'Goal',
+        value: () => GOAL_NAME[c.goal ?? 'ko'],
+        left: () => (c.goal = GOALS[cycle(goalIdx(), -1, GOALS.length)]),
+        right: () => (c.goal = GOALS[cycle(goalIdx(), 1, GOALS.length)]),
+        desc: 'Knock them all out (normal), beat them before the round limit, or just stay standing that long.',
+      },
+      {
+        label: 'Rounds',
+        value: () => (c.goal && c.goal !== 'ko' ? String(c.rounds ?? 5) : '—'),
+        left: () => (c.rounds = Math.max(1, (c.rounds ?? 5) - 1)),
+        right: () => (c.rounds = Math.min(20, (c.rounds ?? 5) + 1)),
+        repeat: true,
+        desc: 'How many rounds the goal above gives you.',
+      },
+      ...HAZARDS.map((h): Row => ({
+        label: h.short,
+        value: () => ((c.hazards ?? []).includes(h.id) ? 'On' : 'Off'),
+        left: () => this.toggleHazard(h.id),
+        right: () => this.toggleHazard(h.id),
+        desc: h.desc,
+      })),
+      {
+        label: 'Items',
+        value: () => (c.noItems ? 'Banned' : 'Allowed'),
+        left: toggle('noItems'),
+        right: toggle('noItems'),
+        desc: 'Banned: the bag stays shut (revives too).',
+      },
+      {
+        label: 'Running',
+        value: () => (c.noRun ? 'Banned' : 'Allowed'),
+        left: toggle('noRun'),
+        right: toggle('noRun'),
+        desc: 'Banned: a fight to the finish, nobody runs.',
+      },
+      {
+        label: 'Crowd',
+        value: () => CROWD_LABEL[c.crowd ?? 'normal'],
+        left: () => (c.crowd = CROWD_SIZES[cycle(CROWD_SIZES.indexOf(c.crowd ?? 'normal'), -1, 3)]),
+        right: () => (c.crowd = CROWD_SIZES[cycle(CROWD_SIZES.indexOf(c.crowd ?? 'normal'), 1, 3)]),
+        desc: 'How full the arena is. A packed house builds Hype half again as fast; a quiet one, half as fast.',
+      },
+      {
+        label: 'Crowd mood',
+        value: () => MOOD_LABEL[c.mood ?? 'fair'],
+        left: () =>
+          (c.mood = CROWD_MOODS[cycle(CROWD_MOODS.indexOf(c.mood ?? 'fair'), -1, CROWD_MOODS.length)]),
+        right: () =>
+          (c.mood = CROWD_MOODS[cycle(CROWD_MOODS.indexOf(c.mood ?? 'fair'), 1, CROWD_MOODS.length)]),
+        desc: '',
+      },
+      {
+        label: 'Clear all',
+        confirm: () => {
+          this.s.cond = {};
+          this.buildRows();
+        },
+        desc: 'Back to a plain match.',
+      },
+      { label: 'Done', confirm: () => this.openPage('fight'), desc: 'Back to the fight set-up.' },
+    ];
+    // the mood's description follows the mood picked
+    const mood = this.rows.find((r) => r.label === 'Crowd mood')!;
+    Object.defineProperty(mood, 'desc', { get: () => MOOD_DESC[c.mood ?? 'fair'] });
+  }
+
+  private toggleHazard(id: string): void {
+    const list = (this.s.cond.hazards ??= []);
+    const i = list.indexOf(id);
+    if (i >= 0) list.splice(i, 1);
+    else list.push(id);
+  }
+
+  /** Switches between the fight rows and the Ring & crowd rows. */
+  openPage(page: 'fight' | 'ring'): void {
+    const from = this.page;
+    this.page = page;
+    this.buildRows();
+    this.cursor =
+      page === 'fight' && from === 'ring' ? this.rows.findIndex((r) => r.label.startsWith('Ring')) : 0;
+    this.render();
   }
 
   /** Picks the hero and takes their numbers. */
@@ -464,8 +588,19 @@ export class BattleSandboxScene extends Phaser.Scene {
       this.side.push(pixelText(this, x, y, text, size, css(color)).setOrigin(0, 0));
       y += size === 16 ? 20 : 12;
     };
-    const slot = this.cursor >= 1 && this.cursor <= SLOTS ? this.s.enemies[this.cursor - 1] : null;
-    if (slot) {
+    const slot =
+      this.page === 'fight' && this.cursor >= 1 && this.cursor <= SLOTS
+        ? this.s.enemies[this.cursor - 1]
+        : null;
+    if (this.page === 'ring') {
+      line('RING & CROWD', UI.spark);
+      const lines = conditionLines(this.s.cond);
+      if (!lines.length) line('Plain match', UI.inkDim);
+      for (const l of lines.slice(0, 7)) line(l);
+      y = TOP + 104;
+      line('HYPE SPECIALS', UI.hype);
+      for (const sp of SPECIALS) line(`${sp.name} · ${sp.cost} Hype`, UI.inkDim);
+    } else if (slot) {
       const d = Database.enemy(slot.id);
       line(t(d.name).toUpperCase(), UI.spark);
       line(`HP ${d.hp}  ATK ${d.attack}  DEF ${d.defence}`);
@@ -496,7 +631,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       );
     }
     y = TOP + 130;
-    if (this.reportTitle) {
+    if (this.reportTitle && this.page === 'fight') {
       line(this.reportTitle, UI.spark);
       for (const l of this.report) line(l, UI.ink);
     }
@@ -577,6 +712,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       stage: Database.data.stages[this.s.stage].id,
       firstStrike: STRIKES[this.s.strike],
       items: [...this.s.items],
+      ...(cleanConditions(this.s.cond) ? { conditions: cleanConditions(this.s.cond) } : {}),
     };
   }
 
@@ -596,6 +732,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       ),
       enemies: Array.from({ length: SLOTS }, (_, i) => (b.enemies[i] ? { ...b.enemies[i] } : null)),
       items: [...(b.items ?? [])],
+      cond: structuredClone(b.conditions ?? {}),
     });
   }
 
@@ -695,6 +832,7 @@ export class BattleSandboxScene extends Phaser.Scene {
   }
 
   private leave(): void {
+    if (this.page === 'ring') return this.openPage('fight');
     this.busy = true;
     SceneLoader.goto(this, 'dev_hub', { cursor: 1 });
   }

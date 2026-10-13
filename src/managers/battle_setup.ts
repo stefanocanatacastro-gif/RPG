@@ -2,7 +2,8 @@
 // plain-data helpers around it. No Phaser here, so tests can use it.
 
 import { Database } from './database';
-import type { FormationSlot, FormationDef } from '../types/data';
+import type { BattleConditions, FormationSlot, FormationDef } from '../types/data';
+import { HAZARDS, cleanConditions } from '../battle/conditions';
 import type { BattleEngine } from '../battle/engine';
 import type { SimSetup, Skill } from '../battle/simulate';
 
@@ -19,10 +20,19 @@ export interface BattleSetup {
   firstStrike: 'player' | 'enemy' | null;
   /** What's in the bag at the start (item ids, up to 10). */
   items?: string[];
+  /** Hazards, goal, house rules and crowd. Missing means a plain match. */
+  conditions?: BattleConditions;
 }
 
 export function formationOf(s: BattleSetup): FormationDef {
-  return { id: 'custom', enemies: s.enemies.map((e) => ({ enemy: e.id, slot: e.slot })), stage: s.stage };
+  const f: FormationDef = {
+    id: 'custom',
+    enemies: s.enemies.map((e) => ({ enemy: e.id, slot: e.slot })),
+    stage: s.stage,
+  };
+  const c = cleanConditions(s.conditions);
+  if (c) f.conditions = c;
+  return f;
 }
 
 /** What's wrong with a setup (a fighter deleted by its maker, no opponents…), or [] if it can be played. */
@@ -37,6 +47,8 @@ export function setupProblems(s: BattleSetup): string[] {
   if (!Database.data.stages.some((st) => st.id === s.stage)) out.push('its arena no longer exists');
   const things = new Set(Database.data.items.map((i) => i.id));
   if ((s.items ?? []).some((i) => !things.has(i))) out.push('an item in its bag no longer exists');
+  if ((s.conditions?.hazards ?? []).some((h) => !HAZARDS.some((x) => x.id === h)))
+    out.push('one of its hazards no longer exists');
   return out;
 }
 
@@ -80,6 +92,6 @@ export function simSetupOf(s: BattleSetup, skill: Skill): SimSetup {
     formation: formationOf(s),
     firstStrike: s.firstStrike,
     skill,
-    items: [...(s.items ?? [])],
+    items: s.conditions?.noItems ? [] : [...(s.items ?? [])],
   };
 }

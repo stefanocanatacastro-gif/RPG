@@ -1,0 +1,26 @@
+[
+  {
+    "id": "rally",
+    "name": "Rally",
+    "desc": "The crowd lifts your team: everyone standing heals 4.",
+    "cost": 3,
+    "target": "party",
+    "effect": { "heal": 4 }
+  },
+  {
+    "id": "crowd_surge",
+    "name": "Crowd Surge",
+    "desc": "Feed off the noise: your team hits 2 harder for 3 turns.",
+    "cost": 4,
+    "target": "party",
+    "effect": { "attackUp": 2, "turns": 3 }
+  },
+  {
+    "id": "showstopper",
+    "name": "Showstopper",
+    "desc": "The big finish: 4 damage to every opponent, through defence.",
+    "cost": 7,
+    "target": "enemies",
+    "effect": { "damage": 4 }
+  }
+]

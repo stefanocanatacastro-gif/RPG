@@ -131,8 +131,55 @@ export interface FormationDef {
   music?: string;
   /** A fight the story lets you lose (no Game Over): the story goes on either way. */
   loseOk?: boolean;
-  /** Hazards that may trigger during this fight (M3). */
+  /** Ring hazards, a goal other than "knock everyone out", house rules and the crowd. */
+  conditions?: BattleConditions;
+}
+
+/** A ring hazard (hazards.json). What each kind does lives in the battle engine. */
+export interface HazardDef {
+  id: string;
+  name: string;
+  /** Fits a menu label (up to 10 letters). */
+  short: string;
+  desc: string;
+  /**
+   * falling   — at the start of a round, with `chance`, `damage` to a random fighter
+   * slip      — run-in moves may slip (`chance`): the move misses, the attacker takes `damage`
+   * burn      — aerial moves cost their user `damage`
+   * spotlight — each round a random fighter hits `attack` harder
+   */
+  kind: 'falling' | 'slip' | 'burn' | 'spotlight';
+  chance?: number;
+  damage?: number;
+  attack?: number;
+}
+
+/** How full the arena is: scales how fast Hype builds. */
+export type CrowdSize = 'quiet' | 'normal' | 'packed';
+/** Who the crowd is behind: fair (nobody), home (you: throws you snacks), away (them: throws junk at you), rowdy (junk at anyone). */
+export type CrowdMood = 'fair' | 'home' | 'away' | 'rowdy';
+
+/** Everything about a fight besides who's in it. All optional: none means a plain match. */
+export interface BattleConditions {
   hazards?: string[];
+  /** ko: knock them all out (default). timed: …within `rounds` rounds. survive: stay up for `rounds` rounds. */
+  goal?: 'ko' | 'timed' | 'survive';
+  rounds?: number;
+  noItems?: boolean;
+  noRun?: boolean;
+  crowd?: CrowdSize;
+  mood?: CrowdMood;
+}
+
+/** A Hype special (specials.json): paid for with Hype by Chispa or the partner. */
+export interface SpecialDef {
+  id: string;
+  name: string;
+  desc: string;
+  cost: number;
+  /** party: everyone standing on your side. enemies: every standing opponent. */
+  target: 'party' | 'enemies';
+  effect: { heal?: number; damage?: number; attackUp?: number; defenceUp?: number; turns?: number };
 }
 
 /** A look for the battle arena: colours for every part, and how full the stands are. */

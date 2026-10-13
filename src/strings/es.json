@@ -150,5 +150,20 @@
   "hub.encounters": "Encuentros",
   "hub.encounters.desc": "Juega peleas guardadas: las tuyas, las de la comunidad y las de prueba. Guarda nuevas desde el sandbox.",
   "hub.items": "Creador de objetos",
-  "hub.items.desc": "Crea tus propios objetos: curación, Garra, daño, mejoras y revivir. Ponlos en la bolsa del sandbox."
+  "hub.items.desc": "Crea tus propios objetos: curación, Garra, daño, mejoras y revivir. Ponlos en la bolsa del sandbox.",
+  "battle.survived": "¡AGUANTASTE!",
+  "battle.timeup": "¡SE ACABÓ EL TIEMPO!",
+  "battle.hype": "EUFORIA",
+  "battle.items.banned": "Sin objetos en esta lucha.",
+  "battle.specials": "Especiales",
+  "battle.specials.desc": "Gasta la euforia del público en un gran momento.",
+  "battle.specials.low": "Falta euforia. ¡Juega con el público!",
+  "battle.appeal": "Lucirse",
+  "battle.appeal.desc": "Juega con el público: no atacas y ganas euforia.",
+  "battle.run.banned": "No se puede huir en esta lucha.",
+  "battle.burn": "¡QUEMA!",
+  "battle.slip": "¡RESBALÓN!",
+  "battle.spotlight": "¡FOCO!",
+  "battle.snack": "BOTANA",
+  "battle.junk": "¡BASURA!"
 }

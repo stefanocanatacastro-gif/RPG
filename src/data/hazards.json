@@ -1,0 +1,36 @@
+[
+  {
+    "id": "falling_light",
+    "name": "Falling lights",
+    "short": "Lights",
+    "desc": "Now and then a light rig crashes down on someone, either side: 3 damage.",
+    "kind": "falling",
+    "chance": 0.3,
+    "damage": 3
+  },
+  {
+    "id": "slippery_canvas",
+    "name": "Slippery canvas",
+    "short": "Slippery",
+    "desc": "Run-in moves may slip: the attacker goes down, takes 1 and the move misses.",
+    "kind": "slip",
+    "chance": 0.25,
+    "damage": 1
+  },
+  {
+    "id": "burning_ropes",
+    "name": "Burning ropes",
+    "short": "Hot ropes",
+    "desc": "Jumping off the ropes burns: every aerial move costs its user 1 HP.",
+    "kind": "burn",
+    "damage": 1
+  },
+  {
+    "id": "spotlight",
+    "name": "Spotlight",
+    "short": "Spotlight",
+    "desc": "Each round one fighter, either side, stands in the spotlight and hits 1 harder.",
+    "kind": "spotlight",
+    "attack": 1
+  }
+]

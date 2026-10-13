@@ -150,5 +150,20 @@
   "hub.encounters": "Encounters",
   "hub.encounters.desc": "Play saved fights: yours, the community's and the test line-ups. Save new ones from the sandbox.",
   "hub.items": "Item maker",
-  "hub.items.desc": "Make your own items: healing, Grit, damage, stat boosts and revives. Put them in a bag in the sandbox."
+  "hub.items.desc": "Make your own items: healing, Grit, damage, stat boosts and revives. Put them in a bag in the sandbox.",
+  "battle.survived": "SURVIVED!",
+  "battle.timeup": "TIME'S UP!",
+  "battle.hype": "HYPE",
+  "battle.items.banned": "No items in this match.",
+  "battle.specials": "Specials",
+  "battle.specials.desc": "Spend Hype from the crowd on a big moment.",
+  "battle.specials.low": "Not enough Hype. Play to the crowd!",
+  "battle.appeal": "Appeal",
+  "battle.appeal.desc": "Play to the crowd: skip your attack and build Hype.",
+  "battle.run.banned": "No running in this match.",
+  "battle.burn": "BURN!",
+  "battle.slip": "SLIP!",
+  "battle.spotlight": "SPOTLIGHT!",
+  "battle.snack": "SNACK",
+  "battle.junk": "JUNK!"
 }

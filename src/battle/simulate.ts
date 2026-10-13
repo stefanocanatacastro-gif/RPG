@@ -8,6 +8,7 @@ import { missEndsCombo, ratingMult, type Rating } from './commands';
 import { Rng } from '../systems/rng';
 import type { CharacterDef, FormationDef } from '../types/data';
 import rules from '../data/battle_rules.json';
+import { SPECIALS } from './conditions';
 
 /** How well the simulated player times things, as chances (the rest misses). */
 export interface Skill {
@@ -89,7 +90,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
   e.hero.defence = setup.defence;
   const rng = new Rng(seed ^ 0x5eed);
   let grit = setup.maxGrit;
-  const bag = [...(setup.items ?? [])];
+  const bag = setup.formation.conditions?.noItems ? [] : [...(setup.items ?? [])];
   const itemOf = (id: string) => db.item(id);
   /** Takes the first bag item matching, if any. */
   const take = (match: (fx: ReturnType<typeof itemOf>['effect']) => boolean): string | null => {
@@ -127,10 +128,44 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
     return s - m.gritCost * 0.05;
   };
 
+  /** Knocked out with a revive in the bag: back up. */
+  const revive = () => {
+    if (e.hero.hp > 0) return;
+    const rev = take((fx) => !!fx.revive);
+    if (rev) e.hero.hp = Math.min(e.hero.maxHp, itemOf(rev).effect.revive!);
+  };
+  const special = (id: string) => SPECIALS.find((x) => x.id === id);
+  /** Grades a hit or block for Hype, as the scene does. */
+  const hypeFor = (r: Rating) => {
+    if (r === 'great') e.gainHype('great');
+    else if (r === 'good') e.gainHype('good');
+  };
+
   for (let guard = 0; guard < 1000 && e.round <= MAX_ROUNDS; guard++) {
+    // the ring and the crowd at the start of a round
+    if (e.takeEvents().length) {
+      revive();
+      e.settle();
+      continue;
+    }
     if (e.phase === 'command') {
-      // low on HP with a healing item in the bag: use it instead of attacking
       const me = e.acting;
+      // Hype to spend: the big finish on a crowd, a rally when hurt
+      const show = special('showstopper');
+      const rally = special('rally');
+      if (show && e.canUseSpecial(show.id) && e.enemies().length >= 2) {
+        e.beginHeroAction();
+        for (const r of e.useSpecial(show.id).hits) dealt += r.damage;
+        e.endHeroAction();
+        continue;
+      }
+      if (rally && e.canUseSpecial(rally.id) && me.hp <= me.maxHp * 0.5) {
+        e.beginHeroAction();
+        e.useSpecial(rally.id);
+        e.endHeroAction();
+        continue;
+      }
+      // low on HP with a healing item in the bag: use it instead of attacking
       if (me.hp <= me.maxHp * 0.35) {
         const heal = take((fx) => !!fx.heal);
         if (heal) {
@@ -149,13 +184,22 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
         }
       }
       if (!best) {
-        e.defend();
+        e.beginHeroAction();
+        // nothing to hit: play to the crowd if it's worth it, otherwise guard
+        if (e.hype < e.maxHype) e.appeal();
+        else e.defend();
         e.endHeroAction();
         continue;
       }
       const m = db.move(best.move);
       grit -= m.gritCost;
       e.beginHeroAction();
+      const hz = e.moveHazard(e.turn, best.move);
+      if (hz.slip || hz.ko) {
+        revive();
+        e.endHeroAction();
+        continue;
+      }
       let rating: Rating | null = m.command !== 'none' && m.command !== 'stomp' ? roll(rng, skill) : null;
       for (const step of m.steps) {
         if (step.do !== 'hit') continue;
@@ -164,6 +208,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
         const mult = (step.mult ?? 1) * (m.command === 'none' ? 1 : ratingMult(m.command, r));
         const res = e.hit(e.turn, best.target, best.move, mult);
         dealt += res.damage;
+        if (m.command !== 'none') hypeFor(r);
         if (r === 'great' && !res.ko) e.breakCharge(best.target);
         rating = null;
         if (m.command === 'stomp' && r === 'miss' && missEndsCombo('stomp')) break;
@@ -174,7 +219,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
       if (plan) {
         const m = db.move(plan.move);
         if (plan.kind === 'support') e.healFighter(plan.target, m.heal ?? 0);
-        else if (plan.kind !== 'charge') {
+        else if (plan.kind !== 'charge' && !e.moveHazard(plan.actor, plan.move).slip) {
           for (const step of m.steps) {
             const victim = e.get(plan.target);
             if (step.do !== 'hit' || victim.hp <= 0 || e.get(plan.actor).hp <= 0) continue;
@@ -184,11 +229,7 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
           }
         }
       }
-      // knocked out with a revive in the bag: back up
-      if (e.hero.hp <= 0) {
-        const rev = take((fx) => !!fx.revive);
-        if (rev) e.hero.hp = Math.min(e.hero.maxHp, itemOf(rev).effect.revive!);
-      }
+      revive();
       e.endEnemyAction();
     } else break;
   }

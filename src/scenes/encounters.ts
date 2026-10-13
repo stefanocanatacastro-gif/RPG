@@ -5,6 +5,7 @@
 // and your wins and best round count are kept per encounter.
 
 import Phaser from 'phaser';
+import { conditionLines } from '../battle/conditions';
 import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
 import { drawPanel } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
@@ -425,6 +426,8 @@ export class EncountersScene extends Phaser.Scene {
       Database.data.items.some((x) => x.id === i) ? t(Database.item(i).name) : '(missing)',
     );
     line(fit(`Bag: ${bag.length ? bag.join(', ') : 'empty'}`, 46), UI.inkDim);
+    const rules = conditionLines(s.conditions);
+    if (rules.length) line(fit(`Ring: ${rules.join(', ')}`, 46), UI.grit);
     const rec = readRecords()[e.key];
     line(
       rec

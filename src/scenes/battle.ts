@@ -26,10 +26,14 @@ import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
 import { isCustomId } from '../managers/builds';
 import { ensureLook } from '../systems/custom_looks';
+import { CROWD_DENSITY, SPECIALS, conditionLines, goalText, hazard, special } from '../battle/conditions';
+import type { RoundEvent } from '../battle/engine';
 
 type Choice =
   | { kind: 'move'; move: string; target: string }
   | { kind: 'item'; item: string; target: string }
+  | { kind: 'special'; special: string }
+  | { kind: 'appeal' }
   | { kind: 'defend' }
   | { kind: 'run' };
 
@@ -81,6 +85,9 @@ export class BattleScene extends Phaser.Scene {
   private menuCursor: Record<string, number> = {};
   /** Losing this fight doesn't end the game. */
   private loseOk = false;
+  private hypeBar!: Bar;
+  /** Light cone over whoever stands in the spotlight this round. */
+  private spot: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super('battle');
@@ -111,7 +118,18 @@ export class BattleScene extends Phaser.Scene {
     }
     this.registry.set('battleSeed', this.engine.rng.seed);
 
-    this.arena = drawStage(this, Database.stage(formation.stage));
+    // the crowd size condition fills or empties the stands
+    const stage = Database.stage(formation.stage);
+    const size = formation.conditions?.crowd;
+    this.arena = drawStage(
+      this,
+      size === 'quiet'
+        ? { ...stage, crowd: Math.min(stage.crowd, CROWD_DENSITY.quiet) }
+        : size === 'packed'
+          ? { ...stage, crowd: CROWD_DENSITY.packed }
+          : stage,
+    );
+    this.spot = null;
     this.uiLayer = this.add.layer().setDepth(1000);
     this.cameras.main.ignore(this.uiLayer);
     this.uiCam = this.cameras.add(0, 0, W, H).setName('ui');
@@ -236,8 +254,25 @@ export class BattleScene extends Phaser.Scene {
     }
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => offs.forEach((off) => off()));
 
+    // round and Hype, top right; the match's conditions listed under them
+    const hx = 436;
+    const hw = W - hx - 8;
+    drawPanel(g, hx, 8, hw, 48, { alpha: 0.94 });
+    this.roundText = this.ui(pixelText(this, hx + 12, 18, '', 8, css(UI.ink)).setOrigin(0, 0));
+    this.hypeBar = this.ui(new Bar(this, hx + 12, 34, hw - 24, BAR_STYLES.hype, 0, this.engine.maxHype));
+    const lines = conditionLines(this.engine.cond);
+    if (lines.length) {
+      const lw = Math.max(...lines.map((l) => tinyTextWidth(l.toUpperCase()))) * 2 + 16;
+      drawPanel(g, W - 8 - lw, 58, lw, lines.length * 12 + 8, { alpha: 0.8 });
+    }
+    lines.forEach((l, i) =>
+      this.ui(
+        tinyText(this, W - 10, 62 + i * 12, l.toUpperCase(), css(UI.inkDim), css(UI.void))
+          .setOrigin(1, 0)
+          .setScale(2),
+      ),
+    );
     this.turnText = this.ui(pixelText(this, 20, 80, '', 8, css(UI.spark)).setOrigin(0, 0));
-    this.roundText = this.ui(pixelText(this, W - 14, 14, '', 8, css(UI.inkDim)).setOrigin(1, 0));
     this.desc = this.ui(
       pixelText(this, 16, H - 26, '', 8)
         .setOrigin(0, 0)
@@ -254,6 +289,15 @@ export class BattleScene extends Phaser.Scene {
   /** Shadows stay on the canvas and follow their fighter sideways; the camera eases toward its shot. */
   update(_t: number, dt: number): void {
     this.director.update(dt);
+    if (this.hypeBar) {
+      const hype = Math.floor(this.engine.hype + 1e-9);
+      if (hype !== this.hypeBar.value) this.hypeBar.setValue(hype, this.engine.maxHype);
+    }
+    if (this.spot) {
+      const v = this.views.get(this.engine.spotlight ?? '');
+      if (!v || v.f.hp <= 0) this.spot.setVisible(false);
+      else this.spot.setVisible(true).setPosition(v.sprite.x, v.sprite.y);
+    }
     for (const v of this.views.values()) {
       v.shadow.x = v.sprite.x;
       if (v.bar) v.bar.x = Math.round(v.sprite.x - 22);
@@ -281,11 +325,25 @@ export class BattleScene extends Phaser.Scene {
     } else {
       await this.banner(t('battle.start'), UI.ink);
     }
+    if (e.roundGoal !== null) await this.caption(goalText(e.cond), UI.spark);
     e.begin(this.start.firstStrike === 'enemy' ? 'enemy' : null);
     if (e.enemies().length === 0) e.phase = 'victory';
 
     for (let guard = 0; guard < 500; guard++) {
-      this.roundText.setText(tf('battle.round', { n: e.round }));
+      const goal = e.roundGoal;
+      this.roundText.setText(
+        goal !== null
+          ? `${tf('battle.round', { n: e.round })} / ${goal}`
+          : tf('battle.round', { n: e.round }),
+      );
+      // the ring and the crowd at the start of a round
+      const events = e.takeEvents();
+      if (events.length) {
+        for (const ev of events) await this.showRoundEvent(ev);
+        if (e.hero.hp <= 0) await this.tryRevive();
+        e.settle();
+        continue;
+      }
       if (e.phase === 'command') {
         this.director.to(SHOTS.command, 5);
         // with a partner out, say whose turn it is, just above the menu
@@ -311,6 +369,10 @@ export class BattleScene extends Phaser.Scene {
       } else break;
     }
 
+    this.spot?.destroy();
+    this.spot = null;
+    if (e.endReason === 'survived') await this.banner(t('battle.survived'), UI.good, 600);
+    if (e.endReason === 'timeup') await this.banner(t('battle.timeup'), UI.rope, 600);
     if (e.phase === 'victory') return this.victory();
     if (e.phase === 'defeat') return this.defeat();
     if (e.phase === 'fled') return this.finish('run');
@@ -330,6 +392,16 @@ export class BattleScene extends Phaser.Scene {
       const aim = this.views.get(c.target);
       this.director.track(aim ? [aim.sprite, me.sprite] : [me.sprite], aim ? 1.2 : 1.05);
       await this.useItem(c.item, c.target);
+    } else if (c.kind === 'special') {
+      e.beginHeroAction();
+      await this.playSpecial(c.special);
+    } else if (c.kind === 'appeal') {
+      e.beginHeroAction();
+      const got = e.appeal();
+      this.director.track([me.sprite], 1.3, 10);
+      await this.tween({ targets: me.sprite, y: me.sprite.y - 12, duration: 110, yoyo: true, repeat: 1 });
+      this.arena.cheer(2);
+      await this.popText(me, `${t('battle.hype')} +${Math.round(got * 10) / 10}`, UI.hype);
     } else if (c.kind === 'defend') {
       e.defend();
       this.director.track([me.sprite], 1.35, 10);
@@ -347,6 +419,8 @@ export class BattleScene extends Phaser.Scene {
         await this.banner(t('battle.fled'), UI.ink);
       }
     }
+    // Chispa can go down on his own turn (burning ropes): a revive still gets him up
+    if (e.hero.hp <= 0) await this.tryRevive();
     e.endHeroAction();
   }
 
@@ -373,19 +447,37 @@ export class BattleScene extends Phaser.Scene {
         };
       });
       const bag = gs.data.items;
+      const noItems = !!e.cond.noItems;
+      const cheapest = Math.min(...SPECIALS.map((x) => x.cost));
       items.push(
         {
           label: t('battle.items'),
           value: 'items',
           right: String(bag.length),
           desc: t('battle.items.desc'),
-          disabled: bag.length === 0,
-          reason: t('battle.items.empty'),
+          disabled: noItems || bag.length === 0,
+          reason: t(noItems ? 'battle.items.banned' : 'battle.items.empty'),
         },
+        {
+          label: t('battle.specials'),
+          value: 'specials',
+          right: String(Math.floor(e.hype + 1e-9)),
+          desc: t('battle.specials.desc'),
+          disabled: e.hype + 1e-9 < cheapest,
+          reason: t('battle.specials.low'),
+        },
+        { label: t('battle.appeal'), value: 'appeal', desc: t('battle.appeal.desc') },
         { label: t('battle.defend'), value: 'defend', desc: t('battle.defend.desc') },
       );
       // only Chispa calls the retreat
-      if (e.turn === 'hero') items.push({ label: t('battle.run'), value: 'run', desc: t('battle.run.desc') });
+      if (e.turn === 'hero')
+        items.push({
+          label: t('battle.run'),
+          value: 'run',
+          desc: t('battle.run.desc'),
+          disabled: !!e.cond.noRun,
+          reason: t('battle.run.banned'),
+        });
       const cursorKey = e.turn;
 
       const open = () => {
@@ -409,6 +501,8 @@ export class BattleScene extends Phaser.Scene {
                 () => open(),
               );
             } else if (item.value === 'items') this.pickItem(done, open);
+            else if (item.value === 'specials') this.pickSpecial(done, open);
+            else if (item.value === 'appeal') done({ kind: 'appeal' });
             else if (item.value === 'defend') done({ kind: 'defend' });
             else done({ kind: 'run' });
           },
@@ -468,6 +562,30 @@ export class BattleScene extends Phaser.Scene {
         else if (def.target === 'ally') choose(e.party().map((f) => f.id));
         else choose(e.enemies().map((f) => f.id));
       },
+    });
+    this.ui(this.menu.setDepth(65));
+  }
+
+  private pickSpecial(done: (c: Choice) => void, back: () => void): void {
+    const e = this.engine;
+    this.menu?.destroy();
+    const items: MenuItem[] = SPECIALS.map((sp) => ({
+      label: sp.name,
+      value: sp.id,
+      right: String(sp.cost),
+      desc: sp.desc,
+      disabled: !e.canUseSpecial(sp.id),
+      reason: t('battle.specials.low'),
+    }));
+    this.inputState = 'menu';
+    this.menu = new MenuList(this, 16, 94, {
+      width: 250,
+      rows: items.length,
+      rowHeight: 24,
+      items,
+      descText: this.desc,
+      onCancel: back,
+      onSelect: (item) => done({ kind: 'special', special: item.value }),
     });
     this.ui(this.menu.setDepth(65));
   }
@@ -555,6 +673,16 @@ export class BattleScene extends Phaser.Scene {
 
     let hovering = false;
     let ended = false;
+    // the ring fights back: aerials burn on the ropes, run-ins may slip
+    const hz = opts.firstStrike ? null : this.engine.moveHazard(actorId, moveId);
+    if (hz && hz.damage > 0 && !hz.slip) {
+      await this.popText(actor, t('battle.burn'), UI.rope);
+      await this.showHit(actor, hz.damage, hz.ko);
+      if (hz.ko) {
+        await this.knockOut(actor);
+        ended = true;
+      }
+    }
     let rating: Rating | undefined;
     let pendingStomp: Promise<CommandResult> | null = null;
     const hitsLeft = (from: number) => move.steps.slice(from).some((x) => x.do === 'hit');
@@ -575,6 +703,16 @@ export class BattleScene extends Phaser.Scene {
             duration: 360,
           });
           this.playAnim(actor, 'idle');
+          if (hz?.slip) {
+            // feet out from under them: flat on the canvas, and the move is gone
+            void this.popText(actor, t('battle.slip'), UI.grit);
+            await this.tween({ targets: s, angle: dir * -80, duration: 140, ease: 'Quad.easeIn' });
+            await this.showHit(actor, hz.damage, hz.ko);
+            if (hz.ko) await this.knockOut(actor);
+            await this.wait(200);
+            if (actor.f.hp > 0 || actor.f.id === 'hero') s.setAngle(0);
+            ended = true;
+          }
           break;
         case 'jump_to_target': {
           // arc up to a point above the target; the fall comes with the next command or hit
@@ -869,6 +1007,7 @@ export class BattleScene extends Phaser.Scene {
   /** Logs a command result and shows its rating over the attacker. */
   private noteCommand(moveId: string, r: CommandResult, at: FighterView): void {
     this.engine.log.push(`cmd ${moveId} ${r.rating}${r.note ? ` ${r.note}` : ''}`);
+    if (r.rating !== 'miss') this.engine.gainHype(r.rating);
     const key = r.rating === 'miss' ? `battle.cmd.${r.note ?? 'none'}` : `battle.cmd.${r.rating}`;
     const color = r.rating === 'great' ? UI.spark : r.rating === 'good' ? UI.ink : UI.inkDim;
     void this.popText(at, t(key), color);
@@ -1006,6 +1145,125 @@ export class BattleScene extends Phaser.Scene {
         if (r.ko) await this.knockOut(view);
       }
     }
+  }
+
+  // ── Hype specials and the ring ──────────────────────────────────────
+
+  private async playSpecial(id: string): Promise<void> {
+    const e = this.engine;
+    const sp = special(id);
+    const me = this.views.get(e.turn)!;
+    await this.caption(sp.name, UI.hype);
+    const r = e.useSpecial(id);
+    this.arena.cheer(2);
+    this.director.punchIn(0.2);
+    if (sp.target === 'party') {
+      const party = e.party().map((f) => this.views.get(f.id)!);
+      this.director.track(
+        party.map((v) => v.sprite),
+        1.2,
+        8,
+      );
+      await this.tween({ targets: party.map((v) => v.sprite), y: '-=14', duration: 140, yoyo: true });
+      for (const h of r.heals) {
+        const v = this.views.get(h.id)!;
+        gameState().setHp(v.f.defId, v.f.hp);
+        void this.popText(v, `+${h.amount}`, UI.good);
+      }
+      for (const id of r.boosted) {
+        const v = this.views.get(id)!;
+        v.sprite.setTintFill(0xffd070);
+        this.time.delayedCall(140, () => v.sprite.clearTint());
+        const fx = sp.effect;
+        const parts = [fx.attackUp ? `ATK +${fx.attackUp}` : '', fx.defenceUp ? `DEF +${fx.defenceUp}` : ''];
+        void this.popText(v, parts.filter(Boolean).join(' '), UI.spark);
+      }
+      await this.wait(500);
+    } else {
+      this.director.to(SHOTS.wide, 4);
+      await this.tween({
+        targets: me.sprite,
+        y: me.sprite.y - 30,
+        duration: 200,
+        yoyo: true,
+        ease: 'Quad.easeOut',
+      });
+      this.cameras.main.flash(120, 255, 220, 140);
+      for (const h of r.hits) {
+        const v = this.views.get(h.target)!;
+        await this.showHit(v, h.damage, h.ko);
+        if (h.ko) await this.knockOut(v);
+      }
+    }
+  }
+
+  /** Shows a round-start happening the engine already applied. */
+  private async showRoundEvent(ev: RoundEvent): Promise<void> {
+    const v = this.views.get(ev.target)!;
+    if (ev.kind === 'spotlight') {
+      this.drawSpot();
+      this.director.track([v.sprite], 1.25, 8);
+      await this.popText(v, t('battle.spotlight'), UI.spark);
+      return;
+    }
+    if (ev.kind === 'falling') {
+      this.director.track([v.sprite], 1.15, 8);
+      await this.caption(hazard('falling_light').name, UI.rope);
+      // a light rig drops from the rafters
+      const rig = this.add.graphics().setDepth(70);
+      rig.fillStyle(0x2a2a33).fillRect(-14, -6, 28, 8);
+      rig.fillStyle(0xfff2b0).fillRect(-10, 2, 20, 4);
+      rig.setPosition(v.sprite.x, v.sprite.y - 220);
+      await this.tween({
+        targets: rig,
+        y: v.sprite.y - v.sprite.displayHeight + 4,
+        duration: 320,
+        ease: 'Quad.easeIn',
+      });
+      rig.destroy();
+      this.cameras.main.shake(160, 0.014);
+      await this.showHit(v, ev.damage, ev.ko);
+      if (ev.ko) await this.knockOut(v);
+      return;
+    }
+    // the crowd throws something
+    this.director.track([v.sprite], 1.15, 8);
+    const thing = this.add.graphics().setDepth(70);
+    thing.fillStyle(ev.heal !== undefined ? 0x7fd6ff : 0x8a7a5a).fillRect(-3, -3, 6, 6);
+    const sx = v.sprite.x + (v.f.side === 'hero' ? -120 : 120);
+    const sy = STAGE.floorY - 160;
+    thing.setPosition(sx, sy);
+    const o = { p: 0 };
+    const tx = v.sprite.x;
+    const ty = v.sprite.y - v.sprite.displayHeight / 2;
+    await this.tween({
+      targets: o,
+      p: 1,
+      duration: 420,
+      onUpdate: () =>
+        thing.setPosition(sx + (tx - sx) * o.p, sy + (ty - sy) * o.p - Math.sin(o.p * Math.PI) * 50),
+    });
+    thing.destroy();
+    if (ev.heal !== undefined) {
+      if (v.f.side === 'hero') gameState().setHp(v.f.defId, v.f.hp);
+      else v.bar?.setValue(v.f.hp, v.f.maxHp);
+      await this.popText(v, `${t('battle.snack')} +${ev.heal}`, UI.good);
+    } else {
+      void this.popText(v, t('battle.junk'), UI.inkDim);
+      await this.showHit(v, ev.damage ?? 1, ev.ko);
+      if (ev.ko) await this.knockOut(v);
+    }
+  }
+
+  /** A soft cone of light, drawn once and moved onto whoever is lit (see update). */
+  private drawSpot(): void {
+    if (this.spot) return;
+    const g = this.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
+    g.fillStyle(0xfff2c0, 0.16)
+      .fillTriangle(-10, -260, 10, -260, 34, 4)
+      .fillTriangle(-10, -260, -34, 4, 34, 4);
+    g.fillStyle(0xfff2c0, 0.22).fillEllipse(0, 2, 72, 12);
+    this.spot = g;
   }
 
   // ── Endings ─────────────────────────────────────────────────────────

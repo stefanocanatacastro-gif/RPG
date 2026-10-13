@@ -46,5 +46,16 @@
     "maxLevel": 99
   },
   "partnerTargetChance": 0.4,
-  "partnerReviveHp": 1
+  "partnerReviveHp": 1,
+  "hype": {
+    "max": 10,
+    "great": 1,
+    "good": 0.5,
+    "block": 0.5,
+    "reversal": 2,
+    "ko": 1,
+    "appeal": 2,
+    "start": 0
+  },
+  "crowdThrowChance": 0.3
 }

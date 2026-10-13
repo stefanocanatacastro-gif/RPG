@@ -3,7 +3,16 @@
 // while the engine applies each hit. Because it's pure logic, whole fights can
 // be simulated in unit tests.
 
-import type { CharacterDef, EnemyDef, FormationDef, FormationSlot, ItemDef, MoveDef } from '../types/data';
+import type {
+  BattleConditions,
+  CharacterDef,
+  EnemyDef,
+  FormationDef,
+  FormationSlot,
+  ItemDef,
+  MoveDef,
+} from '../types/data';
+import { CROWD_MULT, hazard, special } from './conditions';
 import { Rng } from '../systems/rng';
 import rules from '../data/battle_rules.json';
 
@@ -79,6 +88,37 @@ export interface EnemyPlan {
   kind: 'attack' | 'charge' | 'release' | 'support';
 }
 
+/**
+ * Something the ring or the crowd did at the start of a round, already applied:
+ *   falling   — a light rig landed on `target`
+ *   spotlight — `target` stands in the spotlight this round
+ *   throw     — the crowd threw something at `target` (a snack heals, junk hurts)
+ */
+export type RoundEvent =
+  | { kind: 'falling'; target: string; damage: number; ko: boolean }
+  | { kind: 'spotlight'; target: string }
+  | { kind: 'throw'; target: string; heal?: number; damage?: number; ko: boolean };
+
+/** What a hazard did to a fighter starting a move. */
+export interface MoveHazard {
+  /** Slipped on the canvas: the move misses. */
+  slip: boolean;
+  /** Damage the attacker took (slip or burn). */
+  damage: number;
+  /** Which hazard it was, for the scene's caption. */
+  hazard?: string;
+  ko: boolean;
+}
+
+/** What a Hype special did. */
+export interface SpecialResult {
+  heals: { id: string; amount: number }[];
+  hits: HitResult[];
+  boosted: string[];
+}
+
+export type HypeReason = 'great' | 'good' | 'block' | 'reversal' | 'ko' | 'appeal';
+
 export interface Rewards {
   xp: number;
   coins: number;
@@ -107,6 +147,16 @@ export class BattleEngine {
   private enemyQueue: string[] = [];
   /** Log of what happened, for tests and crash reports. */
   readonly log: string[] = [];
+  /** Hazards, goal, house rules and crowd for this fight. */
+  readonly cond: BattleConditions;
+  /** Who stands in the spotlight this round (the Spotlight hazard), if anyone. */
+  spotlight: string | null = null;
+  /** The party's Hype: built by crowd-pleasing moments, spent on specials. */
+  hype = rules.hype.start;
+  /** Why the fight ended when it wasn't by knockouts: the hero survived, or ran out of time. */
+  endReason: 'survived' | 'timeup' | null = null;
+  /** Round-start happenings not yet shown by the scene. */
+  private events: RoundEvent[] = [];
 
   constructor(
     private db: Lookup,
@@ -118,6 +168,7 @@ export class BattleEngine {
     partner?: { def: CharacterDef; hp: number; maxHp: number },
   ) {
     this.rng = new Rng(seed);
+    this.cond = formation.conditions ?? {};
     const member = (
       id: string,
       def: CharacterDef,
@@ -209,6 +260,160 @@ export class BattleEngine {
     this.turn = 'hero';
     if (firstStrike === 'enemy') this.startEnemyTurns();
     else this.phase = 'command';
+    this.startRound();
+  }
+
+  // ── Rounds, hazards and the crowd ───────────────────────────────────
+
+  /** Rounds to win within, or to survive, when the goal isn't plain knockouts. */
+  get roundGoal(): number | null {
+    return this.cond.goal && this.cond.goal !== 'ko' ? (this.cond.rounds ?? 5) : null;
+  }
+
+  /** Hands over (and clears) what happened at the start of the round, for the scene to show. */
+  takeEvents(): RoundEvent[] {
+    const out = this.events;
+    this.events = [];
+    return out;
+  }
+
+  /** After round-start events: the fight is over if a side is down. */
+  settle(): void {
+    if (this.phase === 'victory' || this.phase === 'defeat' || this.phase === 'fled') return;
+    if (this.hero.hp <= 0) this.phase = 'defeat';
+    else if (this.enemies().length === 0) this.phase = 'victory';
+    // a partner knocked down before his turn hands it straight on
+    else if (this.phase === 'command' && this.turn === 'partner' && (this.partner?.hp ?? 0) <= 0)
+      this.startEnemyTurns();
+  }
+
+  private standing(): Fighter[] {
+    return this.fighters.filter((f) => f.hp > 0);
+  }
+
+  /** Spotlight, falling lights and crowd throws. Uses no random numbers in a plain match. */
+  private startRound(): void {
+    this.spotlight = null;
+    for (const id of this.cond.hazards ?? []) {
+      const h = hazard(id);
+      if (h.kind === 'spotlight') {
+        const f = this.rng.pick(this.standing());
+        this.spotlight = f.id;
+        this.events.push({ kind: 'spotlight', target: f.id });
+        this.log.push(`spotlight ${f.id}`);
+      } else if (h.kind === 'falling' && this.rng.chance(h.chance ?? 0.3)) {
+        const f = this.rng.pick(this.standing());
+        const damage = h.damage ?? 3;
+        f.hp = Math.max(0, f.hp - damage);
+        this.events.push({ kind: 'falling', target: f.id, damage, ko: f.hp === 0 });
+        this.log.push(`hazard falling ${f.id} -${damage}${f.hp === 0 ? ' KO' : ''}`);
+      }
+    }
+    const mood = this.cond.mood ?? 'fair';
+    if (mood !== 'fair' && this.rng.chance(rules.crowdThrowChance)) {
+      const pool = mood === 'rowdy' ? this.standing() : this.party();
+      if (pool.length) {
+        const f = this.rng.pick(pool);
+        if (mood === 'home') {
+          const before = f.hp;
+          f.hp = Math.min(f.maxHp, f.hp + 2);
+          this.events.push({ kind: 'throw', target: f.id, heal: f.hp - before, ko: false });
+          this.log.push(`crowd snack ${f.id} +${f.hp - before}`);
+        } else {
+          f.hp = Math.max(0, f.hp - 1);
+          this.events.push({ kind: 'throw', target: f.id, damage: 1, ko: f.hp === 0 });
+          this.log.push(`crowd junk ${f.id} -1${f.hp === 0 ? ' KO' : ''}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Hazards that hit a fighter starting a move (once per move, before its steps):
+   * a run-in move may slip on a slippery canvas, an aerial one burns on the ropes.
+   */
+  moveHazard(actorId: string, moveId: string): MoveHazard {
+    const out: MoveHazard = { slip: false, damage: 0, ko: false };
+    const ids = this.cond.hazards ?? [];
+    if (!ids.length) return out;
+    const a = this.get(actorId);
+    const m = this.db.move(moveId);
+    if (!m.steps.some((s) => s.do === 'hit')) return out;
+    const runIn = m.steps.some((s) => s.do === 'walk_to_target');
+    const aerial = m.steps.some((s) => s.do === 'jump_to_target');
+    for (const id of ids) {
+      const h = hazard(id);
+      if (h.kind === 'burn' && aerial) {
+        out.damage += h.damage ?? 1;
+        out.hazard = h.id;
+      } else if (h.kind === 'slip' && runIn && this.rng.chance(h.chance ?? 0.25)) {
+        out.slip = true;
+        out.damage += h.damage ?? 1;
+        out.hazard = h.id;
+      }
+    }
+    if (out.damage > 0) {
+      a.hp = Math.max(0, a.hp - out.damage);
+      out.ko = a.hp === 0;
+      this.log.push(
+        `hazard ${out.hazard} ${a.id} -${out.damage}${out.slip ? ' slip' : ''}${out.ko ? ' KO' : ''}`,
+      );
+    }
+    return out;
+  }
+
+  // ── Hype ────────────────────────────────────────────────────────────
+
+  get maxHype(): number {
+    return rules.hype.max;
+  }
+
+  /** The crowd reacts: Hype goes up by the moment's worth, scaled by how full the arena is. */
+  gainHype(reason: HypeReason): number {
+    const base = rules.hype[reason];
+    const add = base * CROWD_MULT[this.cond.crowd ?? 'normal'];
+    const before = this.hype;
+    this.hype = Math.min(this.maxHype, this.hype + add);
+    return this.hype - before;
+  }
+
+  /** Playing to the crowd instead of attacking. Returns the Hype gained. */
+  appeal(): number {
+    this.phase = 'acting';
+    const got = this.gainHype('appeal');
+    this.log.push(`${this.turn} appeal +${got}`);
+    return got;
+  }
+
+  canUseSpecial(id: string): boolean {
+    return this.hype + 1e-9 >= special(id).cost;
+  }
+
+  /** Spends Hype on a special for the acting party member. */
+  useSpecial(id: string): SpecialResult {
+    const sp = special(id);
+    if (!this.canUseSpecial(id)) throw new Error(`Not enough Hype for ${id}`);
+    this.hype -= sp.cost;
+    this.phase = 'acting';
+    this.log.push(`${this.turn} special ${id}`);
+    const out: SpecialResult = { heals: [], hits: [], boosted: [] };
+    const fx = sp.effect;
+    if (sp.target === 'party') {
+      for (const f of this.party()) {
+        if (fx.heal) {
+          const before = f.hp;
+          f.hp = Math.min(f.maxHp, f.hp + fx.heal);
+          out.heals.push({ id: f.id, amount: f.hp - before });
+        }
+        if (fx.attackUp || fx.defenceUp) {
+          this.applyBoost(f.id, fx.attackUp ?? 0, fx.defenceUp ?? 0, fx.turns ?? 3);
+          out.boosted.push(f.id);
+        }
+      }
+    } else if (fx.damage) {
+      for (const f of this.enemies()) out.hits.push(this.damage(f.id, fx.damage));
+    }
+    return out;
   }
 
   // ── Player choices ──────────────────────────────────────────────────
@@ -285,14 +490,16 @@ export class BattleEngine {
       // no damage taken, and the attacker gets hit back
       const counter = rules.reversalDamage;
       a.hp = Math.max(0, a.hp - counter);
+      if (t.side === 'hero') this.gainHype('reversal');
       this.log.push(`guard ${t.id} reversal`);
       this.log.push(`${t.id} reversal ${a.id} -${counter}${a.hp === 0 ? ' KO' : ''}`);
       return { target: t.id, damage: 0, ko: false, guarded: true, guard, counter, attackerKo: a.hp === 0 };
     }
     const block = guard === 'block' ? rules.blockReduce : 0;
+    const lit = this.spotlight === a.id ? this.spotlightBonus() : 0;
     const damage = computeDamage(
       m.power,
-      a.attack + (a.boost?.attack ?? 0),
+      a.attack + (a.boost?.attack ?? 0) + lit,
       t.defence + (t.boost?.defence ?? 0),
       {
         mult,
@@ -301,9 +508,18 @@ export class BattleEngine {
       },
     );
     t.hp = Math.max(0, t.hp - damage);
-    if (guard === 'block') this.log.push(`guard ${t.id} block`);
+    if (guard === 'block') {
+      this.log.push(`guard ${t.id} block`);
+      if (t.side === 'hero') this.gainHype('block');
+    }
+    if (a.side === 'hero' && t.hp === 0) this.gainHype('ko');
     this.log.push(`${a.id} ${m.id} ${t.id} -${damage}${t.hp === 0 ? ' KO' : ''}`);
     return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard + block > 0, guard };
+  }
+
+  private spotlightBonus(): number {
+    const id = (this.cond.hazards ?? []).find((h) => hazard(h).kind === 'spotlight');
+    return id ? (hazard(id).attack ?? 1) : 0;
   }
 
   /** Direct damage that isn't a move (items, First Strike bonus). */
@@ -333,6 +549,10 @@ export class BattleEngine {
   /** Running away: a roll against the run chance. Fleeing ends the fight. */
   tryRun(): boolean {
     this.phase = 'acting';
+    if (this.cond.noRun) {
+      this.log.push('run not allowed');
+      return false;
+    }
     const ok = this.rng.chance(rules.runChance);
     this.log.push(ok ? 'hero ran' : 'run failed');
     if (ok) this.phase = 'fled';
@@ -342,6 +562,11 @@ export class BattleEngine {
   /** After a party member's action: victory, the partner's turn, or the enemies'. */
   endHeroAction(): void {
     if (this.phase === 'fled') return;
+    // Chispa can go down on his own turn (burning ropes, a slip)
+    if (this.hero.hp <= 0) {
+      this.phase = 'defeat';
+      return;
+    }
     if (this.enemies().length === 0) {
       this.phase = 'victory';
       return;
@@ -485,14 +710,24 @@ export class BattleEngine {
       return;
     }
     if (this.enemyQueue.length === 0) {
+      // the round is over: a survival or timed goal may be decided now
+      const goal = this.roundGoal;
+      if (goal !== null && this.round >= goal) {
+        this.endReason = this.cond.goal === 'survive' ? 'survived' : 'timeup';
+        this.phase = this.endReason === 'survived' ? 'victory' : 'defeat';
+        this.log.push(`goal ${this.endReason} round ${this.round}`);
+        return;
+      }
       this.round++;
       this.turn = 'hero';
       this.phase = 'command';
+      this.startRound();
     }
   }
 
   rewards(): Rewards {
-    const all = this.enemies(false);
+    // surviving only pays for the opponents actually knocked out
+    const all = this.enemies(false).filter((e) => this.endReason !== 'survived' || e.hp <= 0);
     return { xp: all.reduce((s, e) => s + e.xp, 0), coins: all.reduce((s, e) => s + e.coins, 0) };
   }
 }
