@@ -30,6 +30,8 @@ export interface SimSetup {
   hero: CharacterDef;
   maxHp: number;
   maxGrit: number;
+  /** Item ids in the bag. The simulated player heals when low and keeps revives for a knockout. */
+  items?: string[];
   /** A partner fighting alongside, at full HP. */
   partner?: CharacterDef;
   attack: number;
@@ -87,6 +89,13 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
   e.hero.defence = setup.defence;
   const rng = new Rng(seed ^ 0x5eed);
   let grit = setup.maxGrit;
+  const bag = [...(setup.items ?? [])];
+  const itemOf = (id: string) => db.item(id);
+  /** Takes the first bag item matching, if any. */
+  const take = (match: (fx: ReturnType<typeof itemOf>['effect']) => boolean): string | null => {
+    const i = bag.findIndex((id) => match(itemOf(id).effect));
+    return i < 0 ? null : bag.splice(i, 1)[0];
+  };
   let dealt = 0;
   let taken = 0;
 
@@ -120,6 +129,17 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
 
   for (let guard = 0; guard < 1000 && e.round <= MAX_ROUNDS; guard++) {
     if (e.phase === 'command') {
+      // low on HP with a healing item in the bag: use it instead of attacking
+      const me = e.acting;
+      if (me.hp <= me.maxHp * 0.35) {
+        const heal = take((fx) => !!fx.heal);
+        if (heal) {
+          e.beginHeroAction();
+          e.healHero(itemOf(heal).effect.heal!, e.turn);
+          e.endHeroAction();
+          continue;
+        }
+      }
       let best: { move: string; target: string; s: number } | null = null;
       for (const id of e.acting.moves) {
         if (!e.canUseMove(id, grit).ok) continue;
@@ -163,6 +183,11 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
             taken += before - victim.hp;
           }
         }
+      }
+      // knocked out with a revive in the bag: back up
+      if (e.hero.hp <= 0) {
+        const rev = take((fx) => !!fx.revive);
+        if (rev) e.hero.hp = Math.min(e.hero.maxHp, itemOf(rev).effect.revive!);
       }
       e.endEnemyAction();
     } else break;

@@ -321,7 +321,7 @@ export class EncountersScene extends Phaser.Scene {
 
   private leave(): void {
     this.busy = true;
-    SceneLoader.goto(this, 'dev_hub', { cursor: 4 });
+    SceneLoader.goto(this, 'dev_hub', { cursor: 5 });
   }
 
   // ── Input and drawing ───────────────────────────────────────────────
@@ -421,6 +421,10 @@ export class EncountersScene extends Phaser.Scene {
       ),
       UI.inkDim,
     );
+    const bag = (s.items ?? []).map((i) =>
+      Database.data.items.some((x) => x.id === i) ? t(Database.item(i).name) : '(missing)',
+    );
+    line(fit(`Bag: ${bag.length ? bag.join(', ') : 'empty'}`, 46), UI.inkDim);
     const rec = readRecords()[e.key];
     line(
       rec

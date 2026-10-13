@@ -30,6 +30,8 @@ export function startCustomBattle(
   tmp.party[0] = { id: s.hero, maxHp: s.maxHp, hp: s.maxHp };
   tmp.maxGrit = s.grit;
   tmp.grit = s.grit;
+  // the encounter's own bag, not the save's
+  tmp.items = [...(s.items ?? [])];
   const partner = s.partner && s.partner !== s.hero ? Database.character(s.partner) : null;
   tmp.activePartner = partner?.id ?? null;
   if (partner) {

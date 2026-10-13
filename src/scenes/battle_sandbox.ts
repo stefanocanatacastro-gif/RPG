@@ -32,7 +32,7 @@ import { Builds } from '../managers/builds';
 import { editText } from '../ui/text_field';
 
 const SLOTS = 4;
-const ROW_H = 13;
+const ROW_H = 12;
 const TOP = 50;
 const LEFT_W = 344;
 const VAL_L = 132; // "<"
@@ -74,6 +74,10 @@ interface Setup {
   hero: string;
   /** Character fighting alongside, or null. */
   partner: string | null;
+  /** The bag at the start of the fight (item ids). */
+  items: string[];
+  /** Which item "Add item" would add (index into all items). */
+  itemPick: number;
   strike: number;
   assist: number;
   fixedSeed: boolean;
@@ -113,6 +117,7 @@ export class BattleSandboxScene extends Phaser.Scene {
   create(data?: {
     hero?: string;
     enemy?: string;
+    item?: string;
     encounter?: { id?: string; title?: string; setup: BattleSetup };
   }): void {
     if (!hasGame()) newGame(Database.character('chispa'));
@@ -130,6 +135,8 @@ export class BattleSandboxScene extends Phaser.Scene {
       grit: gameState().data.maxGrit,
       hero: 'chispa',
       partner: 'pip',
+      items: ['water_bottle'],
+      itemPick: 0,
       strike: 0,
       assist: 0,
       fixedSeed: false,
@@ -141,7 +148,12 @@ export class BattleSandboxScene extends Phaser.Scene {
     if (!Database.data.characters.some((c) => c.id === this.s.hero)) this.useHero('chispa');
     if (this.s.partner && !Database.data.characters.some((c) => c.id === this.s.partner))
       this.s.partner = null;
+    this.s.items = (this.s.items ?? []).filter((i) => Database.data.items.some((x) => x.id === i));
+    this.s.itemPick ??= 0;
     if (data?.hero && Database.data.characters.some((c) => c.id === data.hero)) this.useHero(data.hero);
+    // opened from the item maker: the item goes in the bag
+    if (data?.item && Database.data.items.some((i) => i.id === data.item) && this.s.items.length < 10)
+      this.s.items.push(data.item);
     // opened from Encounters: yours are edited in place, anyone else's become a new one
     this.editing = null;
     if (data?.encounter) {
@@ -159,7 +171,7 @@ export class BattleSandboxScene extends Phaser.Scene {
 
     benchBackdrop(this, 'BATTLE SANDBOX', versionLabel());
     const g = this.add.graphics();
-    const panelH = 19 * ROW_H + 10;
+    const panelH = 21 * ROW_H + 10;
     drawPanel(g, 8, TOP - 6, LEFT_W, panelH, { alpha: 0.9 });
     drawPanel(g, LEFT_W + 16, TOP - 6, W - LEFT_W - 24, panelH, { alpha: 0.9 });
     this.desc = pixelText(this, 16, H - 46, '', 8, css(UI.inkDim))
@@ -283,6 +295,30 @@ export class BattleSandboxScene extends Phaser.Scene {
         left: () => this.cyclePartner(-1),
         right: () => this.cyclePartner(1),
         desc: 'Who fights alongside the hero, at full HP.',
+      },
+      {
+        label: 'Add item',
+        value: () => {
+          const it = Database.data.items[s.itemPick % Database.data.items.length];
+          return it ? t(it.name) : '—';
+        },
+        left: () => (s.itemPick = cycle(s.itemPick, -1, Database.data.items.length)),
+        right: () => (s.itemPick = cycle(s.itemPick, 1, Database.data.items.length)),
+        confirm: () => {
+          const it = Database.data.items[s.itemPick % Database.data.items.length];
+          if (it && s.items.length < 10) s.items.push(it.id);
+        },
+        desc: 'Left/right: pick an item (yours from the item maker too). Confirm: put it in the bag (up to 10).',
+      },
+      {
+        label: 'Bag',
+        value: () =>
+          s.items.length
+            ? `${s.items.length}: ${s.items.map((i) => t(Database.item(i).name)).join(', ')}`
+            : 'empty',
+        left: () => void s.items.pop(),
+        confirm: () => (s.items = []),
+        desc: 'What the hero starts with. Left: take out the last item. Confirm: empty the bag.',
       },
       {
         label: 'First strike',
@@ -540,6 +576,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       enemies: this.s.enemies.filter((e): e is { id: string; slot: FormationSlot } => !!e),
       stage: Database.data.stages[this.s.stage].id,
       firstStrike: STRIKES[this.s.strike],
+      items: [...this.s.items],
     };
   }
 
@@ -558,6 +595,7 @@ export class BattleSandboxScene extends Phaser.Scene {
         Database.data.stages.findIndex((st) => st.id === b.stage),
       ),
       enemies: Array.from({ length: SLOTS }, (_, i) => (b.enemies[i] ? { ...b.enemies[i] } : null)),
+      items: [...(b.items ?? [])],
     });
   }
 

@@ -327,7 +327,8 @@ export class BattleScene extends Phaser.Scene {
       await this.playMove(e.turn, c.move, c.target);
     } else if (c.kind === 'item') {
       e.beginHeroAction();
-      this.director.track([this.views.get(c.target)!.sprite, me.sprite], 1.2);
+      const aim = this.views.get(c.target);
+      this.director.track(aim ? [aim.sprite, me.sprite] : [me.sprite], aim ? 1.2 : 1.05);
       await this.useItem(c.item, c.target);
     } else if (c.kind === 'defend') {
       e.defend();
@@ -456,13 +457,16 @@ export class BattleScene extends Phaser.Scene {
         const id = gs.data.items[Number(item.value)];
         const def = Database.item(id);
         this.menu!.active = false;
-        if (def.target === 'self') done({ kind: 'item', item: item.value, target: e.turn });
-        else
+        const choose = (ids: string[]) =>
           this.pickTarget(
-            e.enemies().map((f) => f.id),
+            ids,
             (target) => done({ kind: 'item', item: item.value, target }),
             () => this.pickItem(done, back),
           );
+        if (def.target === 'self') done({ kind: 'item', item: item.value, target: e.turn });
+        else if (def.target === 'all') done({ kind: 'item', item: item.value, target: 'all' });
+        else if (def.target === 'ally') choose(e.party().map((f) => f.id));
+        else choose(e.enemies().map((f) => f.id));
       },
     });
     this.ui(this.menu.setDepth(65));
@@ -969,24 +973,38 @@ export class BattleScene extends Phaser.Scene {
     const id = gs.takeItem(Number(slot));
     if (!id) return;
     const def = Database.item(id);
-    const user = this.views.get(this.engine.turn)!;
-    bus.emit('item.used', { id, by: this.engine.turn, target: targetId });
+    const e = this.engine;
+    const user = this.views.get(e.turn)!;
+    bus.emit('item.used', { id, by: e.turn, target: targetId });
+    e.log.push(`item ${e.turn} ${id} ${targetId}`);
     await this.popText(user, t(def.name).toUpperCase(), UI.good);
-    if (def.effect.heal) {
-      const who = this.engine.turn;
-      const healed = this.engine.healHero(def.effect.heal, who);
-      gs.setHp(user.f.defId, user.f.hp);
-      await this.popText(user, `+${healed}`, UI.good);
+    // healing and boosts go to the chosen ally (or the user); damage to one or all opponents
+    const ally = targetId === 'hero' || targetId === 'partner' ? this.views.get(targetId)! : user;
+    const fx = def.effect;
+    if (fx.heal) {
+      const healed = e.healHero(fx.heal, ally.f.id as 'hero' | 'partner');
+      gameState().setHp(ally.f.defId, ally.f.hp);
+      await this.popText(ally, `+${healed}`, UI.good);
     }
-    if (def.effect.grit) {
-      gs.setGrit(gs.data.grit + def.effect.grit);
-      await this.popText(user, `+${def.effect.grit}`, UI.grit);
+    if (fx.grit) {
+      gs.setGrit(gs.data.grit + fx.grit);
+      await this.popText(user, `+${fx.grit}`, UI.grit);
     }
-    if (def.effect.damage) {
-      const target = this.views.get(targetId)!;
-      const r = this.engine.damage(targetId, def.effect.damage);
-      await this.showHit(target, r.damage, r.ko);
-      if (r.ko) await this.knockOut(target);
+    if (fx.attackUp || fx.defenceUp) {
+      e.applyBoost(ally.f.id, fx.attackUp ?? 0, fx.defenceUp ?? 0, fx.turns ?? 3);
+      ally.sprite.setTintFill(0xffd070);
+      this.time.delayedCall(140, () => ally.sprite.clearTint());
+      const parts = [fx.attackUp ? `ATK +${fx.attackUp}` : '', fx.defenceUp ? `DEF +${fx.defenceUp}` : ''];
+      await this.popText(ally, parts.filter(Boolean).join(' '), UI.spark);
+    }
+    if (fx.damage) {
+      const targets = targetId === 'all' ? e.enemies().map((f) => f.id) : [targetId];
+      for (const tid of targets) {
+        const view = this.views.get(tid)!;
+        const r = e.damage(tid, fx.damage);
+        await this.showHit(view, r.damage, r.ko);
+        if (r.ko) await this.knockOut(view);
+      }
     }
   }
 

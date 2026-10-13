@@ -769,8 +769,37 @@ with sync_playwright() as p:
     page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
     wait_scene(page, "dev_hub")
 
-    # ── Encounters: play the saved one ──
+    # ── Item maker: a damage-everyone item, used in a fight ──
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(4)")
+    press(page, "Enter")
+    wait_scene(page, "item_maker")
+    page.wait_for_timeout(400)
+    im = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('item_maker'); {js} }})()")
+    im("s.addItem(); Object.assign(s.mine[s.mine.length - 1], { name: 'Ring Bell', kind: 'damage', amount: 2, target: 'all' }); s.refresh();")
+    page.screenshot(path=f"{out}/27b_item_maker.png")
+    im("s.tryIt();")
+    wait_scene(page, "battle_sandbox", 10000)
+    bag = page.evaluate("window.__game.scene.getScene('battle_sandbox').s.items")
+    check("c.me.i1" in bag, f"TRY puts the made item in the sandbox bag ({bag})")
+    page.evaluate("(() => { const s = window.__game.scene.getScene('battle_sandbox'); s.s.items = ['c.me.i1']; s.pressRow('FIGHT', 'confirm'); })()")
+    wait_scene(page, "battle", 10000)
+    wait_battle_input(page, "menu")
+    hp_before = battle_eval(page, "return s.engine.enemies().map(f => f.hp);")
+    battle_eval(page, "s.menu.setCursor(s.menu.items.findIndex(i => i.value === 'items'));")
+    press(page, "Enter", 400)
+    battle_eval(page, "s.menu.setCursor(0);")
+    press(page, "Enter", 300)
+    page.wait_for_function("window.__game.scene.getScene('battle').engine.log.some(l => l.startsWith('item hero c.me.i1 all'))", timeout=15000)
+    page.wait_for_timeout(1500)
+    hp_after = battle_eval(page, "return s.engine.enemies(false).map(f => f.hp);")
+    check(all(b - a >= 1 for b, a in zip(hp_before, hp_after)), f"the made item hits every opponent ({hp_before} -> {hp_after})")
+    fight(page, out, "27c_item")
+    wait_scene(page, "battle_sandbox", 10000)
+    page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
+    wait_scene(page, "dev_hub")
+
+    # ── Encounters: play the saved one ──
+    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(5)")
     press(page, "Enter")
     wait_scene(page, "encounters")
     page.wait_for_timeout(400)
@@ -792,7 +821,7 @@ with sync_playwright() as p:
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=5
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=6
     ):
         page.wait_for_timeout(400)
         for _ in range(i):

@@ -28,6 +28,8 @@ export interface Fighter {
   spiky: boolean;
   /** Damage taken is reduced by this until the fighter's next turn. */
   guard: number;
+  /** A stat boost from an item, and how many more of the fighter's turns it lasts. */
+  boost?: { attack: number; defence: number; turnsLeft: number };
   /** A charged move being wound up, and how many more turns until it's released. */
   charging?: { move: string; turnsLeft: number };
   xp: number;
@@ -249,8 +251,23 @@ export class BattleEngine {
   /** Called when Chispa or the partner commits to an action (Grit is spent by the caller's GameState). */
   beginHeroAction(): void {
     // a Defend lasts until that fighter's next turn
-    this.acting.guard = 0;
+    const f = this.acting;
+    f.guard = 0;
+    // a boost counts down one of its turns each time its holder acts
+    if (f.boost) {
+      if (f.boost.turnsLeft <= 0) {
+        f.boost = undefined;
+        this.log.push(`boost ${f.id} ends`);
+      } else f.boost.turnsLeft--;
+    }
     this.phase = 'acting';
+  }
+
+  /** An item's stat boost on Chispa or the partner, for the next `turns` of their turns. */
+  applyBoost(id: string, attack: number, defence: number, turns: number): void {
+    const f = this.get(id);
+    f.boost = { attack, defence, turnsLeft: turns };
+    this.log.push(`boost ${id} +${attack}atk +${defence}def ${turns}t`);
   }
 
   /** Applies one hit of a move. Moves with several "hit" steps call this once per step. */
@@ -273,11 +290,16 @@ export class BattleEngine {
       return { target: t.id, damage: 0, ko: false, guarded: true, guard, counter, attackerKo: a.hp === 0 };
     }
     const block = guard === 'block' ? rules.blockReduce : 0;
-    const damage = computeDamage(m.power, a.attack, t.defence, {
-      mult,
-      piercing: m.piercing,
-      guard: t.guard + block,
-    });
+    const damage = computeDamage(
+      m.power,
+      a.attack + (a.boost?.attack ?? 0),
+      t.defence + (t.boost?.defence ?? 0),
+      {
+        mult,
+        piercing: m.piercing,
+        guard: t.guard + block,
+      },
+    );
     t.hp = Math.max(0, t.hp - damage);
     if (guard === 'block') this.log.push(`guard ${t.id} block`);
     this.log.push(`${a.id} ${m.id} ${t.id} -${damage}${t.hp === 0 ? ' KO' : ''}`);

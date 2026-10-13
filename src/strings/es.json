@@ -148,5 +148,7 @@
   "hub.maker": "Creador de luchadores",
   "hub.maker.desc": "Crea tus propios héroes y enemigos: aspecto, estadísticas, movimientos. Se guardan en el enlace del juego.",
   "hub.encounters": "Encuentros",
-  "hub.encounters.desc": "Juega peleas guardadas: las tuyas, las de la comunidad y las de prueba. Guarda nuevas desde el sandbox."
+  "hub.encounters.desc": "Juega peleas guardadas: las tuyas, las de la comunidad y las de prueba. Guarda nuevas desde el sandbox.",
+  "hub.items": "Creador de objetos",
+  "hub.items.desc": "Crea tus propios objetos: curación, Garra, daño, mejoras y revivir. Ponlos en la bolsa del sandbox."
 }

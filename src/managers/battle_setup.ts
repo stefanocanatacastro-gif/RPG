@@ -17,6 +17,8 @@ export interface BattleSetup {
   enemies: { id: string; slot: FormationSlot }[];
   stage: string;
   firstStrike: 'player' | 'enemy' | null;
+  /** What's in the bag at the start (item ids, up to 10). */
+  items?: string[];
 }
 
 export function formationOf(s: BattleSetup): FormationDef {
@@ -33,6 +35,8 @@ export function setupProblems(s: BattleSetup): string[] {
   if (s.enemies.length === 0) out.push('it has no opponents');
   if (s.enemies.some((e) => !foes.has(e.id))) out.push('one of its opponents no longer exists');
   if (!Database.data.stages.some((st) => st.id === s.stage)) out.push('its arena no longer exists');
+  const things = new Set(Database.data.items.map((i) => i.id));
+  if ((s.items ?? []).some((i) => !things.has(i))) out.push('an item in its bag no longer exists');
   return out;
 }
 
@@ -76,5 +80,6 @@ export function simSetupOf(s: BattleSetup, skill: Skill): SimSetup {
     formation: formationOf(s),
     firstStrike: s.firstStrike,
     skill,
+    items: [...(s.items ?? [])],
   };
 }

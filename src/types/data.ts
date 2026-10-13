@@ -56,7 +56,16 @@ export interface EnemyDef {
 }
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';
-export type TargetRule = 'single' | 'all' | 'all_ground' | 'front' | 'self' | 'partner' | 'ally_lowest';
+export type TargetRule =
+  | 'single'
+  | 'all'
+  | 'all_ground'
+  | 'front'
+  | 'self'
+  | 'partner'
+  | 'ally_lowest'
+  /** Items: Chispa or the partner, the user's choice. */
+  | 'ally';
 export type CommandType =
   'none' | 'stomp' | 'timed_press' | 'hold_release' | 'mash' | 'rotate' | 'sequence' | 'ring';
 
@@ -104,6 +113,8 @@ export interface ItemDef {
     grit?: number;
     damage?: number;
     attackUp?: number;
+    defenceUp?: number;
+    /** How many of the target's turns a boost lasts. */
     turns?: number;
     /** Gets Chispa back up with this much HP when he's knocked out (works by itself, not from the menu). */
     revive?: number;

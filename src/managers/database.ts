@@ -33,7 +33,16 @@ export interface ValidationContext {
   stringKeys?: Set<string>;
 }
 
-const TARGETS: TargetRule[] = ['single', 'all', 'all_ground', 'front', 'self', 'partner', 'ally_lowest'];
+const TARGETS: TargetRule[] = [
+  'single',
+  'all',
+  'all_ground',
+  'front',
+  'self',
+  'partner',
+  'ally_lowest',
+  'ally',
+];
 const CATEGORIES = ['strike', 'aerial', 'grapple', 'enemy', 'partner'];
 const COMMANDS = ['none', 'stomp', 'timed_press', 'hold_release', 'mash', 'rotate', 'sequence', 'ring'];
 const STEPS = [
@@ -340,8 +349,12 @@ export const Database = {
    * Adds (or replaces) characters and enemies made in the fighter maker. Their
    * ids carry a prefix (the maker's), so they never clash with built-in ones.
    */
-  registerCustom(prefix: string, chars: CharacterDef[], foes: EnemyDef[]): void {
+  registerCustom(prefix: string, chars: CharacterDef[], foes: EnemyDef[], things: ItemDef[] = []): void {
     Database.unregisterCustom(prefix);
+    for (const it of things) {
+      DATA.items.push(it);
+      maps.items.set(it.id, it);
+    }
     for (const c of chars) {
       DATA.characters.push(c);
       maps.characters.set(c.id, c);
@@ -355,6 +368,8 @@ export const Database = {
     const gone = (id: string) => id.startsWith(prefix);
     for (const c of DATA.characters.filter((c) => gone(c.id))) maps.characters.delete(c.id);
     for (const e of DATA.enemies.filter((e) => gone(e.id))) maps.enemies.delete(e.id);
+    for (const it of DATA.items.filter((i) => gone(i.id))) maps.items.delete(it.id);
+    DATA.items = DATA.items.filter((i) => !gone(i.id));
     DATA.characters = DATA.characters.filter((c) => !gone(c.id));
     DATA.enemies = DATA.enemies.filter((e) => !gone(e.id));
   },

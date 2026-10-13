@@ -199,7 +199,23 @@ Dev hub → **Encounters** lists yours, the community's (everyone in the game li
 
 Encounters are stored with your fighters (`builds/<your id>`). The fight-setup code shared by the sandbox and Encounters is in `managers/battle_setup.ts` and `managers/custom_battle.ts`.
 
-Coming next in the builder: items, stage conditions, the crowd and Hype, a move maker, and a community gallery.
+## Items
+
+Dev hub → **Item maker**: make items with one effect each.
+
+| Effect | What it does | Target |
+| --- | --- | --- |
+| Heal HP | heals an amount | the user, or pick Chispa or the partner |
+| Restore Grit | gives Grit back | — |
+| Damage | hits for an amount | one opponent, or all of them |
+| Stat boost | attack +n and/or defence +n for some turns of the one who gets it | the user, or pick Chispa or the partner |
+| Revive | gets the hero back up with that much HP when knocked out (works by itself) | — |
+
+Each item has a name, an optional line of text (otherwise it describes itself), and an icon colour. Items are saved with your fighters and encounters, everyone in the game link can see and copy them, and built-in items can be copied too. **TRY** opens the sandbox with the item in the bag.
+
+The sandbox has an **Add item** row (pick any item, confirm to put it in) and a **Bag** row (left takes the last one out, confirm empties it): that bag is what the fight starts with, and encounters save it. The simulator uses the bag too: it heals when HP is low and keeps revives for a knockout, so ODDS count the items.
+
+Coming next in the builder: stage conditions, the crowd and Hype, a move maker, and a community gallery.
 
 ## Battle sandbox
 

@@ -8,7 +8,7 @@
 // (CharacterDef / EnemyDef) so battles, the sandbox and the simulator use them
 // like built-in ones.
 
-import type { AiRule, CharacterDef, EnemyDef, EnemyProp } from '../types/data';
+import type { AiRule, CharacterDef, EnemyDef, EnemyProp, ItemDef } from '../types/data';
 import { Database } from './database';
 import { addStrings } from './strings';
 import { registerSpriteKey } from './sprite_keys';
@@ -63,9 +63,28 @@ export interface Encounter {
   savedAt?: string;
 }
 
+/** An item made in the item maker. One kind of effect each. */
+export interface CustomItem {
+  /** Unique within its maker's set (i1, i2…). */
+  id: string;
+  name: string;
+  desc: string;
+  kind: 'heal' | 'grit' | 'damage' | 'boost' | 'revive';
+  /** HP healed, Grit given, damage dealt, or HP after a revive. */
+  amount: number;
+  /** Damage: one opponent or all of them. Heal/boost: the user, or a chosen ally. */
+  target: 'self' | 'ally' | 'single' | 'all';
+  attackUp?: number;
+  defenceUp?: number;
+  turns?: number;
+  /** Colour of its icon. */
+  color?: number;
+}
+
 export interface BuildSet {
   fighters: CustomFighter[];
   encounters?: Encounter[];
+  items?: CustomItem[];
   savedAt?: string;
 }
 
@@ -156,6 +175,63 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
   };
 }
 
+/** Turns a made item into normal game data. */
+export function toItemDef(owner: string, it: CustomItem): ItemDef {
+  const gid = globalId(owner, it.id);
+  addStrings({ [`${gid}.name`]: it.name || 'Mystery item', [`${gid}.desc`]: it.desc || itemSummary(it) });
+  const effect: ItemDef['effect'] =
+    it.kind === 'heal'
+      ? { heal: it.amount }
+      : it.kind === 'grit'
+        ? { grit: it.amount }
+        : it.kind === 'damage'
+          ? { damage: it.amount }
+          : it.kind === 'revive'
+            ? { revive: it.amount }
+            : { attackUp: it.attackUp ?? 0, defenceUp: it.defenceUp ?? 0, turns: it.turns ?? 3 };
+  const target =
+    it.kind === 'damage'
+      ? it.target === 'all'
+        ? 'all'
+        : 'single'
+      : it.kind === 'heal' || it.kind === 'boost'
+        ? it.target === 'ally'
+          ? 'ally'
+          : 'self'
+        : 'self';
+  return {
+    id: gid,
+    name: `${gid}.name`,
+    desc: `${gid}.desc`,
+    icon: '',
+    category: it.kind === 'damage' ? 'damage' : it.kind === 'boost' ? 'buff' : 'heal',
+    target,
+    effect,
+    price: Math.max(1, it.amount * 2),
+  };
+}
+
+/** One line saying what an item does (its description when none is written). */
+export function itemSummary(it: CustomItem): string {
+  const who = it.target === 'ally' ? 'Chispa or the partner' : 'the user';
+  switch (it.kind) {
+    case 'heal':
+      return `Heals ${it.amount} HP for ${who}.`;
+    case 'grit':
+      return `Restores ${it.amount} Grit.`;
+    case 'damage':
+      return `Deals ${it.amount} damage to ${it.target === 'all' ? 'every opponent' : 'one opponent'}.`;
+    case 'revive':
+      return `Gets the hero back up with ${it.amount} HP when knocked out. Works by itself.`;
+    case 'boost': {
+      const up = [it.attackUp ? `attack +${it.attackUp}` : '', it.defenceUp ? `defence +${it.defenceUp}` : '']
+        .filter(Boolean)
+        .join(', ');
+      return `${up || 'No boost'} for ${it.turns ?? 3} turns (${who}).`;
+    }
+  }
+}
+
 function register(owner: string, set: BuildSet): void {
   const chars: CharacterDef[] = [];
   const foes: EnemyDef[] = [];
@@ -164,7 +240,8 @@ function register(owner: string, set: BuildSet): void {
     if (d.char) chars.push(d.char);
     if (d.foe) foes.push(d.foe);
   }
-  Database.registerCustom(`c.${ownerTag(owner)}.`, chars, foes);
+  const things = (set.items ?? []).map((it) => toItemDef(owner, it));
+  Database.registerCustom(`c.${ownerTag(owner)}.`, chars, foes, things);
 }
 
 /** Loads every set it can see (all of them, in the link) and adds the fighters to the game. */
@@ -226,12 +303,30 @@ export const Builds = {
     return out;
   },
 
-  /** Saves this person's set (fighters, encounters, or both) and refreshes the game data. */
-  async saveMine(update: { fighters?: CustomFighter[]; encounters?: Encounter[] }): Promise<void> {
+  /** This person's own items. */
+  myItems(): CustomItem[] {
+    return structuredClone(sets.get(myOwnerId())?.items ?? []);
+  },
+
+  /** Everyone else's items, with their owner. */
+  otherItems(): { owner: string; item: CustomItem }[] {
+    const out: { owner: string; item: CustomItem }[] = [];
+    for (const [owner, set] of sets)
+      if (owner !== myOwnerId()) for (const it of set.items ?? []) out.push({ owner, item: it });
+    return out;
+  },
+
+  /** Saves this person's set (any of fighters, encounters, items) and refreshes the game data. */
+  async saveMine(update: {
+    fighters?: CustomFighter[];
+    encounters?: Encounter[];
+    items?: CustomItem[];
+  }): Promise<void> {
     const cur = sets.get(myOwnerId());
     const set: BuildSet = {
       fighters: structuredClone(update.fighters ?? cur?.fighters ?? []),
       encounters: structuredClone(update.encounters ?? cur?.encounters ?? []),
+      items: structuredClone(update.items ?? cur?.items ?? []),
       savedAt: new Date().toISOString(),
     };
     if (db && uid) await db.doc(`builds/${uid}`).set({ json: JSON.stringify(set), savedAt: set.savedAt! });

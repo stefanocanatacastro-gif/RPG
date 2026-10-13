@@ -148,5 +148,7 @@
   "hub.maker": "Fighter maker",
   "hub.maker.desc": "Make your own heroes and enemies: look, stats, moves. Saved to the game link for everyone.",
   "hub.encounters": "Encounters",
-  "hub.encounters.desc": "Play saved fights: yours, the community's and the test line-ups. Save new ones from the sandbox."
+  "hub.encounters.desc": "Play saved fights: yours, the community's and the test line-ups. Save new ones from the sandbox.",
+  "hub.items": "Item maker",
+  "hub.items.desc": "Make your own items: healing, Grit, damage, stat boosts and revives. Put them in a bag in the sandbox."
 }
