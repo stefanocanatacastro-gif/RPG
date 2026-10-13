@@ -29,3 +29,14 @@ export function englishKeys(): Set<string> {
 export function tf(key: string, vars: Record<string, string | number>): string {
   return t(key).replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
 }
+
+/** Adds or replaces text at runtime (rooms made in the editor bring their own). */
+export function addStrings(table: Record<string, string>, l: 'en' | 'es' = 'en'): void {
+  Object.assign(TABLES[l], table);
+}
+
+/** Text that's either a string-table key or written in place ({ en, es }). */
+export function tx(v: string | { en: string; es?: string }): string {
+  if (typeof v === 'string') return t(v);
+  return (lang === 'es' && v.es) || v.en;
+}

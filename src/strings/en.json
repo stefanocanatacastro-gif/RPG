@@ -122,5 +122,7 @@
   "npc.dock_kid.2": "Lucky for you, I know everyone. There, the gate's open.",
   "npc.dock_kid.after": "Go on, the gate's open. Don't tell anyone it was me.",
   "sign.octagon": "EAST: THE OCTAGON. Fighters only. No refunds.",
-  "trigger.test_a": "(A story trigger fired here. It only happens once.)"
+  "trigger.test_a": "(A story trigger fired here. It only happens once.)",
+  "hub.editor": "Room editor",
+  "hub.editor.desc": "Build and change rooms on a top-down plan, then walk around them. Saves to the game link."
 }

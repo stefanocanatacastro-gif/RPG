@@ -55,6 +55,13 @@ const PROMPTS: Record<InputDevice, Partial<Record<Action, string>>> = {
 
 const STICK_DEADZONE = 0.45;
 
+/** True for key presses aimed at a text field, select or button on the page. */
+export function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable;
+}
+
 class InputManager {
   private keysDown = new Set<string>();
   /** Keys pressed since the last poll, so a tap shorter than one frame still counts. */
@@ -79,7 +86,13 @@ class InputManager {
     this.installed = true;
     const gameCodes = new Set(Object.values(KEYS).flat());
 
+    // typing into a text box (the room editor) never moves the game
+    const typing = (e: KeyboardEvent) =>
+      e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
     window.addEventListener('keydown', (e) => {
+      if (typing(e)) return;
+      // typing in a text box (the room editor's panel) isn't game input
+      if (isTyping(e.target)) return;
       if (gameCodes.has(e.code)) e.preventDefault(); // stop Space/arrows scrolling the page
       this.keysDown.add(e.code);
       this.keysTapped.add(e.code);

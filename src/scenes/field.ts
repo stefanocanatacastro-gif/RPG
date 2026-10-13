@@ -7,6 +7,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
 import { input } from '../systems/input';
+import { IS_DEV } from '../systems/version';
 import { animKey } from '../systems/anim_builder';
 import { debugState } from '../systems/debug_state';
 import { Bar, BAR_STYLES, drawPanel } from '../ui/components';
@@ -43,7 +44,7 @@ import { drawRoom, type RoomView } from '../field/room_view';
 import { buildShape } from '../field/room_shape';
 import type { Condition, ObjectDef, RoomDef, RoomExit } from '../field/room_types';
 import { MessageBox, type Line } from '../ui/message_box';
-import { t, tf } from '../managers/strings';
+import { t, tf, tx } from '../managers/strings';
 import { blockDepth, type Block } from '../field/world';
 import { ROOMS } from '../field/rooms';
 import rules from '../data/rules.json';
@@ -116,6 +117,7 @@ export class FieldScene extends Phaser.Scene {
   private interactReadyAt = 0;
   private marker!: Phaser.GameObjects.Text;
   private lockedShown = false;
+  private editKey?: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('field');
@@ -136,6 +138,7 @@ export class FieldScene extends Phaser.Scene {
     this.talking = false;
     this.lockedShown = false;
     this.msg = new MessageBox(this);
+    this.editKey = this.input.keyboard?.addKey('F2', false);
     const width = this.shape.width;
     const view = drawRoom(this, this.room, this.shape);
     this.view = view;
@@ -348,6 +351,12 @@ export class FieldScene extends Phaser.Scene {
       return;
     }
 
+    // dev builds: F2 opens this room in the room editor
+    if (this.editKey?.isDown && IS_DEV) {
+      this.leaving = true;
+      SceneLoader.goto(this, 'room_editor', { room: this.roomId });
+      return;
+    }
     if (input.justPressed('menu')) {
       this.leaving = true;
       SceneLoader.goto(this, 'dev_hub', { cursor: 0 });
@@ -402,7 +411,7 @@ export class FieldScene extends Phaser.Scene {
       b.z = prev.z;
       if (!this.lockedShown) {
         this.lockedShown = true;
-        void this.say([{ text: t(exit.lockedText ?? 'field.locked') }]);
+        void this.say([{ text: tx(exit.lockedText ?? 'field.locked') }]);
       }
     } else if (!this.nearExit(b.x, b.z)) this.lockedShown = false;
     this.checkTriggers();
@@ -527,12 +536,12 @@ export class FieldScene extends Phaser.Scene {
       case 'npc': {
         // turn to face the player
         o.sprite?.setFlipX(this.player.body.x < def.x);
-        await this.say(def.lines.map((k) => ({ name: t(def.name), text: t(k) })));
+        await this.say(def.lines.map((k) => ({ name: tx(def.name), text: tx(k) })));
         if (def.setFlag) gs.setFlag(def.setFlag);
         break;
       }
       case 'sign':
-        await this.say(def.lines.map((k) => ({ text: t(k) })));
+        await this.say(def.lines.map((k) => ({ text: tx(k) })));
         break;
       case 'chest': {
         if (gs.isSet(def.flag)) return this.say([{ text: t('field.empty') }]);
@@ -566,7 +575,7 @@ export class FieldScene extends Phaser.Scene {
       if (!entered) continue;
       if (def.once !== false && def.setFlag && gameState().isSet(def.setFlag)) continue;
       if (def.setFlag) gameState().setFlag(def.setFlag);
-      if (def.lines?.length) void this.say(def.lines.map((k) => ({ text: t(k) })));
+      if (def.lines?.length) void this.say(def.lines.map((k) => ({ text: tx(k) })));
     }
   }
 

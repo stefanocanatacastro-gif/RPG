@@ -49,7 +49,7 @@ npm run format
 ```
 src/
   main.ts            game config: 640×360, pixel art, integer scaling
-  scenes/            title, dev hub, field, battle, battle sandbox, overlays (debug, curtain)
+  scenes/            title, dev hub, field, battle, battle sandbox, room editor, overlays (debug, curtain)
   field/             the 3D world: units, projection, movement, room drawing
   battle/            battle system (M1)
   ui/                pixel panels, menus, bars, fonts, theme colours
@@ -104,6 +104,17 @@ Walk up to a person or thing and a **!** appears over it; the jump button (Z / A
 **Story flags drive the rooms.** Any door, enemy or object can carry `if` (only while a flag is set) and `unless` (only while it isn't), so a character can say something different after an event, or disappear. Doors and gates can be locked with `requires` (a flag) and `lockedText`. Enemies with `"respawn": false` are story fights: once beaten they stay gone (a `beaten:<room>:<id>` flag). The debug menu's flag list shows every flag the rooms use.
 
 The test rooms show all of it: in room B the kid unlocks the Octagon gate when you talk to him (and says something else afterwards), plus a sign, a chest and a heal block; room A has a one-time trigger by its east door; the Bruiser crew in the Octagon is a story fight.
+
+## Room editor
+
+Dev hub → *Room editor* (or **F2** while walking around a room) is where rooms get built. It shows the room as a top-down plan: the back wall at the top, the front edge (where the game camera stands) at the bottom, one grid square per unit, an amber line at every screen.
+
+- **Tools** (right panel): select, block, light, spawn, exit, enemy, person, sign, chest, heal, trigger. Pick one and click the plan to place it; it's then selected so you can set it up.
+- **Select** to pick, drag to move (snaps to half units, hold Shift for tenths), drag the white corner to resize blocks, triggers and lights. Delete removes, Ctrl+D copies, Ctrl+Z undoes, arrow keys nudge, `[` `]` change a block's height. Right-drag or drag empty space to pan, mouse wheel to zoom.
+- **Properties** (right panel): click `<` `>` to step a value (Shift for bigger steps), click a blue value to type it. People's and signs' lines are typed straight in, one line per text box, in English and (separately) Spanish. Flag fields take any flag name.
+- With nothing selected, the panel shows the room itself: name, look (harbor, warehouse, arena), screens, depth, wall height, rectangle or octagon, fence, and any problems the room checker finds.
+- **PLAY** (or P) walks into the room as it is now, from the selected spawn point or `start`; **F2** comes back. **NEW** makes an empty room, **REVERT** throws away saved changes.
+- **SAVE** (Ctrl+S): in the published game link, rooms are saved to the link's own database, so everyone who opens the link gets them and Claude can read them back into `src/data/rooms/`. Running locally they're saved in the browser instead. The game lays saved rooms over the shipped ones at start-up.
 
 ## Battle presentation
 

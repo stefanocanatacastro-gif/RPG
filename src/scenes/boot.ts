@@ -9,6 +9,7 @@ import { englishKeys } from '../managers/strings';
 import { gameState, hasGame } from '../managers/game_state';
 import { rng } from '../systems/rng';
 import { debugState, setDebug } from '../systems/debug_state';
+import { loadSavedRooms } from '../managers/room_store';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -38,7 +39,12 @@ export class BootScene extends Phaser.Scene {
       battleSeed: this.registry.get('battleSeed') ?? null,
     }));
 
-    waitForPixelFont().then((ok) => {
+    // rooms saved from the room editor are laid over the shipped ones, then checked too
+    const rooms = loadSavedRooms().then((where) => {
+      this.registry.set('roomStore', where);
+      Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
+    });
+    Promise.all([waitForPixelFont(), rooms]).then(([ok]) => {
       this.registry.set('fontReady', ok);
       document.getElementById('boot-note')?.remove();
       // Overlay scenes run for the whole session, above everything else.

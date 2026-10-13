@@ -122,5 +122,7 @@
   "npc.dock_kid.2": "Por suerte, yo conozco a todos. Listo, la reja está abierta.",
   "npc.dock_kid.after": "Anda, la reja está abierta. No digas que fui yo.",
   "sign.octagon": "ESTE: EL OCTÁGONO. Solo luchadores. Sin reembolsos.",
-  "trigger.test_a": "(Aquí se activó un evento de historia. Solo pasa una vez.)"
+  "trigger.test_a": "(Aquí se activó un evento de historia. Solo pasa una vez.)",
+  "hub.editor": "Editor de salas",
+  "hub.editor.desc": "Construye y cambia salas en un plano, y luego recórrelas. Se guarda en el enlace del juego."
 }

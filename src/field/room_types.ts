@@ -2,6 +2,13 @@ import type { Block, Pt } from './world';
 import type { Facing } from '../managers/game_state';
 
 /**
+ * Text in a room: a string-table key, or the words themselves written into the
+ * room (English, plus Spanish when it's been translated). The room editor
+ * writes the second form.
+ */
+export type RoomText = string | { en: string; es?: string };
+
+/**
  * Story-flag conditions any door, enemy or object can carry:
  * `if` — only while this flag is set; `unless` — only while it isn't.
  */
@@ -15,7 +22,7 @@ export interface Lock {
   /** Flag that must be set for the way to open. */
   requires?: string;
   /** What the player is told when they try a locked way (string key). */
-  lockedText?: string;
+  lockedText?: RoomText;
 }
 
 /** A room as stored in data. All sizes and positions are world units. */
@@ -77,15 +84,15 @@ interface ObjectBase extends Condition {
 export interface NpcDef extends ObjectBase {
   kind: 'npc';
   sprite: string;
-  name: string;
-  lines: string[];
+  name: RoomText;
+  lines: RoomText[];
   /** Set once the player has heard them out. */
   setFlag?: string;
 }
 
 export interface SignDef extends ObjectBase {
   kind: 'sign';
-  lines: string[];
+  lines: RoomText[];
 }
 
 /** An item box: opens once (its flag remembers), gives the item. */
@@ -106,7 +113,7 @@ export interface TriggerDef extends ObjectBase {
   w: number;
   d: number;
   setFlag?: string;
-  lines?: string[];
+  lines?: RoomText[];
   /** Fires only once (needs setFlag to remember). Default true. */
   once?: boolean;
 }

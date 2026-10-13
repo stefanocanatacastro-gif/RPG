@@ -663,8 +663,53 @@ with sync_playwright() as p:
     wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
+    # ── Room editor ──
+    page.wait_for_timeout(400)
+    press(page, "ArrowDown")
+    press(page, "ArrowDown")
+    press(page, "Enter")
+    wait_scene(page, "room_editor")
+    page.wait_for_timeout(400)
+    ed = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('room_editor'); {js} }})()")
+    ed("s.switchRoom('test_b');")
+    page.screenshot(path=f"{out}/20_editor.png")
+    nb = ed("return s.room.blocks.length;")
+    # place a block by clicking with the block tool
+    box = page.locator("#game canvas").bounding_box()
+    k = box["width"] / 640
+    ed("s.tool = 'block'; s.refresh(false);")
+    # click the middle of the plan
+    page.mouse.click(box["x"] + 227 * k, box["y"] + 180 * k)
+    page.wait_for_timeout(300)
+    check(ed("return s.room.blocks.length;") == nb + 1, "the block tool places a block where you click")
+    page.keyboard.press("Control+z")
+    page.wait_for_timeout(200)
+    check(ed("return s.room.blocks.length;") == nb, "Ctrl+Z undoes it")
+    ed("s.place('npc', 6, 2);")
+    obj = ed("return s.room.objects[s.room.objects.length - 1];")
+    check(obj["kind"] == "npc" and ed("return s.problems.length;") == 0, f"a new person is valid room data ({obj['id']})")
+    page.screenshot(path=f"{out}/21_editor_npc.png")
+    ed("s.play();")
+    wait_scene(page, "field", 10000)
+    page.wait_for_timeout(600)
+    ids = page.evaluate("window.__game.scene.getScene('field').objects.map(o => o.def.id)")
+    check(obj["id"] in ids, f"PLAY walks into the edited room ({obj['id']} is there)")
+    page.screenshot(path=f"{out}/22_editor_play.png")
+    press(page, "F2", 300)
+    wait_scene(page, "room_editor", 10000)
+    page.keyboard.press("Control+s")
+    page.wait_for_timeout(400)
+    saved = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.rooms') || '{}')")
+    check("test_b" in saved and any(o["id"] == obj["id"] for o in saved["test_b"].get("objects", [])), "Ctrl+S saves the room")
+    ed("s.revert();")
+    page.wait_for_timeout(300)
+    check(not any(o["id"] == obj["id"] for o in ed("return s.room.objects;")), "REVERT puts the room back as it ships")
+    ed("s.leave();")
+    wait_scene(page, "dev_hub")
+    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
+
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=2
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=3
     ):
         page.wait_for_timeout(400)
         for _ in range(i):
