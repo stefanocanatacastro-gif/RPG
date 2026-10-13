@@ -34,10 +34,44 @@ export const PALETTE: number[] = [
   0x1d2a4a, 0x3fa7f0, 0x5fd068, 0x2e7a3a, 0x9f6fd8, 0x5b3a8a, 0x1b1622, 0x5b5068, 0xa79cb6, 0xff70a0,
 ];
 
+/** The pictures a fighter can have: standing, attacking, getting hit. */
+export const POSES = ['idle', 'attack', 'hurt'] as const;
+export type Pose = (typeof POSES)[number];
+
+/** How an uploaded picture is drawn in the game. */
+export interface PictureSettings {
+  /** Height on screen, in game pixels. */
+  height: number;
+  /** Size of one picture pixel in game pixels: 1 = smooth, 2–4 = chunkier pixel art. */
+  pixel: number;
+  /** A dark 1-pixel outline around the figure. */
+  outline: boolean;
+  /** The picture faces left: turn it to face right (the way heroes face). */
+  flip: boolean;
+}
+
+export const DEFAULT_PICTURE: PictureSettings = { height: 96, pixel: 2, outline: true, flip: false };
+
 export interface FighterLook {
-  /** 'wrestler' = the animated wrestler body in custom colours, or an existing sprite key. */
+  /** 'wrestler' = the animated wrestler body in custom colours, 'picture' = uploaded pictures, or a sprite key. */
   base: string;
   colors?: Partial<Record<ColorSlot, number>>;
+  /** Uploaded pictures (background cleared, cropped, PNG data URLs). Idle is the main one. */
+  pictures?: Partial<Record<Pose, string>>;
+  picture?: PictureSettings;
+}
+
+/** A special rule in an enemy's pattern, on top of how often it uses each move. */
+export interface CustomAiRule {
+  move: string;
+  /**
+   * opener    — on the first round
+   * hp_below  — whenever its HP is at or below `value`%
+   * ally_hurt — when a teammate is at or below `value`% (for healing moves)
+   * every     — every `value` rounds
+   */
+  when: 'opener' | 'hp_below' | 'ally_hurt' | 'every';
+  value?: number;
 }
 
 export interface CustomFighter {
@@ -60,7 +94,15 @@ export interface CustomFighter {
   weights?: Record<string, number>;
   /** Enemies: a move used whenever HP is at half or below. */
   lowHpMove?: string;
+  /** Enemies: special rules (up to 4) on top of the weights. */
+  rules?: CustomAiRule[];
   scout?: string;
+  /** A nickname shown with the name ("The Harbor Hammer"). */
+  title?: string;
+  /** What they shout: enemies at the start of a fight, heroes when they play to the crowd. */
+  line?: string;
+  /** Heroes: a short story. */
+  bio?: string;
 }
 
 /** A saved fight: a sandbox setup with a title. */
@@ -128,6 +170,9 @@ export interface BuildSet {
 }
 
 const LOCAL_KEY = 'kid-chispa.builds';
+/** Everything one person makes is one saved document; pictures count toward this. */
+export const MAX_SET_CHARS = 900_000;
+let afterChange: (() => Promise<void> | void) | null = null;
 let db: DbLike | null = null;
 let uid: string | null = null;
 /** Everyone's sets, by owner id ('me' outside the link). */
@@ -162,7 +207,42 @@ export function isMine(id: string): boolean {
 
 /** Texture key for a fighter's look. */
 function textureFor(gid: string, look: FighterLook): string {
-  return look.base === 'wrestler' ? `spr_custom_${gid.replace(/\./g, '_')}` : look.base;
+  return look.base === 'wrestler' || look.base === 'picture'
+    ? `spr_custom_${gid.replace(/\./g, '_')}`
+    : look.base;
+}
+
+/** An enemy's special rules as engine AI rules. */
+export function rulesToAi(rules: CustomAiRule[]): AiRule[] {
+  return rules.map((r): AiRule => {
+    const pct = Math.max(1, Math.min(100, r.value ?? 50)) / 100;
+    switch (r.when) {
+      case 'opener':
+        return { move: r.move, weight: 1, priority: 2, fromRound: 1, everyRounds: 9999 };
+      case 'hp_below':
+        return { move: r.move, weight: 1, priority: 1, whenHpBelow: pct };
+      case 'ally_hurt':
+        return { move: r.move, weight: 1, priority: 1, whenAllyHpBelow: pct };
+      case 'every': {
+        const n = Math.max(2, Math.min(9, r.value ?? 3));
+        return { move: r.move, weight: 1, priority: 1, fromRound: n, everyRounds: n };
+      }
+    }
+  });
+}
+
+/** A rule in words, for the maker and cards. */
+export function ruleText(r: CustomAiRule, moveName: string): string {
+  switch (r.when) {
+    case 'opener':
+      return `${moveName} to open the fight`;
+    case 'hp_below':
+      return `${moveName} when its HP is at ${r.value ?? 50}% or less`;
+    case 'ally_hurt':
+      return `${moveName} when a teammate is at ${r.value ?? 50}% or less`;
+    case 'every':
+      return `${moveName} every ${r.value ?? 3} rounds`;
+  }
 }
 
 /** Turns a maker's fighter into normal game data. */
@@ -171,7 +251,16 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
   const name = `${gid}.name`;
   addStrings({ [name]: f.name || 'Nameless' });
   const sprite = textureFor(gid, f.look);
-  if (f.look.base === 'wrestler') registerSpriteKey(sprite);
+  if (f.look.base === 'wrestler' || f.look.base === 'picture') registerSpriteKey(sprite);
+  const extra: { title?: string; line?: string } = {};
+  if (f.title) {
+    extra.title = `${gid}.title`;
+    addStrings({ [extra.title]: f.title });
+  }
+  if (f.line) {
+    extra.line = `${gid}.line`;
+    addStrings({ [extra.line]: f.line });
+  }
   looks.set(gid, f.look);
   if (f.kind === 'hero')
     return {
@@ -184,6 +273,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
         attack: f.attack,
         defence: f.defence,
         moves: [...f.moves],
+        ...extra,
       },
     };
   const scout = `${gid}.scout`;
@@ -194,6 +284,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
     .map((m) => ({ move: m, weight: weights[m] ?? 1 }));
   if (f.lowHpMove && f.moves.includes(f.lowHpMove))
     ai.push({ move: f.lowHpMove, weight: 1, priority: 1, whenHpBelow: 0.5 });
+  ai.push(...rulesToAi((f.rules ?? []).filter((r) => f.moves.includes(r.move))));
   if (ai.length === 0 && f.moves[0]) ai.push({ move: f.moves[0], weight: 1 });
   return {
     foe: {
@@ -210,6 +301,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
       moves: [...f.moves],
       ai,
       scout,
+      ...extra,
     },
   };
 }
@@ -539,7 +631,12 @@ export const Builds = {
       moves: structuredClone(update.moves ?? cur?.moves ?? []),
       savedAt: new Date().toISOString(),
     };
-    if (db && uid) await db.doc(`builds/${uid}`).set({ json: JSON.stringify(set), savedAt: set.savedAt! });
+    const json = JSON.stringify(set);
+    if (json.length > MAX_SET_CHARS)
+      throw new Error(
+        `too big to save (${Math.round(json.length / 1024)} KB of ${Math.round(MAX_SET_CHARS / 1024)}): use fewer or smaller pictures`,
+      );
+    if (db && uid) await db.doc(`builds/${uid}`).set({ json, savedAt: set.savedAt! });
     else
       try {
         localStorage.setItem(LOCAL_KEY, JSON.stringify(set));
@@ -548,6 +645,19 @@ export const Builds = {
       }
     sets.set(myOwnerId(), set);
     register(myOwnerId(), set);
+    await afterChange?.();
+  },
+
+  /** Runs after every save (the game uses it to draw new pictures). */
+  onChange(fn: () => Promise<void> | void): void {
+    afterChange = fn;
+  },
+
+  /** How big this person's set is when saved, and the most it may be. */
+  sizeOf(update: { fighters?: CustomFighter[] }): { chars: number; max: number } {
+    const cur = sets.get(myOwnerId());
+    const set = { ...(cur ?? { fighters: [] }), ...update };
+    return { chars: JSON.stringify(set).length, max: MAX_SET_CHARS };
   },
 
   /**

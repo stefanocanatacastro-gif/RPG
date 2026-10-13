@@ -11,7 +11,8 @@ import { rng } from '../systems/rng';
 import { debugState, setDebug } from '../systems/debug_state';
 import { loadSavedRooms } from '../managers/room_store';
 import { loadSaveSlots } from '../managers/save_manager';
-import { loadBuilds } from '../managers/builds';
+import { Builds, loadBuilds } from '../managers/builds';
+import { preparePictures } from '../systems/pictures';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -46,9 +47,12 @@ export class BootScene extends Phaser.Scene {
     // rooms saved from the room editor are laid over the shipped ones, then checked too
     // rooms from the room editor and fighters from the fighter maker join the
     // shipped data; then everything is checked together
-    const rooms = Promise.all([loadSavedRooms(), loadBuilds()]).then(([where, builds]) => {
+    const rooms = Promise.all([loadSavedRooms(), loadBuilds()]).then(async ([where, builds]) => {
       this.registry.set('roomStore', where);
       this.registry.set('buildStore', builds);
+      // uploaded fighter pictures become textures now, and again after every save
+      await preparePictures(this.textures);
+      Builds.onChange(() => preparePictures(this.textures));
       Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
     });
     const saves = loadSaveSlots().then((where) => this.registry.set('saveStore', where));

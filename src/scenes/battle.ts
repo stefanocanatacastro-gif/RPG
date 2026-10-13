@@ -25,7 +25,9 @@ import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle
 import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
 import { isCustomId } from '../managers/builds';
-import { ensureLook } from '../systems/custom_looks';
+import { ensureLook, isPictureLook } from '../systems/custom_looks';
+import { poseKey } from '../systems/pictures';
+import { makePlaceholder } from '../systems/placeholder';
 import { CROWD_DENSITY, SPECIALS, conditionLines, goalText, hazard, special } from '../battle/conditions';
 import type { RoundEvent } from '../battle/engine';
 
@@ -171,14 +173,16 @@ export class BattleScene extends Phaser.Scene {
     // Kid Chispa uses the test wrestler until his real art exists; made fighters bring their own look
     const texture = f.defId === 'chispa' ? HERO_TEXTURE : f.sprite;
     if (isCustomId(f.defId)) ensureLook(this, f.defId);
+    // a picture still loading (or a missing sprite) shows as a placeholder box rather than nothing
+    if (!this.textures.exists(texture)) makePlaceholder(this, { key: texture, w: 72, h: 96 });
     const animated = this.anims.exists(animKey(texture, 'idle'));
     const sprite = this.add
       .sprite(home.x, home.y, texture, animated ? 'idle_00' : undefined)
       .setOrigin(0.5, 1)
       .setDepth(10 + f.order);
     if (animated) sprite.play(animKey(texture, 'idle'));
-    // animated bodies are drawn facing right: enemies turn to face the hero
-    const baseFlip = f.side === 'enemy' && animated;
+    // animated bodies and uploaded pictures face right: enemies turn to face the hero
+    const baseFlip = f.side === 'enemy' && (animated || (isCustomId(f.defId) && isPictureLook(f.defId)));
     sprite.setFlipX(baseFlip);
     const view: FighterView = { f, sprite, shadow, home, texture, baseFlip };
     if (f.side === 'enemy') {
@@ -329,6 +333,12 @@ export class BattleScene extends Phaser.Scene {
     } else {
       await this.banner(t('battle.start'), UI.ink);
     }
+    // a made enemy with something to say says it before the bell
+    const talker = e.enemies().find((f) => Database.enemy(f.defId).line);
+    if (talker) {
+      const d = Database.enemy(talker.defId);
+      await this.quote(this.views.get(talker.id)!, t(d.name), t(d.line!));
+    }
     if (e.roundGoal !== null) await this.caption(goalText(e.cond), UI.spark);
     e.begin(this.start.firstStrike === 'enemy' ? 'enemy' : null);
     if (e.enemies().length === 0) e.phase = 'victory';
@@ -403,6 +413,8 @@ export class BattleScene extends Phaser.Scene {
       e.beginHeroAction();
       const got = e.appeal();
       this.director.track([me.sprite], 1.3, 15);
+      const line = Database.character(me.f.defId).line;
+      if (line) await this.quote(me, t(me.f.name), t(line));
       await this.tween({ targets: me.sprite, y: me.sprite.y - 18, duration: 110, yoyo: true, repeat: 1 });
       this.arena.cheer(2);
       await this.popText(me, `${t('battle.hype')} +${Math.round(got * 10) / 10}`, UI.hype);
@@ -773,6 +785,8 @@ export class BattleScene extends Phaser.Scene {
           break;
         }
         case 'hit': {
+          const unpose = this.pose(actor, 'attack');
+          this.time.delayedCall(420, unpose);
           // an enemy attacking the hero: wind up and strike, while the player can Block or Reverse
           let guard: GuardResult = 'none';
           if (actor.f.side === 'enemy' && target.f.side === 'hero' && !opts.firstStrike) {
@@ -889,6 +903,8 @@ export class BattleScene extends Phaser.Scene {
     };
     drawPanel(add(this.add.graphics()), px, py, pw, ph, { alpha: 0.96 });
     add(pixelText(this, px + 21, py + 18, t(def.name).toUpperCase(), 24, css(UI.spark)).setOrigin(0, 0));
+    if (def.title)
+      add(pixelText(this, px + pw - 21, py + 24, `"${t(def.title)}"`, 16, css(UI.inkDim)).setOrigin(1, 0));
     add(
       pixelText(
         this,
@@ -990,6 +1006,31 @@ export class BattleScene extends Phaser.Scene {
     await this.popText(v, t('battle.staggered'), UI.good);
   }
 
+  /** Someone's line in a speech panel near the top, long enough to read. */
+  private async quote(v: FighterView, name: string, text: string): Promise<void> {
+    this.director.track([v.sprite], 1.3, 15);
+    this.engine.log.push(`quote ${v.f.id}`);
+    const w = Math.min(W - 120, Math.max(360, text.length * 16 + 60));
+    const body = this.ui(
+      pixelText(this, W / 2, 168, `"${text}"`, 16, css(UI.ink))
+        .setWordWrapWidth(w - 48)
+        .setAlign('center')
+        .setLineSpacing(8),
+    );
+    const h = Math.ceil(body.height) + 54;
+    const g = this.ui(this.add.graphics());
+    drawPanel(g, W / 2 - w / 2, 132, w, h, { alpha: 0.95 });
+    const who = this.ui(pixelText(this, W / 2, 144, name.toUpperCase(), 16, css(UI.spark)));
+    g.setDepth(1);
+    body.setDepth(2);
+    who.setDepth(2);
+    await this.wait(Math.min(3200, 1100 + text.length * 30));
+    await this.tween({ targets: [g, body, who], alpha: 0, duration: 180 });
+    g.destroy();
+    body.destroy();
+    who.destroy();
+  }
+
   /** Names an enemy's move in a small panel at the top of the screen. */
   private async caption(text: string, color: number): Promise<void> {
     const w = Math.max(240, text.length * 16 + 48);
@@ -1070,7 +1111,20 @@ export class BattleScene extends Phaser.Scene {
     if (this.hasAnim(v, anim)) v.sprite.play(animKey(v.texture, anim));
   }
 
-  /** Plays a one-shot animation; placeholder sprites get a quick lunge instead. */
+  /**
+   * Shows a made fighter's attack or hurt picture, if it has one. Returns a
+   * function that puts the standing picture back.
+   */
+  private pose(v: FighterView, pose: 'attack' | 'hurt'): () => void {
+    const k = poseKey(v.texture, pose);
+    if (this.hasAnim(v, 'idle') || !this.textures.exists(k)) return () => undefined;
+    v.sprite.setTexture(k);
+    return () => {
+      if (v.sprite.texture.key === k) v.sprite.setTexture(v.texture);
+    };
+  }
+
+  /** Plays a one-shot animation; sprites without one get a quick lunge instead (in their attack pose, if any). */
   private async playAnimOnce(v: FighterView, anim: string): Promise<void> {
     if (this.hasAnim(v, anim)) {
       v.sprite.play(animKey(v.texture, anim));
@@ -1078,6 +1132,8 @@ export class BattleScene extends Phaser.Scene {
       this.playAnim(v, 'idle');
     } else {
       const dir = v.f.side === 'hero' ? 1 : -1;
+      const restore = this.pose(v, 'attack');
+      this.time.delayedCall(260, restore);
       await this.tween({
         targets: v.sprite,
         x: v.sprite.x + dir * 15,
@@ -1097,6 +1153,8 @@ export class BattleScene extends Phaser.Scene {
     s.setTintFill(0xffffff);
     this.time.delayedCall(70, () => s.clearTint());
     void this.popText(target, String(damage), damage > 0 ? UI.spark : UI.inkDim);
+    // a made fighter's hurt picture, for a moment
+    if (damage > 0 && !ko) this.time.delayedCall(380, this.pose(target, 'hurt'));
     // hit-stop: everything freezes for a moment on impact
     await this.wait(damage > 0 ? 90 : 40);
     if (target.f.side === 'hero') {

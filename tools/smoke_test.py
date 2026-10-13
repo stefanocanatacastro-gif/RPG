@@ -797,7 +797,29 @@ with sync_playwright() as p:
     fm = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('fighter_maker'); {js} }})()")
     fm("s.addFighter('hero'); s.mine[s.mine.length - 1].name = 'Test Hero'; s.mine[s.mine.length - 1].hp = 30; s.refresh();")
     fm("s.addFighter('enemy'); s.mine[s.mine.length - 1].name = 'Test Rival'; s.refresh();")
+    # a picture for the rival: a figure drawn on a white background, standing and attacking
+    draw = """(pose) => { const c = document.createElement('canvas'); c.width = 120; c.height = 160;
+      const x = c.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, 120, 160);
+      x.fillStyle = '#d8314b'; x.fillRect(35, 20, 50, 60); x.fillStyle = '#2a6fd8'; x.fillRect(30, 80, 60, 70);
+      x.fillStyle = '#ffffff'; x.fillRect(50, 35, 8, 8);
+      if (pose === 'attack') { x.fillStyle = '#f2c14e'; x.fillRect(85, 60, 30, 14); }
+      return c.toDataURL('image/png'); }"""
+    page.evaluate("(async () => { const d = " + draw + "; const s = window.__game.scene.getScene('fighter_maker'); await s.usePicture('idle', d('idle')); await s.usePicture('attack', d('attack')); })()")
+    fm("const f = s.mine[s.mine.length - 1]; f.title = 'The Test Pattern'; f.line = 'Smile for the camera!'; s.refresh();")
+    look = fm("const f = s.mine[s.mine.length - 1]; return [f.look.base, Object.keys(f.look.pictures || {}).sort()];")
+    check(look == ["picture", ["attack", "idle"]], f"the maker takes uploaded pictures for a fighter ({look})")
+    clean = page.evaluate("""(async () => {
+      const f = window.__game.scene.getScene('fighter_maker').mine.at(-1);
+      const img = new Image(); img.src = f.look.pictures.idle; await img.decode();
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      return [img.width, img.height, x.getImageData(0, 0, 1, 1).data[3]]; })()""")
+    check(clean[0] == 60 and clean[1] == 130 and clean[2] == 0, f"the upload is cropped to the figure with the white background cleared ({clean})")
+    page.wait_for_timeout(300)
     page.screenshot(path=f"{out}/25_maker.png")
+    fm("s.previewPose = 'attack'; s.refresh();")
+    page.wait_for_timeout(200)
+    page.screenshot(path=f"{out}/25b_maker_attack_pose.png")
     check(fm("return s.problems.length;") == 0, "a new hero and enemy are valid fighters")
     fm("s.save();")
     page.wait_for_timeout(400)
@@ -812,6 +834,8 @@ with sync_playwright() as p:
     wait_battle_input(page, "menu")
     lead = battle_eval(page, "return [s.engine.hero.defId, s.engine.hero.maxHp, s.engine.enemies()[0].defId];")
     check(lead == ["c.me.f1", 30, "c.me.f2"], f"the made hero leads the fight against the made enemy ({lead})")
+    rival = battle_eval(page, "const v = s.views.get('e0'); return [v.sprite.texture.key, v.sprite.flipX, s.textures.exists('spr_custom_c_me_f2_attack'), s.engine.log.includes('quote e0')];")
+    check(rival == ["spr_custom_c_me_f2", True, True, True], f"the rival fights in its picture, facing the hero, says its line ({rival})")
     page.screenshot(path=f"{out}/26_maker_battle.png")
     phase = fight(page, out, "27_maker")
     check(phase == "victory", f"the made fighters fight it out ({phase})")

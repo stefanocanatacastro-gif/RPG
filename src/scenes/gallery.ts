@@ -407,11 +407,14 @@ export class GalleryScene extends Phaser.Scene {
       const key = Builds.lookOf(gid)?.key;
       if (key && this.textures.exists(key)) {
         const frame = this.textures.get(key).has('idle_00') ? 'idle_00' : undefined;
-        const img = this.add.image(CARD.x + CARD.w - 70, CARD.y + 180, key, frame).setOrigin(0.5, 1);
+        const img = this.add.image(CARD.x + CARD.w - 80, CARD.y + 240, key, frame).setOrigin(0.5, 1);
         if (f.kind === 'enemy') img.setFlipX(true);
+        if (img.height > 200) img.setVisible(false);
         this.dyn.push(img);
       }
       line(f.kind === 'hero' ? 'HERO' : 'ENEMY', UI.grit);
+      if (f.title) line(`"${f.title}"`, UI.spark);
+      if (f.line) line(`Says: ${f.line}`, UI.inkDim);
       line(`HP ${f.hp}  ATK ${f.attack}  DEF ${f.defence}`);
       if (f.kind === 'hero') line(`Grit ${f.grit ?? 5}`, UI.inkDim);
       else

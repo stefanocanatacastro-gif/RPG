@@ -21,15 +21,20 @@ import { animKey } from '../systems/anim_builder';
 import {
   Builds,
   COLOR_SLOTS,
+  DEFAULT_PICTURE,
   PALETTE,
   globalId,
   myOwnerId,
   newFighter,
+  ruleText,
   toDefs,
+  type CustomAiRule,
   type CustomFighter,
+  type Pose,
 } from '../managers/builds';
 import type { EnemyProp } from '../types/data';
 import { paintWrestler } from '../systems/custom_looks';
+import { cleanPicture, decodePicture, drawPictureLook, poseKey } from '../systems/pictures';
 
 const TOP = 40;
 const LIST = { x: 6, y: TOP + 6, w: 220, h: H - TOP - 40 };
@@ -42,6 +47,37 @@ const PROPS = {
 };
 const ROW = 18;
 const PREVIEW_KEY = 'spr_maker_preview';
+const PREVIEW_PIC = 'spr_maker_picture';
+const POSE_LABEL: Record<Pose, string> = { idle: 'Standing', attack: 'Attacking', hurt: 'Getting hit' };
+const RULE_WHEN: CustomAiRule['when'][] = ['opener', 'hp_below', 'ally_hurt', 'every'];
+
+/** Asks the browser for a picture file (must be called from a click). */
+function pickFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const el = document.createElement('input');
+    el.type = 'file';
+    el.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    el.addEventListener('change', () => {
+      resolve(el.files?.[0] ?? null);
+      el.remove();
+    });
+    // closing the dialog without a choice: the page gets focus back
+    window.addEventListener(
+      'focus',
+      () =>
+        setTimeout(() => {
+          if (!el.files?.length) {
+            resolve(null);
+            el.remove();
+          }
+        }, 600),
+      { once: true },
+    );
+    el.click();
+  });
+}
 
 /** What's selected in the list. */
 type Pick =
@@ -107,6 +143,10 @@ export class FighterMakerScene extends Phaser.Scene {
   private statusColor: number = UI.inkDim;
   problems: string[] = [];
   private preview!: Phaser.GameObjects.Sprite;
+  /** Clear a flat background from uploads (a maker setting, not saved with the fighter). */
+  clearBackground = true;
+  /** Which picture the preview shows. */
+  previewPose: Pose = 'idle';
 
   constructor() {
     super('fighter_maker');
@@ -147,7 +187,28 @@ export class FighterMakerScene extends Phaser.Scene {
       } else if (e.key === 'Escape') this.leave();
     };
     window.addEventListener('keydown', onKey);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener('keydown', onKey));
+    // a picture dropped on the page, or pasted, becomes the standing picture
+    const onDrag = (e: DragEvent) => e.preventDefault();
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      if (file && this.scene.isActive()) void this.usePicture(this.previewPose, file);
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (textFieldOpen || !this.scene.isActive()) return;
+      const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'));
+      const file = item?.getAsFile();
+      if (file) void this.usePicture(this.previewPose, file);
+    };
+    window.addEventListener('dragover', onDrag);
+    window.addEventListener('drop', onDrop);
+    window.addEventListener('paste', onPaste);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('dragover', onDrag);
+      window.removeEventListener('drop', onDrop);
+      window.removeEventListener('paste', onPaste);
+    });
     this.setStatus(
       Builds.backend() === 'shared'
         ? 'Your fighters save to the game link, where everyone can see and copy them.'
@@ -262,6 +323,43 @@ export class FighterMakerScene extends Phaser.Scene {
 
   private leave(): void {
     SceneLoader.goto(this, 'dev_hub', { cursor: 3 });
+  }
+
+  /** Opens the file picker for one of the fighter's pictures. */
+  private async uploadPicture(pose: Pose): Promise<void> {
+    const file = await pickFile();
+    if (file) await this.usePicture(pose, file);
+  }
+
+  /**
+   * Cleans a picture and gives it to the selected fighter (yours only); its
+   * look becomes "picture". Also used by the browser test with a data URL.
+   */
+  async usePicture(pose: Pose, file: Blob | string): Promise<void> {
+    const f = this.pick?.src === 'mine' ? this.mine[this.pick.i] : null;
+    if (!f) {
+      this.setStatus('Pick (or COPY) one of your fighters first, then add a picture.', UI.rope);
+      return this.refresh();
+    }
+    this.setStatus('Reading the picture…');
+    this.refresh();
+    try {
+      const url = await cleanPicture(file, this.clearBackground);
+      await decodePicture(url);
+      f.look = {
+        ...f.look,
+        base: 'picture',
+        pictures: { ...(f.look.pictures ?? {}), [pose]: url },
+        picture: f.look.picture ?? { ...DEFAULT_PICTURE },
+      };
+      this.previewPose = pose;
+      const kb = Math.round((url.length * 0.75) / 1024);
+      this.setStatus(`${POSE_LABEL[pose]} picture added (${kb} KB). SAVE to keep it.`, UI.good);
+      this.changed();
+    } catch (e) {
+      this.setStatus(String((e as { message?: string }).message ?? e), UI.rope);
+      this.refresh();
+    }
   }
 
   // ── Input ───────────────────────────────────────────────────────────
@@ -397,26 +495,58 @@ export class FighterMakerScene extends Phaser.Scene {
     });
     const rowY = () => PROPS.y + (rows.length - this.propScroll) * ROW;
 
-    rows.push({
-      label: 'Name',
-      value: () => f.name,
+    const text = (
+      label: string,
+      key: 'name' | 'title' | 'line' | 'bio' | 'scout',
+      max: number,
+      placeholder: string,
+    ): Row => ({
+      label,
+      value: () => f[key] || '—',
       edit: async () => {
-        const v = await editText(this, { x: PROPS.x, y: rowY(), w: PROPS.w, value: f.name });
-        if (v?.trim()) {
-          f.name = v.trim().slice(0, 24);
-          this.changed();
-        }
+        const v = await editText(this, {
+          x: PROPS.x,
+          y: rowY(),
+          w: PROPS.w,
+          value: f[key] ?? '',
+          placeholder,
+        });
+        if (v === null) return;
+        if (key === 'name') {
+          if (v.trim()) f.name = v.trim().slice(0, max);
+        } else f[key] = v.trim().slice(0, max) || undefined;
+        this.changed();
       },
     });
+    rows.push(text('Name', 'name', 24, 'Name'));
+    rows.push(text('Title', 'title', 28, 'A nickname, e.g. The Harbor Hammer'));
+    rows.push(
+      text(
+        'Line',
+        'line',
+        90,
+        f.kind === 'hero' ? 'What they shout to the crowd' : 'What they say before the bell',
+      ),
+    );
+    if (f.kind === 'hero') rows.push(text('Story', 'bio', 160, 'A short story'));
+    else rows.push(text('Scout', 'scout', 140, "What Pip's Scout says about them"));
+
+    rows.push({ label: 'LOOK', value: () => '', head: true });
     const looks = [
       'wrestler',
+      'picture',
       ...[...allSpriteKeys()]
         .filter((k) => k.startsWith('spr_c0_') || k === 'spr_pip' || k === 'spr_sparring_dummy')
         .sort(),
     ];
     rows.push({
       label: 'Look',
-      value: () => (f.look.base === 'wrestler' ? 'wrestler' : f.look.base.replace(/^spr_(c0_)?/, '')),
+      value: () =>
+        f.look.base === 'wrestler'
+          ? 'wrestler (recolour it)'
+          : f.look.base === 'picture'
+            ? 'your pictures'
+            : f.look.base.replace(/^spr_(c0_)?/, ''),
       step: (dir) => {
         const i = looks.indexOf(f.look.base);
         f.look = { ...f.look, base: looks[(i + dir + looks.length) % looks.length] };
@@ -440,22 +570,85 @@ export class FighterMakerScene extends Phaser.Scene {
             this.changed();
           },
         });
+    if (f.look.base === 'picture') {
+      const pic = () => (f.look.picture ??= { ...DEFAULT_PICTURE });
+      for (const pose of ['idle', 'attack', 'hurt'] as Pose[]) {
+        const url = () => f.look.pictures?.[pose];
+        rows.push({
+          label: `  ${POSE_LABEL[pose]}`,
+          value: () => {
+            const u = url();
+            return u
+              ? `picture · ${Math.round((u.length * 0.75) / 1024)} KB (click: replace)`
+              : 'click to upload…';
+          },
+          edit: () => void this.uploadPicture(pose),
+          step:
+            pose === 'idle'
+              ? undefined
+              : () => {
+                  // left/right on attack and hurt: remove that picture
+                  if (!url()) return void this.uploadPicture(pose);
+                  const pictures = { ...(f.look.pictures ?? {}) };
+                  delete pictures[pose];
+                  f.look = { ...f.look, pictures };
+                  this.changed();
+                },
+        });
+      }
+      rows.push({
+        label: '  Clear bg',
+        value: () => (this.clearBackground ? 'yes, on upload' : 'no, keep it'),
+        step: () => {
+          this.clearBackground = !this.clearBackground;
+          this.refresh();
+        },
+      });
+      const picNum = (label: string, key: 'height' | 'pixel', min: number, max: number, by: number): Row => ({
+        label,
+        value: () =>
+          key === 'height'
+            ? `${pic().height} px tall`
+            : `${pic().pixel}${pic().pixel === 1 ? ' (smooth)' : ''}`,
+        step: (dir) => {
+          pic()[key] = Phaser.Math.Clamp(pic()[key] + dir * by, min, max);
+          this.changed();
+        },
+      });
+      rows.push(picNum('  Height', 'height', 48, 192, 8), picNum('  Pixel size', 'pixel', 1, 4, 1));
+      rows.push({
+        label: '  Outline',
+        value: () => (pic().outline ? 'yes' : 'no'),
+        step: () => {
+          pic().outline = !pic().outline;
+          this.changed();
+        },
+      });
+      rows.push({
+        label: '  Faces',
+        value: () => (pic().flip ? 'left (turned)' : 'right'),
+        step: () => {
+          pic().flip = !pic().flip;
+          this.changed();
+        },
+      });
+      rows.push({
+        label: '  Preview',
+        value: () => POSE_LABEL[this.previewPose],
+        step: (dir) => {
+          const ps: Pose[] = ['idle', 'attack', 'hurt'];
+          this.previewPose = ps[(ps.indexOf(this.previewPose) + dir + 3) % 3];
+          this.refresh();
+        },
+      });
+    }
+
+    rows.push({ label: 'STATS', value: () => '', head: true });
     rows.push(num('HP', 'hp', 1, 99), num('Attack', 'attack', 0, 20), num('Defence', 'defence', 0, 20));
     if (f.kind === 'hero') rows.push(num('Grit', 'grit', 0, 30));
     else {
       rows.push(num('XP', 'xp', 0, 99), num('Coins', 'coins', 0, 99));
       rows.push(toggleProp('Spiky', 'spiky'), toggleProp('Flying', 'airborne'));
-      rows.push({
-        label: 'Scout',
-        value: () => f.scout || '—',
-        edit: async () => {
-          const v = await editText(this, { x: PROPS.x, y: rowY(), w: PROPS.w, value: f.scout ?? '' });
-          if (v !== null) {
-            f.scout = v.trim().slice(0, 140);
-            this.changed();
-          }
-        },
-      });
     }
 
     // moves: heroes switch them on and off; enemies get a weight (how often)
@@ -488,19 +681,69 @@ export class FighterMakerScene extends Phaser.Scene {
           },
         });
     }
-    if (f.kind === 'enemy') {
-      const opts = [undefined, ...f.moves];
+    if (f.kind === 'enemy') this.ruleRows(f, rows);
+    return rows;
+  }
+
+  /** An enemy's special rules: up to 4, each a move and when to use it. */
+  private ruleRows(f: CustomFighter, rows: Row[]): void {
+    // the old single "when hurt" move becomes a rule
+    if (f.lowHpMove && this.editable()) {
+      f.rules = [...(f.rules ?? []), { move: f.lowHpMove, when: 'hp_below', value: 50 }];
+      f.lowHpMove = undefined;
+    }
+    const rules = f.rules ?? [];
+    rows.push({ label: 'PATTERN (special rules)', value: () => '', head: true });
+    const name = (id: string) =>
+      Database.data.moves.some((m) => m.id === id) ? t(Database.move(id).name) : '(gone)';
+    rules.forEach((r, i) => {
       rows.push({
-        label: 'When hurt',
-        value: () => (f.lowHpMove ? t(Database.move(f.lowHpMove).name) : '—'),
+        label: `  Rule ${i + 1}`,
+        value: () => ruleText(r, name(r.move)),
         step: (dir) => {
-          const i = opts.indexOf(f.lowHpMove);
-          f.lowHpMove = opts[(i + dir + opts.length) % opts.length];
+          // cycle the condition; past the last one removes the rule
+          const k = RULE_WHEN.indexOf(r.when) + dir;
+          if (k < 0 || k >= RULE_WHEN.length) f.rules = rules.filter((x) => x !== r);
+          else {
+            r.when = RULE_WHEN[k];
+            r.value = r.when === 'every' ? 3 : r.when === 'opener' ? undefined : 50;
+          }
           this.changed();
         },
       });
-    }
-    return rows;
+      rows.push({
+        label: '    move',
+        value: () => name(r.move),
+        step: (dir) => {
+          if (!f.moves.length) return;
+          const k = f.moves.indexOf(r.move);
+          r.move = f.moves[(k + dir + f.moves.length) % f.moves.length];
+          this.changed();
+        },
+      });
+      if (r.when !== 'opener')
+        rows.push({
+          label: r.when === 'every' ? '    rounds' : '    at HP %',
+          value: () => String(r.value ?? (r.when === 'every' ? 3 : 50)),
+          step: (dir) => {
+            r.value =
+              r.when === 'every'
+                ? Phaser.Math.Clamp((r.value ?? 3) + dir, 2, 9)
+                : Phaser.Math.Clamp((r.value ?? 50) + dir * 10, 10, 90);
+            this.changed();
+          },
+        });
+    });
+    if (rules.length < 4)
+      rows.push({
+        label: '  + Add rule',
+        value: () => (f.moves.length ? 'click to add' : 'needs a move first'),
+        edit: () => {
+          if (!f.moves.length) return;
+          f.rules = [...rules, { move: f.moves[0], when: 'opener' }];
+          this.changed();
+        },
+      });
   }
 
   // ── Drawing ─────────────────────────────────────────────────────────
@@ -509,6 +752,8 @@ export class FighterMakerScene extends Phaser.Scene {
     this.problems = [];
     if (!f || this.pick?.src !== 'mine') return;
     if (!f.moves.length) this.problems.push('needs at least one move');
+    if (f.look.base === 'picture' && !f.look.pictures?.idle)
+      this.problems.push('needs a standing picture (click Standing)');
     // check it as real game data
     const d = toDefs(myOwnerId(), f);
     const data = {
@@ -573,13 +818,14 @@ export class FighterMakerScene extends Phaser.Scene {
           .setScale(2),
       );
       const lines = [
+        ...(f.title ? [`"${f.title}"`] : []),
         `HP ${f.hp}  ATK ${f.attack}  DEF ${f.defence}`,
         f.kind === 'hero' ? `GRIT ${f.grit ?? 5}` : `XP ${f.xp ?? 0}  COINS ${f.coins ?? 0}`,
         ...(f.props?.length ? [f.props.join(', ')] : []),
         ...f.moves.slice(0, 5).map((m) => `· ${t(Database.move(m).name)}`),
       ];
       lines.forEach((l, i) =>
-        txt(PREVIEW.x + 8, PREVIEW.y + 276 + i * 16, fit(l, 29), i < 2 ? UI.ink : UI.inkDim),
+        txt(PREVIEW.x + 8, PREVIEW.y + 276 + i * 16, fit(l, 29), i < (f.title ? 3 : 2) ? UI.ink : UI.inkDim),
       );
       const by = PREVIEW.y + PREVIEW.h - 30;
       bar.fillStyle(UI.panelHi).fillRect(PREVIEW.x + 6, by, PREVIEW.w / 2 - 12, 24);
@@ -630,6 +876,31 @@ export class FighterMakerScene extends Phaser.Scene {
   /** Shows the fighter on the little ring, in its own colours. */
   private showPreview(f: CustomFighter): void {
     let key: string;
+    if (f.look.base === 'picture') {
+      if (!f.look.pictures?.idle) {
+        this.preview.setVisible(false);
+        return;
+      }
+      this.preview.stop().setTexture('spr_test_dummy', 'idle_00');
+      if (!drawPictureLook(this.textures, PREVIEW_PIC, f.look)) {
+        // still decoding: draw again when ready
+        void Promise.all(Object.values(f.look.pictures).map((u) => decodePicture(u!))).then(() =>
+          this.refresh(),
+        );
+        this.preview.setVisible(false);
+        return;
+      }
+      const k = this.textures.exists(poseKey(PREVIEW_PIC, this.previewPose))
+        ? poseKey(PREVIEW_PIC, this.previewPose)
+        : PREVIEW_PIC;
+      const h = this.textures.get(k).getSourceImage().height;
+      this.preview
+        .setVisible(true)
+        .setTexture(k)
+        .setScale(h <= 110 ? 2 : 1)
+        .setFlipX(f.kind === 'enemy');
+      return;
+    }
     if (f.look.base === 'wrestler') {
       // park the sprite on another texture while its own is repainted
       this.preview.stop().setTexture('spr_test_dummy', 'idle_00');

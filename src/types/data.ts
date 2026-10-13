@@ -16,6 +16,10 @@ export interface CharacterDef {
   attack: number;
   defence: number;
   moves: string[];
+  /** Made fighters: a nickname shown with the name. */
+  title?: StringKey;
+  /** Made fighters: what they shout (when playing to the crowd). */
+  line?: StringKey;
 }
 
 export type EnemyProp = 'spiky' | 'airborne' | 'armoured' | 'flips' | 'fiery';
@@ -53,6 +57,10 @@ export interface EnemyDef {
   ai: AiRule[];
   /** Pip's Scout description. */
   scout: StringKey;
+  /** Made fighters: a nickname shown with the name. */
+  title?: StringKey;
+  /** Made fighters: what they shout at the start of a fight. */
+  line?: StringKey;
 }
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';
