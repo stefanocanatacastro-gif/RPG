@@ -165,5 +165,7 @@
   "battle.slip": "¡RESBALÓN!",
   "battle.spotlight": "¡FOCO!",
   "battle.snack": "BOTANA",
-  "battle.junk": "¡BASURA!"
+  "battle.junk": "¡BASURA!",
+  "hub.moves": "Creador de movimientos",
+  "hub.moves.desc": "Crea ataques y curaciones: poder, golpes, Garra, carrera o aéreo, un objetivo o todos, comando de acción, cargas. Enséñalos en el creador de luchadores."
 }

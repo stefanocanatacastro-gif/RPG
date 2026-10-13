@@ -349,17 +349,33 @@ export const Database = {
    * Adds (or replaces) characters and enemies made in the fighter maker. Their
    * ids carry a prefix (the maker's), so they never clash with built-in ones.
    */
-  registerCustom(prefix: string, chars: CharacterDef[], foes: EnemyDef[], things: ItemDef[] = []): void {
+  registerCustom(
+    prefix: string,
+    chars: CharacterDef[],
+    foes: EnemyDef[],
+    things: ItemDef[] = [],
+    moves: MoveDef[] = [],
+  ): void {
     Database.unregisterCustom(prefix);
+    for (const m of moves) {
+      DATA.moves.push(m);
+      maps.moves.set(m.id, m);
+    }
     for (const it of things) {
       DATA.items.push(it);
       maps.items.set(it.id, it);
     }
+    // a move its maker deleted is forgotten, rather than breaking the fight
+    const known = (id: string) => maps.moves.has(id);
     for (const c of chars) {
+      c.moves = c.moves.filter(known);
       DATA.characters.push(c);
       maps.characters.set(c.id, c);
     }
     for (const e of foes) {
+      e.moves = e.moves.filter(known);
+      e.ai = e.ai.filter((r) => known(r.move));
+      if (!e.ai.length && e.moves[0]) e.ai = [{ move: e.moves[0], weight: 1 }];
       DATA.enemies.push(e);
       maps.enemies.set(e.id, e);
     }
@@ -369,6 +385,8 @@ export const Database = {
     for (const c of DATA.characters.filter((c) => gone(c.id))) maps.characters.delete(c.id);
     for (const e of DATA.enemies.filter((e) => gone(e.id))) maps.enemies.delete(e.id);
     for (const it of DATA.items.filter((i) => gone(i.id))) maps.items.delete(it.id);
+    for (const m of DATA.moves.filter((m) => gone(m.id))) maps.moves.delete(m.id);
+    DATA.moves = DATA.moves.filter((m) => !gone(m.id));
     DATA.items = DATA.items.filter((i) => !gone(i.id));
     DATA.characters = DATA.characters.filter((c) => !gone(c.id));
     DATA.enemies = DATA.enemies.filter((e) => !gone(e.id));

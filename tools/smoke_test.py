@@ -36,8 +36,25 @@ def active(page, key):
 
 
 def wait_scene(page, key, timeout=8000):
-    page.wait_for_function(f"window.__game && window.__game.scene.isActive('{key}')", timeout=timeout)
+    try:
+        page.wait_for_function(f"window.__game && window.__game.scene.isActive('{key}')", timeout=timeout)
+    except Exception:
+        scenes = page.evaluate("window.__game.scene.getScenes(true).map(s => s.sys.settings.key)")
+        page.screenshot(path=f"{out}/zz_stuck_waiting_{key}.png")
+        print(f"  STUCK waiting for {key}; active: {scenes}; errors: {ERRORS[-3:]}")
+        raise
     page.wait_for_timeout(250)
+
+
+ERRORS = []
+
+
+def hub_open(page, index):
+    """Opens a dev hub entry once the hub has finished fading in."""
+    wait_scene(page, "dev_hub")
+    page.wait_for_timeout(600)
+    page.evaluate(f"window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor({index})")
+    press(page, "Enter")
 
 
 def press(page, key, wait=120):
@@ -150,7 +167,7 @@ with sync_playwright() as p:
     # ── Desktop walkthrough ─────────────────────────────────────────────
     ctx = b.new_context(viewport={"width": 1280, "height": 720})
     page = ctx.new_page()
-    errors = []
+    errors = ERRORS
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and errors.append(m.text))
     page.goto(url)
@@ -808,8 +825,7 @@ with sync_playwright() as p:
     wait_scene(page, "dev_hub")
 
     # ── Item maker: a damage-everyone item, used in a fight ──
-    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(4)")
-    press(page, "Enter")
+    hub_open(page, 4)
     wait_scene(page, "item_maker")
     page.wait_for_timeout(400)
     im = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('item_maker'); {js} }})()")
@@ -837,8 +853,7 @@ with sync_playwright() as p:
     wait_scene(page, "dev_hub")
 
     # ── Encounters: play the saved one ──
-    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(5)")
-    press(page, "Enter")
+    hub_open(page, 5)
     wait_scene(page, "encounters")
     page.wait_for_timeout(400)
     en = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('encounters'); {js} }})()")
@@ -856,10 +871,38 @@ with sync_playwright() as p:
     page.screenshot(path=f"{out}/30_encounter_result.png")
     en("s.leave();")
     wait_scene(page, "dev_hub")
+
+    # ── Move maker: an attack on everyone, tried in the sandbox ──
+    hub_open(page, 6)
+    wait_scene(page, "move_maker")
+    page.wait_for_timeout(400)
+    mm = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('move_maker'); {js} }})()")
+    mm("s.addMove('hero'); Object.assign(s.mine[s.mine.length - 1], { name: 'Tornado DDT', gritCost: 0, power: 2 }); s.refresh();")
+    mm("s.pressRow('Target', 1); s.pressRow('Target', 1);")
+    tgt = mm("return s.mine[s.mine.length - 1].target;")
+    check(tgt == "all", f"the move maker sets a move on everyone ({tgt})")
+    page.screenshot(path=f"{out}/30b_move_maker.png")
+    mm("s.tryIt();")
+    wait_scene(page, "battle_sandbox", 10000)
+    hero = page.evaluate("window.__game.scene.getScene('battle_sandbox').s.hero")
+    check(hero == "c.try.hero", f"TRY puts a hero who knows the move in the sandbox ({hero})")
+    page.evaluate("(() => { const s = window.__game.scene.getScene('battle_sandbox'); s.s.preset = 0; s.pressRow('Line-up', 'confirm'); s.s.cond = {}; s.s.assist = 3; s.pressRow('FIGHT', 'confirm'); })()")
+    wait_scene(page, "battle", 10000)
+    wait_battle_input(page, "menu")
+    first = battle_eval(page, "return s.menu.items[0].value;")
+    check(first == "move:c.me.m1", f"the made move is on the menu ({first})")
+    press(page, "Enter", 300)
+    page.wait_for_function("window.__game.scene.getScene('battle').engine.log.filter(l => l.startsWith('hero c.me.m1 ')).length >= 2", timeout=15000)
+    page.screenshot(path=f"{out}/30c_move_in_battle.png")
+    check(True, "the made move hits every opponent")
+    fight(page, out, "30d_move")
+    wait_scene(page, "battle_sandbox", 10000)
+    page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
+    wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=6
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=7
     ):
         page.wait_for_timeout(400)
         for _ in range(i):

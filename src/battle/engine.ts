@@ -422,8 +422,7 @@ export class BattleEngine {
   canUseMove(moveId: string, grit: number): TargetCheck {
     const m = this.db.move(moveId);
     if (m.gritCost > grit) return { ok: false, reason: 'notEnoughGrit' };
-    if (!this.enemies().some((e) => this.canTarget(moveId, e.id).ok))
-      return { ok: false, reason: 'noTarget' };
+    if (this.targetsFor(moveId).length === 0) return { ok: false, reason: 'noTarget' };
     return { ok: true };
   }
 
@@ -433,6 +432,8 @@ export class BattleEngine {
     const t = this.get(targetId);
     if (t.hp <= 0) return { ok: false, reason: 'down' };
     if (m.target === 'self') return t.id === this.turn ? { ok: true } : { ok: false, reason: 'selfOnly' };
+    // healing moves aim at your own side
+    if (m.target === 'ally') return t.side === 'hero' ? { ok: true } : { ok: false, reason: 'ally' };
     if (t.side === 'hero') return { ok: false, reason: 'ally' };
     if (t.airborne && !m.reaches.airborne) return { ok: false, reason: 'airborne' };
     if (t.spiky && !m.reaches.spiky) return { ok: false, reason: 'spiky' };
@@ -448,9 +449,26 @@ export class BattleEngine {
     return this.enemies().filter((e) => !e.airborne)[0];
   }
 
-  /** Valid targets for a move, front to back. */
+  /** Valid targets for a move, front to back (your own side for self and ally moves). */
   targetsFor(moveId: string): Fighter[] {
+    const m = this.db.move(moveId);
+    if (m.target === 'self') return [this.acting];
+    if (m.target === 'ally') return this.party();
     return this.enemies().filter((e) => this.canTarget(moveId, e.id).ok);
+  }
+
+  /**
+   * Who a move lands on when used by `actorId` at `targetId`: everyone it can
+   * reach for an "all" move (the other side), otherwise just the target.
+   */
+  victimsOf(actorId: string, moveId: string, targetId: string): string[] {
+    const m = this.db.move(moveId);
+    if (m.target !== 'all') return [targetId];
+    const a = this.get(actorId);
+    if (a.side === 'enemy') return this.party().map((f) => f.id);
+    return this.enemies()
+      .filter((e) => this.canTarget(moveId, e.id).ok)
+      .map((e) => e.id);
   }
 
   /** Called when Chispa or the partner commits to an action (Grit is spent by the caller's GameState). */

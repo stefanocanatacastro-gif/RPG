@@ -229,7 +229,7 @@ export class BattleScene extends Phaser.Scene {
         this,
         20,
         18,
-        t(Database.character(gs.hero().id).name).toUpperCase(),
+        t(Database.character(gs.hero().id).name).toUpperCase().slice(0, 26),
         8,
         css(UI.spark),
       ).setOrigin(0, 0),
@@ -244,10 +244,14 @@ export class BattleScene extends Phaser.Scene {
     if (pm) {
       drawPanel(g, 252, 8, 176, 48, { alpha: 0.94 });
       this.ui(
-        pixelText(this, 264, 18, t(Database.character(pm.id).name).toUpperCase(), 8, css(UI.spark)).setOrigin(
-          0,
-          0,
-        ),
+        pixelText(
+          this,
+          264,
+          18,
+          t(Database.character(pm.id).name).toUpperCase().slice(0, 18),
+          8,
+          css(UI.spark),
+        ).setOrigin(0, 0),
       );
       const php = this.ui(new Bar(this, 264, 34, 152, BAR_STYLES.hp, pm.hp, pm.maxHp));
       offs.push(bus.on('hp.changed', (e) => e.who === pm.id && php.setValue(e.hp, e.maxHp)));
@@ -495,6 +499,10 @@ export class BattleScene extends Phaser.Scene {
             this.menu!.active = false;
             if (item.value.startsWith('move:')) {
               const move = item.value.slice(5);
+              const aim = e.targetsFor(move);
+              // a move on everyone, or on yourself, needs no aiming
+              const rule = Database.move(move).target;
+              if (rule === 'all' || rule === 'self') return done({ kind: 'move', move, target: aim[0].id });
               this.pickTarget(
                 e.targetsFor(move).map((f) => f.id),
                 (target) => done({ kind: 'move', move, target }),
@@ -780,42 +788,53 @@ export class BattleScene extends Phaser.Scene {
           const mult = (step.mult ?? 1) * (rating ? ratingMult(move.command, rating) : 1);
           let great = rating === 'great';
           rating = undefined;
-          const r = opts.firstStrike
-            ? this.engine.damage(targetId, rules.firstStrikeDamage + this.engine.hero.attack)
-            : this.engine.hit(actorId, targetId, moveId, mult, guard);
-          if (r.guard === 'reversal') {
-            await this.showReversal(target, actor, r.counter ?? 0, !!r.attackerKo);
-            if (r.attackerKo) ended = true;
-            break;
+          // an "all" move lands on everyone it can reach; anything else on its target
+          const victims = opts.firstStrike
+            ? [targetId]
+            : this.engine.victimsOf(actorId, moveId, targetId).filter((id) => this.engine.get(id).hp > 0);
+          let standing = 0;
+          for (const vid of victims) {
+            const tv = this.views.get(vid)!;
+            const r = opts.firstStrike
+              ? this.engine.damage(vid, rules.firstStrikeDamage + this.engine.hero.attack)
+              : this.engine.hit(actorId, vid, moveId, mult, guard);
+            if (r.guard === 'reversal') {
+              await this.showReversal(tv, actor, r.counter ?? 0, !!r.attackerKo);
+              if (r.attackerKo) ended = true;
+              standing++;
+              if (ended) break;
+              continue;
+            }
+            if (r.guard === 'block') this.showBlock(tv);
+            await this.showHit(tv, r.damage, r.ko);
+            if (opts.big && r.damage > 0) {
+              this.director.punchIn(0.26);
+              this.arena.cheer(1);
+            }
+            if (pendingStomp) {
+              const res = await pendingStomp;
+              pendingStomp = null;
+              this.noteCommand(moveId, res, actor);
+              if (res.rating === 'miss') ended = true;
+              if (res.rating === 'great') great = true;
+            }
+            // a GREAT hit knocks a charging enemy out of its wind-up
+            if (great && !r.ko && this.engine.breakCharge(vid)) await this.showStagger(tv);
+            if (r.ko) await this.knockOut(tv);
+            else standing++;
           }
-          if (r.guard === 'block') this.showBlock(target);
-          await this.showHit(target, r.damage, r.ko);
-          if (opts.big && r.damage > 0) {
-            this.director.punchIn(0.26);
-            this.arena.cheer(1);
-          }
-          if (pendingStomp) {
-            const res = await pendingStomp;
-            pendingStomp = null;
-            this.noteCommand(moveId, res, actor);
-            if (res.rating === 'miss') ended = true;
-            if (res.rating === 'great') great = true;
-          }
-          // a GREAT hit knocks a charging enemy out of its wind-up
-          if (great && !r.ko && this.engine.breakCharge(targetId)) await this.showStagger(target);
-          if (r.ko) {
-            await this.knockOut(target);
-            ended = true;
-          }
+          if (standing === 0) ended = true;
           if (!ended && hitsLeft(i + 1)) {
-            // bounce back up for the next hit
-            await this.tween({
-              targets: s,
-              y: topOf(target) - 64,
-              duration: stomp.bounceMs,
-              ease: 'Quad.easeOut',
-            });
-            hovering = true;
+            if (move.command === 'stomp' || move.steps.some((x) => x.do === 'jump_to_target')) {
+              // bounce back up for the next hit
+              await this.tween({
+                targets: s,
+                y: topOf(target) - 64,
+                duration: stomp.bounceMs,
+                ease: 'Quad.easeOut',
+              });
+              hovering = true;
+            } else await this.playAnimOnce(actor, 'chop');
           }
           break;
         }
@@ -835,6 +854,7 @@ export class BattleScene extends Phaser.Scene {
           target.sprite.setTintFill(0x9ff0a8);
           this.time.delayedCall(120, () => target.sprite.clearTint());
           target.bar?.setValue(target.f.hp, target.f.maxHp);
+          if (target.f.side === 'hero') gameState().setHp(target.f.defId, target.f.hp);
           await this.popText(target, `+${healed}`, UI.good);
           break;
         }

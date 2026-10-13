@@ -177,8 +177,17 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
       }
       let best: { move: string; target: string; s: number } | null = null;
       for (const id of e.acting.moves) {
+        const mv = db.move(id);
+        // the simulated player only attacks; healing comes from the bag
+        if (mv.heal || mv.target === 'self' || mv.target === 'ally') continue;
         if (!e.canUseMove(id, grit).ok) continue;
-        for (const t of e.targetsFor(id)) {
+        const aims = e.targetsFor(id);
+        if (mv.target === 'all') {
+          const s = aims.reduce((a, t) => a + score(id, t.id), 0);
+          if (aims.length && (!best || s > best.s)) best = { move: id, target: aims[0].id, s };
+          continue;
+        }
+        for (const t of aims) {
           const s = score(id, t.id);
           if (!best || s > best.s) best = { move: id, target: t.id, s };
         }
@@ -203,13 +212,16 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
       let rating: Rating | null = m.command !== 'none' && m.command !== 'stomp' ? roll(rng, skill) : null;
       for (const step of m.steps) {
         if (step.do !== 'hit') continue;
-        if (e.get(best.target).hp <= 0) break;
+        const victims = e.victimsOf(e.turn, best.move, best.target).filter((id) => e.get(id).hp > 0);
+        if (!victims.length) break;
         const r: Rating = m.command === 'stomp' ? roll(rng, skill) : (rating ?? 'good');
         const mult = (step.mult ?? 1) * (m.command === 'none' ? 1 : ratingMult(m.command, r));
-        const res = e.hit(e.turn, best.target, best.move, mult);
-        dealt += res.damage;
         if (m.command !== 'none') hypeFor(r);
-        if (r === 'great' && !res.ko) e.breakCharge(best.target);
+        for (const vid of victims) {
+          const res = e.hit(e.turn, vid, best.move, mult);
+          dealt += res.damage;
+          if (r === 'great' && !res.ko) e.breakCharge(vid);
+        }
         rating = null;
         if (m.command === 'stomp' && r === 'miss' && missEndsCombo('stomp')) break;
       }
@@ -221,11 +233,15 @@ export function simulateFight(setup: SimSetup, seed: number): FightOutcome {
         if (plan.kind === 'support') e.healFighter(plan.target, m.heal ?? 0);
         else if (plan.kind !== 'charge' && !e.moveHazard(plan.actor, plan.move).slip) {
           for (const step of m.steps) {
-            const victim = e.get(plan.target);
-            if (step.do !== 'hit' || victim.hp <= 0 || e.get(plan.actor).hp <= 0) continue;
-            const before = victim.hp;
-            e.hit(plan.actor, plan.target, plan.move, step.mult ?? 1, rollGuard(rng, skill));
-            taken += before - victim.hp;
+            if (step.do !== 'hit' || e.get(plan.actor).hp <= 0) continue;
+            const guard = rollGuard(rng, skill);
+            for (const vid of e.victimsOf(plan.actor, plan.move, plan.target)) {
+              const victim = e.get(vid);
+              if (victim.hp <= 0 || e.get(plan.actor).hp <= 0) continue;
+              const before = victim.hp;
+              e.hit(plan.actor, vid, plan.move, step.mult ?? 1, guard);
+              taken += before - victim.hp;
+            }
           }
         }
       }

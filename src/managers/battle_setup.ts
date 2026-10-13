@@ -47,6 +47,17 @@ export function setupProblems(s: BattleSetup): string[] {
   if (!Database.data.stages.some((st) => st.id === s.stage)) out.push('its arena no longer exists');
   const things = new Set(Database.data.items.map((i) => i.id));
   if ((s.items ?? []).some((i) => !things.has(i))) out.push('an item in its bag no longer exists');
+  // a fighter's maker may have deleted one of its moves since
+  const moves = new Set(Database.data.moves.map((m) => m.id));
+  const known = [
+    ...[s.hero, s.partner]
+      .filter((id): id is string => !!id && chars.has(id))
+      .map((id) => Database.character(id).moves),
+    ...s.enemies.filter((e) => foes.has(e.id)).map((e) => Database.enemy(e.id).moves),
+  ].flat();
+  if (s.enemies.some((e) => foes.has(e.id) && Database.enemy(e.id).ai.length === 0))
+    out.push('one of its opponents has no moves');
+  if (known.some((m) => !moves.has(m))) out.push('one of its fighters knows a move that no longer exists');
   if ((s.conditions?.hazards ?? []).some((h) => !HAZARDS.some((x) => x.id === h)))
     out.push('one of its hazards no longer exists');
   return out;

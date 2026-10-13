@@ -16,6 +16,7 @@ import { GameOverScene } from './scenes/game_over';
 import { FighterMakerScene } from './scenes/fighter_maker';
 import { EncountersScene } from './scenes/encounters';
 import { ItemMakerScene } from './scenes/item_maker';
+import { MoveMakerScene } from './scenes/move_maker';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
 import { TouchControlsScene } from './scenes/touch_controls';
 import { DebugMenuScene } from './scenes/debug_menu';
@@ -57,6 +58,7 @@ function startGame(): void {
       FighterMakerScene,
       EncountersScene,
       ItemMakerScene,
+      MoveMakerScene,
       InputTestScene,
       UiKitScene,
       AnimTestScene,

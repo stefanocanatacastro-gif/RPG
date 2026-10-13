@@ -8,9 +8,18 @@
 // (CharacterDef / EnemyDef) so battles, the sandbox and the simulator use them
 // like built-in ones.
 
-import type { AiRule, CharacterDef, EnemyDef, EnemyProp, ItemDef } from '../types/data';
+import type {
+  AiRule,
+  CharacterDef,
+  CommandType,
+  EnemyDef,
+  EnemyProp,
+  ItemDef,
+  MoveDef,
+  MoveStep,
+} from '../types/data';
 import { Database } from './database';
-import { addStrings } from './strings';
+import { addStrings, t } from './strings';
 import { registerSpriteKey } from './sprite_keys';
 import { artifactDb, viewerId, type DbLike } from './artifact_db';
 import type { BattleSetup } from './battle_setup';
@@ -81,10 +90,38 @@ export interface CustomItem {
   color?: number;
 }
 
+/** A move made in the move maker: an attack or a heal, for heroes or for enemies. */
+export interface CustomMove {
+  /** Unique within its maker's set (m1, m2…). */
+  id: string;
+  name: string;
+  desc: string;
+  /** Who can learn it in the fighter maker. */
+  user: 'hero' | 'enemy';
+  kind: 'attack' | 'heal';
+  /** Attack: power per hit (plus the user's attack). Heal: HP restored. */
+  power: number;
+  /** Attack: how many hits. */
+  hits: number;
+  gritCost: number;
+  /** How the user gets there: runs in, jumps in, or hits from where they stand. */
+  approach: 'run' | 'jump' | 'stay';
+  /** Attack: the front opponent, any one, or all of them at once. Heal: the user, or a chosen ally. */
+  target: 'front' | 'single' | 'all' | 'self' | 'ally';
+  /** Heroes: the action command that powers it up. */
+  command: 'timed_press' | 'hold_release' | 'stomp' | 'none';
+  reachesAir: boolean;
+  reachesSpiky: boolean;
+  piercing: boolean;
+  /** Enemies: turns spent winding up first (0 = none). */
+  charge: number;
+}
+
 export interface BuildSet {
   fighters: CustomFighter[];
   encounters?: Encounter[];
   items?: CustomItem[];
+  moves?: CustomMove[];
   savedAt?: string;
 }
 
@@ -211,6 +248,147 @@ export function toItemDef(owner: string, it: CustomItem): ItemDef {
   };
 }
 
+/** Turns a made move into normal game data, with steps the battle scene can play. */
+export function toMoveDef(owner: string, m: CustomMove): MoveDef {
+  const gid = globalId(owner, m.id);
+  const name = `${gid}.name`;
+  addStrings({ [name]: m.name || 'Mystery move', [`${name}.desc`]: m.desc || moveSummary(m) });
+  const heal = m.kind === 'heal';
+  // enemies don't run action commands; an attack on everyone is thrown from where you stand
+  const command: CommandType = m.user === 'enemy' || heal ? 'none' : m.command;
+  const approach = heal || m.target === 'all' ? 'stay' : command === 'stomp' ? 'jump' : m.approach;
+  const steps: MoveStep[] = [];
+  if (approach === 'run') steps.push({ do: 'walk_to_target' });
+  if (approach === 'jump') steps.push({ do: 'jump_to_target' });
+  if (heal) steps.push({ do: 'heal' });
+  else {
+    const hits = Math.max(1, Math.min(5, m.hits));
+    for (let i = 0; i < hits; i++) {
+      if (command === 'stomp' || (command !== 'none' && i === 0)) steps.push({ do: 'command' });
+      if (approach !== 'jump' && i === 0) steps.push({ do: 'anim', anim: 'chop' });
+      steps.push({ do: 'hit' });
+    }
+  }
+  steps.push({ do: 'return' });
+  const target = heal
+    ? m.user === 'enemy'
+      ? 'ally_lowest'
+      : m.target === 'ally'
+        ? 'ally'
+        : 'self'
+    : m.target === 'all' || m.target === 'front'
+      ? m.target
+      : 'single';
+  const def: MoveDef = {
+    id: gid,
+    name,
+    category: m.user === 'enemy' ? 'enemy' : approach === 'jump' ? 'aerial' : 'strike',
+    gritCost: m.user === 'enemy' ? 0 : m.gritCost,
+    power: heal ? 0 : m.power,
+    target,
+    command,
+    reaches: { airborne: m.reachesAir || approach === 'jump', spiky: m.reachesSpiky },
+    steps,
+  };
+  if (m.piercing && !heal) def.piercing = true;
+  if (heal) def.heal = Math.max(1, m.power);
+  if (m.user === 'enemy' && !heal && m.charge > 0) def.charge = Math.min(3, m.charge);
+  return def;
+}
+
+const COMMAND_WORD: Record<CustomMove['command'], string> = {
+  timed_press: 'press on time',
+  hold_release: 'hold and let go',
+  stomp: 'press on every landing',
+  none: 'no command',
+};
+
+/** One line saying what a move does (its description when none is written). */
+export function moveSummary(m: CustomMove): string {
+  if (m.kind === 'heal')
+    return m.user === 'enemy'
+      ? `Heals the most hurt teammate ${m.power} HP.`
+      : `Heals ${m.target === 'ally' ? 'a chosen ally' : 'the user'} ${m.power} HP.`;
+  const who =
+    m.target === 'all' ? 'every opponent' : m.target === 'front' ? 'the opponent in front' : 'one opponent';
+  const hits = m.hits > 1 ? `${m.hits} hits of ${m.power}` : `power ${m.power}`;
+  const extra = [
+    m.piercing ? 'ignores defence' : '',
+    m.user === 'enemy' && m.charge > 0 ? `winds up ${m.charge} turn${m.charge > 1 ? 's' : ''}` : '',
+    m.user === 'hero' ? COMMAND_WORD[m.command] : '',
+  ].filter(Boolean);
+  return `Hits ${who}, ${hits}${extra.length ? ` (${extra.join(', ')})` : ''}.`;
+}
+
+/** A built-in move as maker data (for showing and copying). */
+export function fromBuiltinMove(def: MoveDef, id: string): CustomMove {
+  const hits = def.steps.filter((s) => s.do === 'hit').length;
+  const approach = def.steps.some((s) => s.do === 'jump_to_target')
+    ? 'jump'
+    : def.steps.some((s) => s.do === 'walk_to_target')
+      ? 'run'
+      : 'stay';
+  const command =
+    (['timed_press', 'hold_release', 'stomp'] as const).find((c) => c === def.command) ?? 'none';
+  return {
+    id,
+    name: t(def.name),
+    desc: '',
+    user: def.category === 'enemy' ? 'enemy' : 'hero',
+    kind: def.heal ? 'heal' : 'attack',
+    power: def.heal ?? def.power,
+    hits: Math.max(1, hits),
+    gritCost: def.gritCost,
+    approach,
+    target: def.heal
+      ? 'ally'
+      : def.target === 'all' || def.target === 'front'
+        ? def.target
+        : def.target === 'self'
+          ? 'self'
+          : 'single',
+    command,
+    reachesAir: def.reaches.airborne,
+    reachesSpiky: def.reaches.spiky,
+    piercing: !!def.piercing,
+    charge: def.charge ?? 0,
+  };
+}
+
+/** Keeps a move's settings consistent after a change (heals have no hits, enemies no commands…). */
+export function tidyMove(m: CustomMove): void {
+  if (m.kind === 'heal') {
+    if (m.user === 'hero' && m.target !== 'self' && m.target !== 'ally') m.target = 'ally';
+    m.power = Math.max(1, m.power);
+  } else if (m.target === 'self' || m.target === 'ally') m.target = 'front';
+  if (m.user === 'enemy') {
+    m.command = 'none';
+    m.gritCost = 0;
+  } else m.charge = 0;
+  if (m.user === 'hero' && m.kind === 'attack' && m.command === 'none') m.command = 'timed_press';
+}
+
+/** Default numbers for a new move. */
+export function newMove(user: 'hero' | 'enemy', id: string): CustomMove {
+  return {
+    id,
+    name: 'New Move',
+    desc: '',
+    user,
+    kind: 'attack',
+    power: 2,
+    hits: 1,
+    gritCost: user === 'hero' ? 1 : 0,
+    approach: 'run',
+    target: 'front',
+    command: user === 'hero' ? 'timed_press' : 'none',
+    reachesAir: false,
+    reachesSpiky: true,
+    piercing: false,
+    charge: 0,
+  };
+}
+
 /** One line saying what an item does (its description when none is written). */
 export function itemSummary(it: CustomItem): string {
   const who = it.target === 'ally' ? 'Chispa or the partner' : 'the user';
@@ -241,7 +419,8 @@ function register(owner: string, set: BuildSet): void {
     if (d.foe) foes.push(d.foe);
   }
   const things = (set.items ?? []).map((it) => toItemDef(owner, it));
-  Database.registerCustom(`c.${ownerTag(owner)}.`, chars, foes, things);
+  const moves = (set.moves ?? []).map((m) => toMoveDef(owner, m));
+  Database.registerCustom(`c.${ownerTag(owner)}.`, chars, foes, things, moves);
 }
 
 /** Loads every set it can see (all of them, in the link) and adds the fighters to the game. */
@@ -270,6 +449,15 @@ export async function loadBuilds(timeoutMs = 4000): Promise<'shared' | 'local'> 
       /* no storage */
     }
   }
+  // everyone's moves first, so fighters can use moves from other people's sets
+  for (const [owner, set] of sets)
+    Database.registerCustom(
+      `c.${ownerTag(owner)}.`,
+      [],
+      [],
+      [],
+      (set.moves ?? []).map((m) => toMoveDef(owner, m)),
+    );
   for (const [owner, set] of sets) register(owner, set);
   return db ? 'shared' : 'local';
 }
@@ -316,17 +504,37 @@ export const Builds = {
     return out;
   },
 
-  /** Saves this person's set (any of fighters, encounters, items) and refreshes the game data. */
+  /** This person's own moves. */
+  myMoves(): CustomMove[] {
+    return structuredClone(sets.get(myOwnerId())?.moves ?? []);
+  },
+
+  /** Everyone else's moves, with their owner. */
+  otherMoves(): { owner: string; move: CustomMove }[] {
+    const out: { owner: string; move: CustomMove }[] = [];
+    for (const [owner, set] of sets)
+      if (owner !== myOwnerId()) for (const m of set.moves ?? []) out.push({ owner, move: m });
+    return out;
+  },
+
+  /** Everyone's sets, by owner (for the gallery). */
+  allSets(): { owner: string; set: BuildSet }[] {
+    return [...sets].map(([owner, set]) => ({ owner, set: structuredClone(set) }));
+  },
+
+  /** Saves this person's set (any of fighters, encounters, items, moves) and refreshes the game data. */
   async saveMine(update: {
     fighters?: CustomFighter[];
     encounters?: Encounter[];
     items?: CustomItem[];
+    moves?: CustomMove[];
   }): Promise<void> {
     const cur = sets.get(myOwnerId());
     const set: BuildSet = {
       fighters: structuredClone(update.fighters ?? cur?.fighters ?? []),
       encounters: structuredClone(update.encounters ?? cur?.encounters ?? []),
       items: structuredClone(update.items ?? cur?.items ?? []),
+      moves: structuredClone(update.moves ?? cur?.moves ?? []),
       savedAt: new Date().toISOString(),
     };
     if (db && uid) await db.doc(`builds/${uid}`).set({ json: JSON.stringify(set), savedAt: set.savedAt! });

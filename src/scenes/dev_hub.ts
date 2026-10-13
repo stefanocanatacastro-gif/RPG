@@ -38,6 +38,7 @@ export class DevHubScene extends Phaser.Scene {
       maker: 'fighter_maker',
       items: 'item_maker',
       encounters: 'encounters',
+      moves: 'move_maker',
       input: 'input_test',
       ui: 'ui_kit',
       anim: 'anim_test',
@@ -47,7 +48,7 @@ export class DevHubScene extends Phaser.Scene {
     const keys = Object.keys(targets);
     const menu = new MenuList(this, 16, 72, {
       width: 360,
-      rows: 11,
+      rows: 8,
       items: keys.map((k) => ({ label: t(`hub.${k}`), value: k, desc: t(`hub.${k}.desc`) })),
       descText: desc,
       cancellable: true,
