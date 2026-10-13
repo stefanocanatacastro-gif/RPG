@@ -140,3 +140,27 @@ describe('made moves', () => {
     await Builds.saveMine({ moves: [], fighters: [] });
   });
 });
+
+describe('community gallery', () => {
+  it('lists everyone’s creations by kind, copies them in as yours, and keeps likes', async () => {
+    const { creations } = await import('../src/managers/builds');
+    const { Likes, loadLikes } = await import('../src/managers/likes');
+    const owner = myOwnerId();
+    await Builds.saveMine({ moves: [{ ...newMove('hero', 'm1'), name: 'Suplex' }], fighters: [], items: [] });
+    const list = creations('move');
+    expect(list.map((c) => c.name)).toContain('Suplex');
+    const c = list.find((x) => x.name === 'Suplex')!;
+    expect(c.key).toBe(`move:${owner === 'me' ? 'me' : owner}.m1`);
+    const id = await Builds.copyIn('move', c.thing);
+    expect(id).toBe('m2');
+    expect(Builds.myMoves().map((m) => m.name)).toEqual(['Suplex', 'Suplex']);
+    await loadLikes();
+    expect(Likes.count(c.key)).toBe(0);
+    expect(await Likes.toggle(c.key)).toBe(true);
+    expect(Likes.count(c.key)).toBe(1);
+    expect(Likes.mine(c.key)).toBe(true);
+    expect(await Likes.toggle(c.key)).toBe(false);
+    expect(Likes.count(c.key)).toBe(0);
+    await Builds.saveMine({ moves: [] });
+  });
+});

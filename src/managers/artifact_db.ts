@@ -18,11 +18,13 @@ export interface DbLike {
 }
 interface UserLike {
   id(): Promise<string | null>;
+  profiles?(ids: string[]): Promise<Record<string, { name?: string } | undefined>>;
 }
 
 type Use = (name: string) => Promise<unknown>;
 let dbPromise: Promise<DbLike | null> | null = null;
 let userPromise: Promise<string | null> | null = null;
+let userNs: Promise<UserLike | null> | null = null;
 
 function use(name: string, timeoutMs: number): Promise<unknown> {
   if (typeof window === 'undefined') return Promise.resolve(null);
@@ -40,8 +42,25 @@ export function artifactDb(timeoutMs = 4000): Promise<DbLike | null> {
 
 /** The viewer's id (for their private saves), or null. */
 export function viewerId(timeoutMs = 4000): Promise<string | null> {
-  userPromise ??= (use('user', timeoutMs) as Promise<UserLike | null>).then((u) =>
-    u ? u.id().catch(() => null) : null,
-  );
+  userNs ??= use('user', timeoutMs) as Promise<UserLike | null>;
+  userPromise ??= userNs.then((u) => (u ? u.id().catch(() => null) : null));
   return userPromise;
+}
+
+/**
+ * Display names for viewer ids (makers in the gallery). Names are looked up each
+ * time, never stored: an id without a name comes back as ''.
+ */
+export async function profileNames(ids: string[], timeoutMs = 4000): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  userNs ??= use('user', timeoutMs) as Promise<UserLike | null>;
+  const u = await userNs;
+  if (!u?.profiles || !ids.length) return out;
+  try {
+    const ps = await u.profiles(ids);
+    for (const id of ids) out[id] = ps?.[id]?.name || '';
+  } catch {
+    /* names are a nicety */
+  }
+  return out;
 }

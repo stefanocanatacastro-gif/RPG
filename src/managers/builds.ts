@@ -117,6 +117,8 @@ export interface CustomMove {
   charge: number;
 }
 
+export type CreationKind = 'fighter' | 'move' | 'item' | 'encounter';
+
 export interface BuildSet {
   fighters: CustomFighter[];
   encounters?: Encounter[];
@@ -548,6 +550,48 @@ export const Builds = {
     register(myOwnerId(), set);
   },
 
+  /**
+   * Copies someone's creation into your own set (a remix you can change) and
+   * saves. Returns the copy's local id. Fighters keep the moves they know,
+   * wherever those came from.
+   */
+  async copyIn(
+    kind: CreationKind,
+    thing: CustomFighter | CustomMove | CustomItem | Encounter,
+  ): Promise<string> {
+    const cur = sets.get(myOwnerId());
+    const next = (prefix: string, used: { id: string }[]) => {
+      const ids = new Set(used.map((x) => x.id));
+      for (let n = 1; ; n++) if (!ids.has(`${prefix}${n}`)) return `${prefix}${n}`;
+    };
+    if (kind === 'fighter') {
+      const list = structuredClone(cur?.fighters ?? []);
+      const id = next('f', list);
+      list.push({ ...structuredClone(thing as CustomFighter), id });
+      await Builds.saveMine({ fighters: list });
+      return id;
+    }
+    if (kind === 'move') {
+      const list = structuredClone(cur?.moves ?? []);
+      const id = next('m', list);
+      list.push({ ...structuredClone(thing as CustomMove), id });
+      await Builds.saveMine({ moves: list });
+      return id;
+    }
+    if (kind === 'item') {
+      const list = structuredClone(cur?.items ?? []);
+      const id = next('i', list);
+      list.push({ ...structuredClone(thing as CustomItem), id });
+      await Builds.saveMine({ items: list });
+      return id;
+    }
+    const list = structuredClone(cur?.encounters ?? []);
+    const id = next('b', list);
+    list.push({ ...structuredClone(thing as Encounter), id, savedAt: new Date().toISOString() });
+    await Builds.saveMine({ encounters: list });
+    return id;
+  },
+
   /** A made fighter's look and texture key (for drawing it). */
   lookOf(gid: string): { look: FighterLook; key: string } | null {
     const look = looks.get(gid);
@@ -583,4 +627,40 @@ export function newFighter(kind: 'hero' | 'enemy', id: string): CustomFighter {
     coins: 2,
     weights: { goon_shove: 1 },
   };
+}
+
+export interface Creation {
+  kind: CreationKind;
+  owner: string;
+  /** Id within its maker's set. */
+  id: string;
+  /** What likes point at. */
+  key: string;
+  name: string;
+  thing: CustomFighter | CustomMove | CustomItem | Encounter;
+}
+
+/** Everything everyone has made, of one kind. */
+export function creations(kind: CreationKind): Creation[] {
+  const out: Creation[] = [];
+  for (const { owner, set } of Builds.allSets()) {
+    const list: { id: string; name?: string; title?: string }[] =
+      kind === 'fighter'
+        ? set.fighters
+        : kind === 'move'
+          ? (set.moves ?? [])
+          : kind === 'item'
+            ? (set.items ?? [])
+            : (set.encounters ?? []);
+    for (const x of list)
+      out.push({
+        kind,
+        owner,
+        id: x.id,
+        key: `${kind}:${encounterKey(owner, x.id)}`,
+        name: x.name ?? x.title ?? x.id,
+        thing: x as Creation['thing'],
+      });
+  }
+  return out;
 }

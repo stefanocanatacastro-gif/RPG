@@ -65,6 +65,41 @@ interface Row {
   edit?: () => void;
 }
 
+/**
+ * Opens the sandbox with someone who knows the move: Kid Chispa (and his moves)
+ * for a hero move, a Dock Goon that only uses it for an enemy move.
+ */
+export function tryMoveInSandbox(scene: Phaser.Scene, id: string): void {
+  const def = Database.move(id);
+  if (def.category === 'enemy') {
+    const base = Database.enemy('dock_goon');
+    addStrings({ 'c.try.foe.name': `${t(def.name)} Goon` });
+    Database.registerCustom(
+      'c.try.',
+      [],
+      [{ ...base, id: 'c.try.foe', name: 'c.try.foe.name', moves: [id], ai: [{ move: id, weight: 1 }] }],
+    );
+    SceneLoader.goto(scene, 'battle_sandbox', { enemy: 'c.try.foe' });
+  } else {
+    const base = Database.character('chispa');
+    addStrings({ 'c.try.hero.name': t(base.name) });
+    Database.registerCustom(
+      'c.try.',
+      [
+        {
+          ...base,
+          id: 'c.try.hero',
+          name: 'c.try.hero.name',
+          sprite: 'spr_test_dummy',
+          moves: [id, ...base.moves.filter((m) => m !== id)],
+        },
+      ],
+      [],
+    );
+    SceneLoader.goto(scene, 'battle_sandbox', { hero: 'c.try.hero' });
+  }
+}
+
 export class MoveMakerScene extends Phaser.Scene {
   mine: CustomMove[] = [];
   pick: Pick | null = null;
@@ -206,34 +241,7 @@ export class MoveMakerScene extends Phaser.Scene {
       id = globalId(myOwnerId(), c.id);
     } else if (this.pick.src === 'other') id = globalId(this.pick.owner, c.id);
     else id = this.pick.id;
-    const def = Database.move(id);
-    if (def.category === 'enemy') {
-      const base = Database.enemy('dock_goon');
-      addStrings({ 'c.try.foe.name': `${t(def.name)} Goon` });
-      Database.registerCustom(
-        'c.try.',
-        [],
-        [{ ...base, id: 'c.try.foe', name: 'c.try.foe.name', moves: [id], ai: [{ move: id, weight: 1 }] }],
-      );
-      SceneLoader.goto(this, 'battle_sandbox', { enemy: 'c.try.foe' });
-    } else {
-      const base = Database.character('chispa');
-      addStrings({ 'c.try.hero.name': t(base.name) });
-      Database.registerCustom(
-        'c.try.',
-        [
-          {
-            ...base,
-            id: 'c.try.hero',
-            name: 'c.try.hero.name',
-            sprite: 'spr_test_dummy',
-            moves: [id, ...base.moves.filter((m) => m !== id)],
-          },
-        ],
-        [],
-      );
-      SceneLoader.goto(this, 'battle_sandbox', { hero: 'c.try.hero' });
-    }
+    tryMoveInSandbox(this, id);
   }
 
   leave(): void {

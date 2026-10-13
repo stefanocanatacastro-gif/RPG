@@ -899,10 +899,36 @@ with sync_playwright() as p:
     wait_scene(page, "battle_sandbox", 10000)
     page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
     wait_scene(page, "dev_hub")
+
+    # ── Community gallery: browse by kind, copy to remix, play an encounter ──
+    hub_open(page, 7)
+    wait_scene(page, "gallery")
+    page.wait_for_function("window.__game.scene.getScene('gallery').ready", timeout=10000)
+    ga = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('gallery'); {js} }})()")
+    enc = ga("return s.list().map(c => c.name);")
+    check("Maker Bout" in enc, f"the gallery lists the saved encounter ({enc})")
+    page.screenshot(path=f"{out}/30e_gallery_fights.png")
+    ga("s.setKind('fighter');")
+    page.wait_for_timeout(200)
+    page.screenshot(path=f"{out}/30f_gallery_fighters.png")
+    ga("s.setKind('move');")
+    names = ga("return s.list().map(c => c.name);")
+    check("Tornado DDT" in names, f"the gallery lists made moves ({names})")
+    ga("s.copy();")
+    page.wait_for_function("window.__game.scene.getScene('gallery').status.startsWith('Copied')", timeout=8000)
+    n = ga("return s.list().filter(c => c.name === 'Tornado DDT').length;")
+    check(n == 2, f"COPY makes it yours to remix ({n} copies)")
+    page.screenshot(path=f"{out}/30g_gallery_moves.png")
+    ga("s.setKind('encounter'); s.selected = s.list().findIndex(c => c.name === 'Maker Bout'); s.play();")
+    wait_scene(page, "encounters")
+    sel = page.evaluate("(() => { const s = window.__game.scene.getScene('encounters'); return s.entries()[s.selected].title; })()")
+    check(sel == "Maker Bout", f"PLAY opens that encounter ({sel})")
+    page.evaluate("window.__game.scene.getScene('encounters').leave()")
+    wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=7
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=8
     ):
         page.wait_for_timeout(400)
         for _ in range(i):

@@ -167,5 +167,7 @@
   "battle.snack": "SNACK",
   "battle.junk": "JUNK!",
   "hub.moves": "Move maker",
-  "hub.moves.desc": "Make attacks and heals: power, hits, Grit, run-in or aerial, one target or everyone, action command, wind-ups. Teach them in the fighter maker."
+  "hub.moves.desc": "Make attacks and heals: power, hits, Grit, run-in or aerial, one target or everyone, action command, wind-ups. Teach them in the fighter maker.",
+  "hub.gallery": "Community gallery",
+  "hub.gallery.desc": "Everything everyone in the game link has made, by maker: try it, play it, like it, or copy it to remix."
 }
