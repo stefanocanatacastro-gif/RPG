@@ -228,6 +228,7 @@ with sync_playwright() as p:
         """() => { const s = window.__game.scene.getScene('field');
         const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; }"""
     )
+    page.evaluate("window.__debug.set('god', true)")  # this checks running away; losing is tested later
     wait_scene(page, "battle")
     for _ in range(12):
         wait_battle_input(page, "menu")
@@ -240,6 +241,7 @@ with sync_playwright() as p:
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
     wait_scene(page, "field", 10000)
+    page.evaluate("window.__debug.set('god', false)")
     page.evaluate(
         """() => { const s = window.__game.scene.getScene('field');
         const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x; s.player.body.z = e.body.z; }"""
@@ -659,6 +661,7 @@ with sync_playwright() as p:
     sb("s.pressRow('Stage', 'right'); s.pressRow('Max HP', 'right'); s.pressRow('Assist', 'left');")
     stage = sb("return s.rows.find(r => r.label === 'Stage').value();")
     gs_before = page.evaluate("window.__debug.save()")
+    flags_before = page.evaluate("[window.__debug.state.god, window.__debug.state.autoCommands]")
     sb("s.pressRow('FIGHT', 'confirm');")
     wait_scene(page, "battle")
     wait_battle_input(page, "menu")
@@ -679,7 +682,7 @@ with sync_playwright() as p:
     gs_after = page.evaluate("window.__debug.save()")
     check(gs_before == gs_after, "a sandbox fight leaves the save untouched")
     flags = page.evaluate("[window.__debug.state.god, window.__debug.state.autoCommands]")
-    check(flags == [False, False], f"the sandbox puts the debug switches back ({flags})")
+    check(flags == flags_before, f"the sandbox puts the debug switches back ({flags_before} -> {flags})")
     press(page, "x", 300)
     wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
@@ -729,8 +732,41 @@ with sync_playwright() as p:
     wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
+    # ── Fighter maker ──
+    page.wait_for_timeout(400)
+    for _ in range(3):
+        press(page, "ArrowDown")
+    press(page, "Enter")
+    wait_scene(page, "fighter_maker")
+    page.wait_for_timeout(400)
+    fm = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('fighter_maker'); {js} }})()")
+    fm("s.addFighter('hero'); s.mine[s.mine.length - 1].name = 'Test Hero'; s.mine[s.mine.length - 1].hp = 30; s.refresh();")
+    fm("s.addFighter('enemy'); s.mine[s.mine.length - 1].name = 'Test Rival'; s.refresh();")
+    page.screenshot(path=f"{out}/25_maker.png")
+    check(fm("return s.problems.length;") == 0, "a new hero and enemy are valid fighters")
+    fm("s.save();")
+    page.wait_for_timeout(400)
+    built = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.builds') || '{}')")
+    check(len(built.get("fighters", [])) == 2, f"SAVE keeps both fighters ({len(built.get('fighters', []))})")
+    fm("s.tryIt();")
+    wait_scene(page, "battle_sandbox", 10000)
+    enemy0 = page.evaluate("window.__game.scene.getScene('battle_sandbox').s.enemies[0].id")
+    check(enemy0 == "c.me.f2", f"TRY puts the made enemy in the sandbox ({enemy0})")
+    page.evaluate("(() => { const s = window.__game.scene.getScene('battle_sandbox'); s.useHero('c.me.f1'); s.s.assist = 3; s.pressRow('FIGHT', 'confirm'); })()")
+    wait_scene(page, "battle", 10000)
+    wait_battle_input(page, "menu")
+    lead = battle_eval(page, "return [s.engine.hero.defId, s.engine.hero.maxHp, s.engine.enemies()[0].defId];")
+    check(lead == ["c.me.f1", 30, "c.me.f2"], f"the made hero leads the fight against the made enemy ({lead})")
+    page.screenshot(path=f"{out}/26_maker_battle.png")
+    phase = fight(page, out, "27_maker")
+    check(phase == "victory", f"the made fighters fight it out ({phase})")
+    wait_scene(page, "battle_sandbox", 10000)
+    page.evaluate("window.__game.scene.getScene('battle_sandbox').leave()")
+    wait_scene(page, "dev_hub")
+    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
+
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=3
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=4
     ):
         page.wait_for_timeout(400)
         for _ in range(i):

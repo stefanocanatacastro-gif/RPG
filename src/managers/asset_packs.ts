@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { AssetPack } from '../types/asset_pack';
 import { makePlaceholder } from '../systems/placeholder';
+import { runtimeSpriteKeys } from './sprite_keys';
 
 // Every JSON in src/data/packs is bundled at build time and keyed by its id.
 const modules = import.meta.glob<AssetPack>('../data/packs/*.json', { eager: true, import: 'default' });
@@ -70,5 +71,8 @@ export function unloadPack(scene: Phaser.Scene, id: string): void {
 
 /** Every image key declared in any pack (the Database checks sprites against this). */
 export function allSpriteKeys(): Set<string> {
-  return new Set(Object.values(PACKS).flatMap((p) => p.images.map((i) => i.key)));
+  return new Set([
+    ...Object.values(PACKS).flatMap((p) => p.images.map((i) => i.key)),
+    ...runtimeSpriteKeys(),
+  ]);
 }

@@ -336,6 +336,28 @@ export const Database = {
   move: (id: string) => lookup(maps.moves, 'move', id),
   item: (id: string) => lookup(maps.items, 'item', id),
   formation: (id: string) => lookup(maps.formations, 'formation', id),
+  /**
+   * Adds (or replaces) characters and enemies made in the fighter maker. Their
+   * ids carry a prefix (the maker's), so they never clash with built-in ones.
+   */
+  registerCustom(prefix: string, chars: CharacterDef[], foes: EnemyDef[]): void {
+    Database.unregisterCustom(prefix);
+    for (const c of chars) {
+      DATA.characters.push(c);
+      maps.characters.set(c.id, c);
+    }
+    for (const e of foes) {
+      DATA.enemies.push(e);
+      maps.enemies.set(e.id, e);
+    }
+  },
+  unregisterCustom(prefix: string): void {
+    const gone = (id: string) => id.startsWith(prefix);
+    for (const c of DATA.characters.filter((c) => gone(c.id))) maps.characters.delete(c.id);
+    for (const e of DATA.enemies.filter((e) => gone(e.id))) maps.enemies.delete(e.id);
+    DATA.characters = DATA.characters.filter((c) => !gone(c.id));
+    DATA.enemies = DATA.enemies.filter((e) => !gone(e.id));
+  },
   stage: (id: string) => lookup(maps.stages, 'stage', id),
   counts: () => ({
     characters: DATA.characters.length,

@@ -30,7 +30,7 @@ export function tf(key: string, vars: Record<string, string | number>): string {
   return t(key).replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
 }
 
-/** Adds or replaces text at runtime (rooms made in the editor bring their own). */
+/** Adds or replaces text at runtime (custom fighters bring their own names). */
 export function addStrings(table: Record<string, string>, l: 'en' | 'es' = 'en'): void {
   Object.assign(TABLES[l], table);
 }

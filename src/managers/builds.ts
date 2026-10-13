@@ -1,0 +1,249 @@
+// Fighters made in the fighter maker: heroes and enemies with their own name,
+// look, stats, moves and (for enemies) traits, rewards and attack pattern.
+//
+// Storage: each person's fighters are one document, builds/<their id>, in the
+// game link's database. Everyone who opens the link reads everyone's (the
+// community), only the owner can change theirs. Outside the link they live in
+// this browser. At start-up every fighter found is turned into normal game data
+// (CharacterDef / EnemyDef) so battles, the sandbox and the simulator use them
+// like built-in ones.
+
+import type { AiRule, CharacterDef, EnemyDef, EnemyProp } from '../types/data';
+import { Database } from './database';
+import { addStrings } from './strings';
+import { registerSpriteKey } from './sprite_keys';
+import { artifactDb, viewerId, type DbLike } from './artifact_db';
+
+/** The colour slots of the wrestler body. */
+export const COLOR_SLOTS = ['skin', 'mask', 'shirt', 'trunks', 'boots'] as const;
+export type ColorSlot = (typeof COLOR_SLOTS)[number];
+
+/** Colours offered for each slot. */
+export const PALETTE: number[] = [
+  0xf4ead2, 0xd99b6c, 0xb07850, 0x7a4a30, 0x4a2c20, 0xffb238, 0xf2c14e, 0xd8314b, 0x8f1f33, 0x2a6fd8,
+  0x1d2a4a, 0x3fa7f0, 0x5fd068, 0x2e7a3a, 0x9f6fd8, 0x5b3a8a, 0x1b1622, 0x5b5068, 0xa79cb6, 0xff70a0,
+];
+
+export interface FighterLook {
+  /** 'wrestler' = the animated wrestler body in custom colours, or an existing sprite key. */
+  base: string;
+  colors?: Partial<Record<ColorSlot, number>>;
+}
+
+export interface CustomFighter {
+  /** Unique within its maker's set (f1, f2…). */
+  id: string;
+  kind: 'hero' | 'enemy';
+  name: string;
+  look: FighterLook;
+  hp: number;
+  attack: number;
+  defence: number;
+  moves: string[];
+  /** Heroes: Grit to spend on moves. */
+  grit?: number;
+  /** Enemies. */
+  props?: EnemyProp[];
+  xp?: number;
+  coins?: number;
+  /** Enemies: how often each move is picked (0 = never). */
+  weights?: Record<string, number>;
+  /** Enemies: a move used whenever HP is at half or below. */
+  lowHpMove?: string;
+  scout?: string;
+}
+
+export interface BuildSet {
+  fighters: CustomFighter[];
+  savedAt?: string;
+}
+
+const LOCAL_KEY = 'kid-chispa.builds';
+let db: DbLike | null = null;
+let uid: string | null = null;
+/** Everyone's sets, by owner id ('me' outside the link). */
+const sets = new Map<string, BuildSet>();
+const looks = new Map<string, FighterLook>();
+
+/** Short owner tag used in fighter ids: c.<owner>.<id>. */
+function ownerTag(owner: string): string {
+  return owner === 'me' ? 'me' : owner.replace(/^u_/, '').slice(0, 8);
+}
+
+export function myOwnerId(): string {
+  return uid ?? 'me';
+}
+
+export function globalId(owner: string, localId: string): string {
+  return `c.${ownerTag(owner)}.${localId}`;
+}
+
+export function isCustomId(id: string): boolean {
+  return id.startsWith('c.');
+}
+
+export function isMine(id: string): boolean {
+  return id.startsWith(`c.${ownerTag(myOwnerId())}.`);
+}
+
+/** Texture key for a fighter's look. */
+function textureFor(gid: string, look: FighterLook): string {
+  return look.base === 'wrestler' ? `spr_custom_${gid.replace(/\./g, '_')}` : look.base;
+}
+
+/** Turns a maker's fighter into normal game data. */
+export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; foe?: EnemyDef } {
+  const gid = globalId(owner, f.id);
+  const name = `${gid}.name`;
+  addStrings({ [name]: f.name || 'Nameless' });
+  const sprite = textureFor(gid, f.look);
+  if (f.look.base === 'wrestler') registerSpriteKey(sprite);
+  looks.set(gid, f.look);
+  if (f.kind === 'hero')
+    return {
+      char: {
+        id: gid,
+        name,
+        sprite,
+        hp: f.hp,
+        grit: f.grit ?? 5,
+        attack: f.attack,
+        defence: f.defence,
+        moves: [...f.moves],
+      },
+    };
+  const scout = `${gid}.scout`;
+  addStrings({ [scout]: f.scout || 'A fighter from the community.' });
+  const weights = f.weights ?? {};
+  const ai: AiRule[] = f.moves
+    .filter((m) => (weights[m] ?? 1) > 0)
+    .map((m) => ({ move: m, weight: weights[m] ?? 1 }));
+  if (f.lowHpMove && f.moves.includes(f.lowHpMove))
+    ai.push({ move: f.lowHpMove, weight: 1, priority: 1, whenHpBelow: 0.5 });
+  if (ai.length === 0 && f.moves[0]) ai.push({ move: f.moves[0], weight: 1 });
+  return {
+    foe: {
+      id: gid,
+      name,
+      sprite,
+      level: 1,
+      hp: f.hp,
+      attack: f.attack,
+      defence: f.defence,
+      xp: f.xp ?? 1,
+      coins: f.coins ?? 0,
+      props: [...(f.props ?? [])],
+      moves: [...f.moves],
+      ai,
+      scout,
+    },
+  };
+}
+
+function register(owner: string, set: BuildSet): void {
+  const chars: CharacterDef[] = [];
+  const foes: EnemyDef[] = [];
+  for (const f of set.fighters) {
+    const d = toDefs(owner, f);
+    if (d.char) chars.push(d.char);
+    if (d.foe) foes.push(d.foe);
+  }
+  Database.registerCustom(`c.${ownerTag(owner)}.`, chars, foes);
+}
+
+/** Loads every set it can see (all of them, in the link) and adds the fighters to the game. */
+export async function loadBuilds(timeoutMs = 4000): Promise<'shared' | 'local'> {
+  db = await artifactDb(timeoutMs);
+  uid = db ? await viewerId(timeoutMs) : null;
+  sets.clear();
+  if (db && uid) {
+    try {
+      const snap = await db.collection('builds').get();
+      for (const d of snap.docs) {
+        const json = d.data()?.json;
+        if (typeof json === 'string') sets.set(d.id, JSON.parse(json));
+      }
+    } catch {
+      db = null;
+    }
+  }
+  if (!db || !uid) {
+    db = null;
+    uid = null;
+    try {
+      const local = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? 'null') as BuildSet | null;
+      if (local) sets.set('me', local);
+    } catch {
+      /* no storage */
+    }
+  }
+  for (const [owner, set] of sets) register(owner, set);
+  return db ? 'shared' : 'local';
+}
+
+export const Builds = {
+  backend: (): 'shared' | 'local' => (db ? 'shared' : 'local'),
+
+  /** This person's own fighters (editable copies). */
+  mine(): CustomFighter[] {
+    return structuredClone(sets.get(myOwnerId())?.fighters ?? []);
+  },
+
+  /** Everyone else's fighters, with their owner, for browsing and copying. */
+  others(): { owner: string; fighter: CustomFighter }[] {
+    const out: { owner: string; fighter: CustomFighter }[] = [];
+    for (const [owner, set] of sets)
+      if (owner !== myOwnerId()) for (const f of set.fighters) out.push({ owner, fighter: f });
+    return out;
+  },
+
+  /** Saves this person's whole set and refreshes the game data. */
+  async saveMine(fighters: CustomFighter[]): Promise<void> {
+    const set: BuildSet = { fighters: structuredClone(fighters), savedAt: new Date().toISOString() };
+    if (db && uid) await db.doc(`builds/${uid}`).set({ json: JSON.stringify(set), savedAt: set.savedAt! });
+    else
+      try {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(set));
+      } catch {
+        /* lasts for this visit */
+      }
+    sets.set(myOwnerId(), set);
+    register(myOwnerId(), set);
+  },
+
+  /** A made fighter's look and texture key (for drawing it). */
+  lookOf(gid: string): { look: FighterLook; key: string } | null {
+    const look = looks.get(gid);
+    return look ? { look, key: textureFor(gid, look) } : null;
+  },
+};
+
+/** Default stats for a new fighter. */
+export function newFighter(kind: 'hero' | 'enemy', id: string): CustomFighter {
+  if (kind === 'hero')
+    return {
+      id,
+      kind,
+      name: 'New Hero',
+      look: { base: 'wrestler', colors: { shirt: 0x5fd068, trunks: 0x1d2a4a, mask: 0xf4ead2 } },
+      hp: 10,
+      grit: 5,
+      attack: 1,
+      defence: 0,
+      moves: ['chop', 'elbow_drop'],
+    };
+  return {
+    id,
+    kind,
+    name: 'New Rival',
+    look: { base: 'wrestler', colors: { shirt: 0x8f1f33, trunks: 0x1b1622, mask: 0x1b1622 } },
+    hp: 6,
+    attack: 1,
+    defence: 0,
+    moves: ['goon_shove'],
+    props: [],
+    xp: 2,
+    coins: 2,
+    weights: { goon_shove: 1 },
+  };
+}

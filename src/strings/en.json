@@ -144,5 +144,7 @@
   "gameover.note": "Kid Chispa is out for the count.",
   "gameover.continue": "Continue from last save",
   "gameover.title_screen": "Back to title",
-  "gameover.no_save": "No save yet: start a new game from the title."
+  "gameover.no_save": "No save yet: start a new game from the title.",
+  "hub.maker": "Fighter maker",
+  "hub.maker.desc": "Make your own heroes and enemies: look, stats, moves. Saved to the game link for everyone."
 }

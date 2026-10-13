@@ -139,7 +139,15 @@ describe('Database', () => {
     b.doors![0].spawn = 'nowhere';
     b.objects!.push({ id: 'chest_b', kind: 'chest', x: 1, z: 1, item: 'golden_belt', flag: '' });
     b.objects!.push({ id: 't1', kind: 'trigger', x: 1, z: 1, w: 1, d: 1 });
-    b.objects!.push({ id: 'n1', kind: 'npc', x: 1, z: 1, sprite: 'spr_nobody', name: 'npc.dock_kid', lines: [] });
+    b.objects!.push({
+      id: 'n1',
+      kind: 'npc',
+      x: 1,
+      z: 1,
+      sprite: 'spr_nobody',
+      name: 'npc.dock_kid',
+      lines: [],
+    });
     b.enemies.push({ id: 'b9', enemy: 'dock_goon', formation: 'nope', x: 1, z: 1, patrol: 1 });
     const msgs = validateGameData(broken, ctx).map((p) => `${p.file}:${p.id}:${p.message}`);
     expect(msgs).toContain(`rooms:test_b · exit to test_a:spawn "nowhere" doesn't exist there`);

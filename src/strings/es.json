@@ -144,5 +144,7 @@
   "gameover.note": "Kid Chispa quedó fuera de combate.",
   "gameover.continue": "Continuar desde la última partida",
   "gameover.title_screen": "Volver al título",
-  "gameover.no_save": "Aún no hay partida guardada: empieza una nueva desde el título."
+  "gameover.no_save": "Aún no hay partida guardada: empieza una nueva desde el título.",
+  "hub.maker": "Creador de luchadores",
+  "hub.maker.desc": "Crea tus propios héroes y enemigos: aspecto, estadísticas, movimientos. Se guardan en el enlace del juego."
 }

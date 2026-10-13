@@ -173,6 +173,21 @@ Enemy attacks go for the partner 40% of the time while he's standing (`partnerTa
 
 Pip's moves: **Mic Drop** (timed press, reaches flyers) and **Scout**, which shows an opponent's HP, attack, defence and Pip's notes. For testing, the debug menu's *Pip in party* switch brings him along in field fights, and the sandbox has a *Partner* row.
 
+## Fighter maker
+
+The game is growing into a Paper Mario-style **battle builder**: make your own fighters and encounters and share them. Step 1 is the fighter maker (dev hub → *Fighter maker*).
+
+- **+HERO / +ENEMY** start a new fighter; anything in the list (yours, the community's, or built-in) can be **COPY**'d and changed.
+- **Look**: the animated wrestler body in your own colours (skin, mask, shirt, trunks, boots), or any existing sprite.
+- **Stats**: HP, attack, defence; heroes have Grit; enemies have XP and coin rewards, can be spiky or flying, and have Scout text.
+- **Moves**: heroes switch hero moves on and off; enemies give each enemy move a weight (how often it's picked) and can have a move they always use when hurt (at half HP or below).
+- **SAVE** (Ctrl+S) checks the fighter like any game data, then stores your set. In the game link it goes to `builds/<your id>` in the link's database: everyone who opens the link can see and copy your fighters (the COMMUNITY list), only you can change them. Elsewhere it's kept in the browser.
+- **TRY** opens the battle sandbox with the fighter in place: as the hero, or as the first opponent. The sandbox has a **Hero** row, so any hero can lead a fight (with any partner).
+
+At start-up every saved fighter becomes normal game data (`c.<owner>.<id>`), so battles, the sandbox and the simulator treat them exactly like built-in ones.
+
+Coming next in the builder: saved encounters, items, stage conditions, the crowd and Hype, a move maker, and a community gallery.
+
 ## Battle sandbox
 
 Dev hub → *Battle sandbox* is the balancing bench. Build a fight from any enemies (up to 4, front or back row; flyers stay in the air), start from any line-up in `formations.json`, pick the arena look, and set Chispa's HP, attack, defence and Grit, the First Strike, assists (Perfect commands, god mode) and the seed (random, or the last fight's seed to replay it).

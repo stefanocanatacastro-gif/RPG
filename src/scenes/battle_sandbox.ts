@@ -23,7 +23,7 @@ import type { BattleScene } from './battle';
 import type { FormationDef, FormationSlot } from '../types/data';
 
 const SLOTS = 4;
-const ROW_H = 14;
+const ROW_H = 13;
 const TOP = 50;
 const LEFT_W = 344;
 const VAL_L = 132; // "<"
@@ -61,16 +61,18 @@ interface Setup {
   attack: number;
   defence: number;
   grit: number;
-  /** Index into partners(): 0 = none. */
-  partner: number;
+  /** Character leading the fight (Chispa or anyone made in the fighter maker). */
+  hero: string;
+  /** Character fighting alongside, or null. */
+  partner: string | null;
   strike: number;
   assist: number;
   fixedSeed: boolean;
   skill: number;
 }
 
-/** Partner choices: none, then every character who isn't Chispa. */
-const partners = () => [null, ...Database.data.characters.filter((c) => c.id !== 'chispa')];
+/** Partner choices: none, then every character who isn't the hero. */
+const partners = (hero: string) => [null, ...Database.data.characters.filter((c) => c.id !== hero)];
 
 /** Kept between visits so the bench remembers the last set-up. */
 let saved: Setup | null = null;
@@ -97,7 +99,8 @@ export class BattleSandboxScene extends Phaser.Scene {
     super('battle_sandbox');
   }
 
-  create(): void {
+  /** `hero` / `enemy`: open with a fighter from the fighter maker already in place. */
+  create(data?: { hero?: string; enemy?: string }): void {
     if (!hasGame()) newGame(Database.character('chispa'));
     const hero = Database.character('chispa');
     this.s = saved ?? {
@@ -111,7 +114,8 @@ export class BattleSandboxScene extends Phaser.Scene {
       attack: hero.attack,
       defence: hero.defence,
       grit: gameState().data.maxGrit,
-      partner: 1,
+      hero: 'chispa',
+      partner: 'pip',
       strike: 0,
       assist: 0,
       fixedSeed: false,
@@ -119,6 +123,15 @@ export class BattleSandboxScene extends Phaser.Scene {
     };
     if (!saved) this.loadPreset();
     saved = this.s;
+    // the hero or partner may have been deleted in the fighter maker since
+    if (!Database.data.characters.some((c) => c.id === this.s.hero)) this.useHero('chispa');
+    if (this.s.partner && !Database.data.characters.some((c) => c.id === this.s.partner))
+      this.s.partner = null;
+    if (data?.hero && Database.data.characters.some((c) => c.id === data.hero)) this.useHero(data.hero);
+    if (data?.enemy && Database.data.enemies.some((e) => e.id === data.enemy)) {
+      const def = Database.enemy(data.enemy);
+      this.s.enemies[0] = { id: def.id, slot: def.props.includes('airborne') ? 'air' : 'front' };
+    }
     this.cursor = 0;
     this.busy = false;
     this.report = [];
@@ -126,7 +139,7 @@ export class BattleSandboxScene extends Phaser.Scene {
 
     benchBackdrop(this, 'BATTLE SANDBOX', versionLabel());
     const g = this.add.graphics();
-    const panelH = 18 * ROW_H + 10;
+    const panelH = 19 * ROW_H + 10;
     drawPanel(g, 8, TOP - 6, LEFT_W, panelH, { alpha: 0.9 });
     drawPanel(g, LEFT_W + 16, TOP - 6, W - LEFT_W - 24, panelH, { alpha: 0.9 });
     this.desc = pixelText(this, 16, H - 46, '', 8, css(UI.inkDim))
@@ -211,10 +224,17 @@ export class BattleSandboxScene extends Phaser.Scene {
         desc: 'Arena look, from stages.json.',
       },
       {
+        label: 'Hero',
+        value: () => t(Database.character(s.hero).name),
+        left: () => this.cycleHero(-1),
+        right: () => this.cycleHero(1),
+        desc: 'Who leads the fight: Kid Chispa, or a hero from the fighter maker. Sets the numbers below.',
+      },
+      {
         label: 'Max HP',
         value: () => String(s.maxHp),
         ...step('maxHp', 1, 99),
-        desc: "Chispa's HP for this fight (starts full).",
+        desc: "The hero's HP for this fight (starts full).",
       },
       {
         label: 'Attack',
@@ -226,7 +246,7 @@ export class BattleSandboxScene extends Phaser.Scene {
         label: 'Defence',
         value: () => String(s.defence),
         ...step('defence', 0, 20),
-        desc: 'Taken off every hit Chispa takes.',
+        desc: 'Taken off every hit the hero takes.',
       },
       {
         label: 'Grit',
@@ -237,12 +257,12 @@ export class BattleSandboxScene extends Phaser.Scene {
       {
         label: 'Partner',
         value: () => {
-          const p = partners()[s.partner];
+          const p = s.partner ? Database.character(s.partner) : null;
           return p ? `${t(p.name)} (${p.hp} HP)` : 'None';
         },
-        left: () => (s.partner = cycle(s.partner, -1, partners().length)),
-        right: () => (s.partner = cycle(s.partner, 1, partners().length)),
-        desc: 'Who fights alongside Chispa, at full HP.',
+        left: () => this.cyclePartner(-1),
+        right: () => this.cyclePartner(1),
+        desc: 'Who fights alongside the hero, at full HP.',
       },
       {
         label: 'First strike',
@@ -286,6 +306,30 @@ export class BattleSandboxScene extends Phaser.Scene {
       },
       { label: 'Back', confirm: () => this.leave(), desc: 'Back to the dev hub.' },
     ];
+  }
+
+  /** Picks the hero and takes their numbers. */
+  private useHero(id: string): void {
+    const def = Database.character(id);
+    Object.assign(this.s, {
+      hero: id,
+      maxHp: def.hp,
+      attack: def.attack,
+      defence: def.defence,
+      grit: def.grit,
+    });
+    if (this.s.partner === id) this.s.partner = null;
+  }
+
+  private cycleHero(dir: number): void {
+    const ids = Database.data.characters.map((c) => c.id);
+    this.useHero(ids[(ids.indexOf(this.s.hero) + dir + ids.length) % ids.length]);
+  }
+
+  private cyclePartner(dir: number): void {
+    const list = partners(this.s.hero).map((c) => c?.id ?? null);
+    const i = list.indexOf(this.s.partner);
+    this.s.partner = list[(i + dir + list.length) % list.length];
   }
 
   private loadPreset(): void {
@@ -476,14 +520,14 @@ export class BattleSandboxScene extends Phaser.Scene {
     this.restoreState = { save, god: debugState.god, auto: debugState.autoCommands };
     // the fight uses a copy of the save with the sandbox's hero numbers
     const tmp: SaveData = structuredClone(save);
-    tmp.party[0].maxHp = this.s.maxHp;
-    tmp.party[0].hp = this.s.maxHp;
+    tmp.party[0] = { id: this.s.hero, maxHp: this.s.maxHp, hp: this.s.maxHp };
     tmp.maxGrit = this.s.grit;
     tmp.grit = this.s.grit;
-    const partner = partners()[this.s.partner];
+    const partner =
+      this.s.partner && this.s.partner !== this.s.hero ? Database.character(this.s.partner) : null;
     tmp.activePartner = partner?.id ?? null;
     if (partner) {
-      tmp.party = tmp.party.filter((m) => m.id !== partner.id);
+      tmp.party = tmp.party.filter((m, i) => i === 0 || m.id !== partner.id);
       tmp.party.push({ id: partner.id, hp: partner.hp, maxHp: partner.hp });
     }
     gs.restore(tmp);
@@ -545,10 +589,11 @@ export class BattleSandboxScene extends Phaser.Scene {
     const r = simulate(
       {
         db: Database,
-        hero: Database.character('chispa'),
+        hero: Database.character(this.s.hero),
         maxHp: this.s.maxHp,
         maxGrit: this.s.grit,
-        partner: partners()[this.s.partner] ?? undefined,
+        partner:
+          this.s.partner && this.s.partner !== this.s.hero ? Database.character(this.s.partner) : undefined,
         attack: this.s.attack,
         defence: this.s.defence,
         formation: f,

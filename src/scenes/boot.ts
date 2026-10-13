@@ -11,6 +11,7 @@ import { rng } from '../systems/rng';
 import { debugState, setDebug } from '../systems/debug_state';
 import { loadSavedRooms } from '../managers/room_store';
 import { loadSaveSlots } from '../managers/save_manager';
+import { loadBuilds } from '../managers/builds';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -43,8 +44,11 @@ export class BootScene extends Phaser.Scene {
     }));
 
     // rooms saved from the room editor are laid over the shipped ones, then checked too
-    const rooms = loadSavedRooms().then((where) => {
+    // rooms from the room editor and fighters from the fighter maker join the
+    // shipped data; then everything is checked together
+    const rooms = Promise.all([loadSavedRooms(), loadBuilds()]).then(([where, builds]) => {
       this.registry.set('roomStore', where);
+      this.registry.set('buildStore', builds);
       Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
     });
     const saves = loadSaveSlots().then((where) => this.registry.set('saveStore', where));

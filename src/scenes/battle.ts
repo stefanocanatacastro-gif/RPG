@@ -24,6 +24,8 @@ import { CommandRunner } from '../battle/command_view';
 import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle/commands';
 import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
+import { isCustomId } from '../managers/builds';
+import { ensureLook } from '../systems/custom_looks';
 
 type Choice =
   | { kind: 'move'; move: string; target: string }
@@ -39,6 +41,8 @@ interface FighterView {
   home: { x: number; y: number };
   /** Texture key, for looking up its animations. */
   texture: string;
+  /** Whether the sprite is mirrored at rest (animated enemies face left). */
+  baseFlip: boolean;
   /** Pulsing glow behind an enemy that is winding up a charged move. */
   aura?: Phaser.GameObjects.Ellipse;
 }
@@ -146,14 +150,19 @@ export class BattleScene extends Phaser.Scene {
   private addFighter(f: Fighter): void {
     const home = homeOf(f.side, f.order, f.airborne);
     const shadow = this.add.ellipse(home.x, STAGE.floorY, 40, 8, 0x000000, 0.3).setDepth(5);
-    const isHero = f.id === 'hero';
-    const texture = isHero ? HERO_TEXTURE : f.sprite;
+    // Kid Chispa uses the test wrestler until his real art exists; made fighters bring their own look
+    const texture = f.defId === 'chispa' ? HERO_TEXTURE : f.sprite;
+    if (isCustomId(f.defId)) ensureLook(this, f.defId);
+    const animated = this.anims.exists(animKey(texture, 'idle'));
     const sprite = this.add
-      .sprite(home.x, home.y, texture, isHero ? 'idle_00' : undefined)
+      .sprite(home.x, home.y, texture, animated ? 'idle_00' : undefined)
       .setOrigin(0.5, 1)
       .setDepth(10 + f.order);
-    if (isHero) sprite.play(animKey(HERO_TEXTURE, 'idle'));
-    const view: FighterView = { f, sprite, shadow, home, texture };
+    if (animated) sprite.play(animKey(texture, 'idle'));
+    // animated bodies are drawn facing right: enemies turn to face the hero
+    const baseFlip = f.side === 'enemy' && animated;
+    sprite.setFlipX(baseFlip);
+    const view: FighterView = { f, sprite, shadow, home, texture, baseFlip };
     if (f.side === 'enemy') {
       view.bar = new Bar(
         this,
@@ -197,7 +206,16 @@ export class BattleScene extends Phaser.Scene {
     this.vignette();
     const g = this.ui(this.add.graphics());
     drawPanel(g, 8, 8, 236, 66, { alpha: 0.94 });
-    this.ui(pixelText(this, 20, 18, t('char.chispa').toUpperCase(), 8, css(UI.spark)).setOrigin(0, 0));
+    this.ui(
+      pixelText(
+        this,
+        20,
+        18,
+        t(Database.character(gs.hero().id).name).toUpperCase(),
+        8,
+        css(UI.spark),
+      ).setOrigin(0, 0),
+    );
     const hp = this.ui(new Bar(this, 20, 34, 212, BAR_STYLES.hp, gs.hero().hp, gs.hero().maxHp));
     const grit = this.ui(new Bar(this, 20, 52, 212, BAR_STYLES.grit, gs.data.grit, gs.data.maxGrit));
     const offs = [
@@ -323,7 +341,7 @@ export class BattleScene extends Phaser.Scene {
         const runners = e.party(false).map((f) => this.views.get(f.id)!.sprite);
         this.director.track([runners[0]], 1.15);
         for (const r of runners) r.setFlipX(true);
-        runners[0].play(animKey(HERO_TEXTURE, 'walk'));
+        this.playAnim(this.views.get('hero')!, 'walk');
         await this.tween({ targets: runners, x: -40, duration: 500 });
         await this.banner(t('battle.fled'), UI.ink);
       }
@@ -866,10 +884,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private async returnHome(v: FighterView): Promise<void> {
-    v.sprite.setFlipX(v.f.side === 'hero');
+    // walking home faces away from the opponents, then turns back
+    v.sprite.setFlipX(!v.baseFlip);
     this.playAnim(v, 'walk');
     await this.tween({ targets: v.sprite, x: v.home.x, y: v.home.y, duration: 320 });
-    v.sprite.setFlipX(false);
+    v.sprite.setFlipX(v.baseFlip);
     this.playAnim(v, 'idle');
   }
 
@@ -983,7 +1002,7 @@ export class BattleScene extends Phaser.Scene {
     // close-up on the winner while the crowd goes wild
     this.director.to({ x: hero.sprite.x + 30, y: STAGE.floorY - 48, zoom: 1.6 }, 3);
     this.arena.cheer(2);
-    hero.sprite.play(animKey(HERO_TEXTURE, 'chop'));
+    this.playAnim(hero, 'chop');
     await this.banner(t('battle.victory'), UI.spark, 700);
     await this.showResults(r, before, levels);
     this.finish('win');

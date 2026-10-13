@@ -5,10 +5,6 @@ import { tinyText, tinyTextWidth } from '../ui/tiny_font';
 import { t } from '../managers/strings';
 import { makeTestWrestler } from '../systems/test_sprites';
 import { buildAnimations } from '../systems/anim_builder';
-import { initRoomStore } from '../field/room_store';
-import { Database } from '../managers/database';
-import { allSpriteKeys } from '../managers/asset_packs';
-import { englishKeys } from '../managers/strings';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -41,10 +37,6 @@ export class PreloadScene extends Phaser.Scene {
       fps: { idle: 3, walk: 8, chop: 12, hurt: 6 },
       once: ['chop', 'hurt'],
     });
-    // rooms saved from the room editor replace the built-in ones; check them too
-    void initRoomStore().then(() => {
-      Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
-      this.scene.start('title');
-    });
+    this.scene.start('title');
   }
 }
