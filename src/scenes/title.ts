@@ -4,12 +4,11 @@ import { pixelText } from '../ui/pixel_text';
 import { tinyText, tinyTextWidth } from '../ui/tiny_font';
 import { versionLabel } from '../systems/version';
 import { t } from '../managers/strings';
-import { gameState, newGame } from '../managers/game_state';
+import { newGame } from '../managers/game_state';
 import { MenuList, type MenuItem } from '../ui/components';
 import { SaveManager, type SlotId } from '../managers/save_manager';
 import { pickSlot } from '../ui/save_slots';
-import { ROOMS } from '../field/rooms';
-import rules from '../data/rules.json';
+import { startFromSave, startNewGame } from '../managers/game_flow';
 import { Database } from '../managers/database';
 import { SceneLoader } from '../managers/scene_loader';
 import { input } from '../systems/input';
@@ -488,8 +487,7 @@ export class TitleScene extends Phaser.Scene {
       if (slot) return this.play(slot);
     } else if (value === 'new') {
       this.busy = true;
-      newGame(Database.character('chispa'));
-      SceneLoader.enterRoom(this, 'field', { room: rules.newGame.room, spawn: rules.newGame.spawn });
+      startNewGame(this);
     } else {
       this.busy = true;
       newGame(Database.character('chispa'));
@@ -502,20 +500,7 @@ export class TitleScene extends Phaser.Scene {
     const data = SaveManager.load(slot);
     if (!data) return;
     this.busy = true;
-    newGame(Database.character('chispa'));
-    gameState().restore(data);
-    if (!ROOMS[data.room])
-      // the room it was saved in no longer exists: start of the game's first room
-      return void SceneLoader.enterRoom(this, 'field', {
-        room: rules.newGame.room,
-        spawn: rules.newGame.spawn,
-      });
-    SceneLoader.enterRoom(this, 'field', {
-      room: data.room,
-      x: data.pos.x,
-      y: data.pos.y,
-      facing: data.facing,
-    });
+    startFromSave(this, data);
   }
 
   /** M0 check of the error overlay: press F8 on the title screen. */

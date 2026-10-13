@@ -499,6 +499,7 @@ export class BattleSandboxScene extends Phaser.Scene {
       hero: { attack: this.s.attack, defence: this.s.defence },
       firstStrike: STRIKES[this.s.strike],
       returnTo: 'battle_sandbox',
+      loseOk: true,
     });
   }
 

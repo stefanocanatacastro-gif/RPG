@@ -6,7 +6,9 @@
     "icon": "item_steel_chair",
     "category": "damage",
     "target": "single",
-    "effect": { "damage": 3 },
+    "effect": {
+      "damage": 3
+    },
     "price": 8
   },
   {
@@ -16,7 +18,9 @@
     "icon": "item_water_bottle",
     "category": "heal",
     "target": "self",
-    "effect": { "heal": 5 },
+    "effect": {
+      "heal": 5
+    },
     "price": 4
   },
   {
@@ -26,7 +30,21 @@
     "icon": "item_protein_shake",
     "category": "heal",
     "target": "self",
-    "effect": { "grit": 5 },
+    "effect": {
+      "grit": 5
+    },
     "price": 6
+  },
+  {
+    "id": "smelling_salts",
+    "name": "item.smelling_salts",
+    "desc": "item.smelling_salts.desc",
+    "icon": "item_smelling_salts",
+    "category": "heal",
+    "target": "self",
+    "effect": {
+      "revive": 5
+    },
+    "price": 15
   }
 ]

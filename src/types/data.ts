@@ -99,7 +99,15 @@ export interface ItemDef {
   icon: string;
   category: ItemCategory;
   target: TargetRule;
-  effect: { heal?: number; grit?: number; damage?: number; attackUp?: number; turns?: number };
+  effect: {
+    heal?: number;
+    grit?: number;
+    damage?: number;
+    attackUp?: number;
+    turns?: number;
+    /** Gets Chispa back up with this much HP when he's knocked out (works by itself, not from the menu). */
+    revive?: number;
+  };
   price: number;
 }
 
@@ -110,6 +118,8 @@ export interface FormationDef {
   enemies: { enemy: string; slot: FormationSlot }[];
   stage: string;
   music?: string;
+  /** A fight the story lets you lose (no Game Over): the story goes on either way. */
+  loseOk?: boolean;
   /** Hazards that may trigger during this fight (M3). */
   hazards?: string[];
 }

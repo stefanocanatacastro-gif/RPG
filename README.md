@@ -114,6 +114,12 @@ The title screen opens a menu when you press Start: **Continue** (the newest sav
 - In the game link, saves are kept in your own private space in the link's database, so they follow you to any browser and nobody else can see them; elsewhere they use the browser's storage.
 - Every save carries a format version. When the save format changes, the version goes up and a small upgrade step in `MIGRATIONS` (`game_state.ts`) brings older saves forward, so saves from earlier builds keep loading.
 
+## Losing
+
+When Chispa is knocked out, anything in the bag that revives (Smelling Salts: back up with 5 HP) is used by itself and the fight goes on; such items can't be picked from the menu. Otherwise it's **Game Over**: the fight and the room close, and the Game Over screen offers **Continue from last save** (the newest save, usually the autosave from entering the room) or **Back to title**.
+
+A fight the story lets you lose has `"loseOk": true` in its formation (or `loseOk` when started from a scene): Chispa gets back up and the game goes on. Sandbox fights never end the game. A knocked-down partner never causes a Game Over.
+
 ## Room editor
 
 Dev hub → *Room editor* (or **F2** while walking around a room) is where rooms get built. It shows the room as a top-down plan: the back wall at the top, the front edge (where the game camera stands) at the bottom, one grid square per unit, an amber line at every screen.

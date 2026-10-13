@@ -28,6 +28,8 @@ export interface BattleStart {
   formationDef?: FormationDef;
   /** Fixed seed, to replay a fight exactly. */
   seed?: number;
+  /** Losing doesn't end the game (sandbox, story fights you're meant to lose). */
+  loseOk?: boolean;
   /** Battle sandbox: the hero's attack and defence for this fight. */
   hero?: { attack: number; defence: number };
 }
@@ -103,6 +105,22 @@ export const SceneLoader = {
         battle.scene.wake(returnTo, end);
       });
       bus.emit('battle.ended', { formation: end.formation, result: end.result });
+    } finally {
+      busy = false;
+    }
+  },
+
+  /** Battle lost for real: the battle and the sleeping room close, and the Game Over screen opens. */
+  async gameOver(battle: Phaser.Scene, returnTo: string): Promise<void> {
+    if (busy) return;
+    busy = true;
+    try {
+      await wipe(battle.game, () => {
+        battle.scene.stop();
+        battle.scene.stop(returnTo);
+        battle.scene.start('game_over');
+      });
+      bus.emit('battle.ended', { formation: '', result: 'lose' });
     } finally {
       busy = false;
     }

@@ -66,7 +66,6 @@
   "battle.run_failed": "COULDN'T ESCAPE!",
   "battle.round": "ROUND {n}",
   "battle.rewards": "+{coins} COINS    +{xp} XP",
-  "battle.defeat_note": "Game over comes later. For now you get back up with full HP.",
   "battle.guard": "GUARD",
   "battle.cmd.great": "GREAT!",
   "battle.cmd.good": "NICE!",
@@ -136,5 +135,14 @@
   "save.empty": "empty",
   "save.when": "Saved {date}",
   "save.saved": "Saved to {slot}.",
-  "save.failed": "Couldn't save: {why}"
+  "save.failed": "Couldn't save: {why}",
+  "item.smelling_salts": "Smelling Salts",
+  "item.smelling_salts.desc": "Gets Chispa back on his feet with 5 HP when he's knocked out. Works by itself.",
+  "battle.reason.auto_item": "Works by itself when Chispa is knocked out.",
+  "battle.revived": "BACK UP!",
+  "gameover.title": "GAME OVER",
+  "gameover.note": "Kid Chispa is out for the count.",
+  "gameover.continue": "Continue from last save",
+  "gameover.title_screen": "Back to title",
+  "gameover.no_save": "No save yet: start a new game from the title."
 }

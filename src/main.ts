@@ -12,6 +12,7 @@ import { FieldScene } from './scenes/field';
 import { BattleScene } from './scenes/battle';
 import { BattleSandboxScene } from './scenes/battle_sandbox';
 import { RoomEditorScene } from './scenes/room_editor';
+import { GameOverScene } from './scenes/game_over';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
 import { TouchControlsScene } from './scenes/touch_controls';
 import { DebugMenuScene } from './scenes/debug_menu';
@@ -49,6 +50,7 @@ function startGame(): void {
       BattleScene,
       BattleSandboxScene,
       RoomEditorScene,
+      GameOverScene,
       InputTestScene,
       UiKitScene,
       AnimTestScene,

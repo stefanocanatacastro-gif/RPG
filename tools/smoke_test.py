@@ -250,8 +250,11 @@ with sync_playwright() as p:
     check(not active(page, "battle") and grace > 0, f"no battle while protected after running (grace left {grace:.0f} ms)")
     page.wait_for_function("window.__game.scene.isActive('battle')", timeout=5000)
     check(True, "enemy can engage again once the grace period ends")
+    # god mode: this checks the fight plays out to the end (losing now means Game Over, tested later)
+    page.evaluate("window.__debug.set('god', true)")
     result = fight(page, out, "06c")
-    check(result in ("victory", "defeat"), f"the mixed fight (spiky, flyer, goon) ends ({result})")
+    page.evaluate("window.__debug.set('god', false)")
+    check(result == "victory", f"the mixed fight (spiky, flyer, goon) ends ({result})")
     wait_scene(page, "field", 10000)
     page.wait_for_timeout(300)
 
@@ -780,6 +783,40 @@ with sync_playwright() as p:
     room = page.evaluate("window.__game.scene.getScene('field').roomId")
     check(room == newest, f"Continue loads the newest save ({room})")
     page.screenshot(path=f"{out}/23_continue.png")
+
+    # losing for real: Smelling Salts first, then Game Over, then Continue
+    page.evaluate("window.__debug.set('god', false); window.__debug.set('autoCommands', false); window.__debug.setHp(1); window.__debug.give('smelling_salts')")
+    page.evaluate("window.__game.scene.getScene('field').graceMs = 99999")
+    page.wait_for_timeout(1000)  # let the curtain finish opening
+    press(page, "F1", 600)
+    pick_debug("battle")
+    press(page, "Enter", 250)
+    pick_debug("test_goons")
+    press(page, "Enter")
+    wait_scene(page, "battle")
+    revived = False
+    for _ in range(80):
+        if page.evaluate("window.__game.scene.isActive('game_over')"):
+            break
+        if not active(page, "battle"):
+            page.wait_for_timeout(300)
+            continue
+        st = page.evaluate("(() => { const s = window.__game.scene.getScene('battle'); return [s.inputState, s.engine.log.some(l => l.startsWith('revive hero smelling_salts'))]; })()")
+        revived = revived or st[1]
+        if st[0] == "menu":
+            battle_eval(page, "s.menu.setCursor(s.menu.items.findIndex(i => i.value === 'defend'));")
+            press(page, "Enter", 300)
+        else:
+            page.wait_for_timeout(300)
+    check(revived, "Smelling Salts get Chispa back up when he's knocked out")
+    wait_scene(page, "game_over", 15000)
+    page.wait_for_function("!!window.__game.scene.getScene('game_over').menu", timeout=5000)
+    page.screenshot(path=f"{out}/24_game_over.png")
+    check(not active(page, "field"), "Game Over closes the room the fight started in")
+    press(page, "Enter")
+    wait_scene(page, "field", 10000)
+    hp = json.loads(page.evaluate("window.__debug.save()"))["party"][0]["hp"]
+    check(page.evaluate("window.__game.scene.getScene('field').roomId") == newest and hp > 1, f"Continue after Game Over loads the last save ({hp} HP)")
     real = [e for e in errors if "fonts.g" not in e and "ERR_" not in e and "Test crash" not in e]
     check(not real, f"no errors on desktop {real[:3]}")
     ctx.close()

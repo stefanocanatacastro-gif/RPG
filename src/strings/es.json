@@ -66,7 +66,6 @@
   "battle.run_failed": "¡NO PUDISTE HUIR!",
   "battle.round": "RONDA {n}",
   "battle.rewards": "+{coins} MONEDAS    +{xp} XP",
-  "battle.defeat_note": "El game over llega después. Por ahora te levantas con todos tus PV.",
   "battle.guard": "GUARDIA",
   "battle.cmd.great": "¡GENIAL!",
   "battle.cmd.good": "¡BIEN!",
@@ -136,5 +135,14 @@
   "save.empty": "vacía",
   "save.when": "Guardado el {date}",
   "save.saved": "Guardado en {slot}.",
-  "save.failed": "No se pudo guardar: {why}"
+  "save.failed": "No se pudo guardar: {why}",
+  "item.smelling_salts": "Sales aromáticas",
+  "item.smelling_salts.desc": "Pone de pie a Chispa con 5 PV cuando queda fuera de combate. Funciona sola.",
+  "battle.reason.auto_item": "Funciona sola cuando Chispa queda fuera de combate.",
+  "battle.revived": "¡DE PIE!",
+  "gameover.title": "FIN DEL JUEGO",
+  "gameover.note": "Kid Chispa quedó fuera de combate.",
+  "gameover.continue": "Continuar desde la última partida",
+  "gameover.title_screen": "Volver al título",
+  "gameover.no_save": "Aún no hay partida guardada: empieza una nueva desde el título."
 }

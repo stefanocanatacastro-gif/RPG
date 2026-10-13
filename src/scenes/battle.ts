@@ -75,6 +75,8 @@ export class BattleScene extends Phaser.Scene {
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   /** Last menu row picked, per party member. */
   private menuCursor: Record<string, number> = {};
+  /** Losing this fight doesn't end the game. */
+  private loseOk = false;
 
   constructor() {
     super('battle');
@@ -89,6 +91,7 @@ export class BattleScene extends Phaser.Scene {
     const gs = gameState();
     const hero = Database.character(gs.hero().id);
     const formation = start.formationDef ?? Database.formation(start.formation);
+    this.loseOk = !!(start.loseOk || formation.loseOk);
     const pm = gs.partner();
     this.engine = new BattleEngine(
       Database,
@@ -283,6 +286,8 @@ export class BattleScene extends Phaser.Scene {
             await this.caption(t(Database.move(plan.move).name), plan.kind === 'release' ? UI.rope : UI.ink);
             await this.playMove(plan.actor, plan.move, plan.target, { big: plan.kind === 'release' });
           }
+          // knocked out: Smelling Salts (or anything that revives) get Chispa back up by themselves
+          if (e.hero.hp <= 0) await this.tryRevive();
         }
         e.endEnemyAction();
       } else break;
@@ -411,7 +416,15 @@ export class BattleScene extends Phaser.Scene {
     this.menu?.destroy();
     const items: MenuItem[] = gs.data.items.map((id, slot) => {
       const it = Database.item(id);
-      return { label: t(it.name), value: `${slot}`, desc: t(it.desc) };
+      // revive items only work by themselves, when Chispa is knocked out
+      const auto = !!it.effect.revive && !it.effect.heal;
+      return {
+        label: t(it.name),
+        value: `${slot}`,
+        desc: t(it.desc),
+        disabled: auto,
+        reason: t('battle.reason.auto_item'),
+      };
     });
     this.inputState = 'menu';
     this.menu = new MenuList(this, 16, 94, {
@@ -1094,11 +1107,39 @@ export class BattleScene extends Phaser.Scene {
     this.director.to({ x: hero.sprite.x, y: STAGE.floorY - 30, zoom: 1.45 }, 2.5);
     await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 8, duration: 300 });
     await this.banner(t('battle.defeat'), UI.rope, 900);
-    this.desc.setText(t('battle.defeat_note')).setColor(css(UI.inkDim));
-    await this.wait(1200);
+    await this.wait(700);
+    if (this.loseOk) {
+      // a fight the story lets you lose: back to the room on your feet
+      const gs = gameState();
+      gs.setHp(gs.hero().id, gs.hero().maxHp);
+      return this.finish('lose');
+    }
+    this.inputState = 'busy';
+    SceneLoader.gameOver(this, this.start.returnTo);
+  }
+
+  /** Uses the first item that revives, if there is one. Returns whether Chispa got back up. */
+  private async tryRevive(): Promise<boolean> {
     const gs = gameState();
-    gs.setHp(gs.hero().id, gs.hero().maxHp);
-    this.finish('lose');
+    const id = gs.data.items.find((i) => Database.item(i).effect.revive);
+    if (!id) return false;
+    gs.takeItem(id);
+    const amount = Database.item(id).effect.revive!;
+    const e = this.engine;
+    e.hero.hp = Math.min(e.hero.maxHp, amount);
+    e.log.push(`revive hero ${id} +${e.hero.hp}`);
+    gs.setHp(gs.hero().id, e.hero.hp);
+    const hero = this.views.get('hero')!;
+    this.director.track([hero.sprite], 1.35, 10);
+    void this.popText(hero, t(Database.item(id).name).toUpperCase(), UI.good);
+    await this.tween({ targets: hero.sprite, angle: -90, duration: 160 });
+    await this.wait(300);
+    await this.tween({ targets: hero.sprite, angle: 0, duration: 220, ease: 'Back.easeOut' });
+    hero.sprite.setTintFill(0x9ff0a8);
+    this.time.delayedCall(140, () => hero.sprite.clearTint());
+    this.arena.cheer(2);
+    await this.popText(hero, `${t('battle.revived')} +${e.hero.hp}`, UI.good);
+    return true;
   }
 
   private finish(result: BattleResult): void {
