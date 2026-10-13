@@ -1,5 +1,9 @@
 {
   "fleeGraceMs": 3000,
   "fieldNoticeRange": 3.5,
-  "fieldGiveUpRange": 6
+  "fieldGiveUpRange": 6,
+  "newGame": {
+    "room": "test_a",
+    "spawn": "start"
+  }
 }

@@ -124,5 +124,17 @@
   "sign.octagon": "EAST: THE OCTAGON. Fighters only. No refunds.",
   "trigger.test_a": "(A story trigger fired here. It only happens once.)",
   "hub.editor": "Room editor",
-  "hub.editor.desc": "Build and change rooms on a top-down plan, then walk around them. Saves to the game link."
+  "hub.editor.desc": "Build and change rooms on a top-down plan, then walk around them. Saves to the game link.",
+  "title.continue": "Continue",
+  "title.new_game": "New game",
+  "title.load": "Load game",
+  "title.dev_hub": "Dev hub",
+  "save.title": "SAVE",
+  "save.load_title": "LOAD",
+  "save.slot.auto": "Autosave",
+  "save.slot.n": "Slot {n}",
+  "save.empty": "empty",
+  "save.when": "Saved {date}",
+  "save.saved": "Saved to {slot}.",
+  "save.failed": "Couldn't save: {why}"
 }

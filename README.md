@@ -105,6 +105,15 @@ Walk up to a person or thing and a **!** appears over it; the jump button (Z / A
 
 The test rooms show all of it: in room B the kid unlocks the Octagon gate when you talk to him (and says something else afterwards), plus a sign, a chest and a heal block; room A has a one-time trigger by its east door; the Bruiser crew in the Octagon is a story fight.
 
+## Saving
+
+The title screen opens a menu when you press Start: **Continue** (the newest save), **New game**, **Load game** (pick a slot) and **Dev hub**. A new game starts in the room set in `rules.json` (`newGame`), a grey-box room until the Prologue exists.
+
+- **Autosave**: entering any room saves to the Autosave slot.
+- **Save blocks** (`"kind": "save"` in a room, or the editor's *save* tool) let you pick one of three slots.
+- In the game link, saves are kept in your own private space in the link's database, so they follow you to any browser and nobody else can see them; elsewhere they use the browser's storage.
+- Every save carries a format version. When the save format changes, the version goes up and a small upgrade step in `MIGRATIONS` (`game_state.ts`) brings older saves forward, so saves from earlier builds keep loading.
+
 ## Room editor
 
 Dev hub → *Room editor* (or **F2** while walking around a room) is where rooms get built. It shows the room as a top-down plan: the back wall at the top, the front edge (where the game camera stands) at the bottom, one grid square per unit, an amber line at every screen.

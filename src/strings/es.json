@@ -124,5 +124,17 @@
   "sign.octagon": "ESTE: EL OCTÁGONO. Solo luchadores. Sin reembolsos.",
   "trigger.test_a": "(Aquí se activó un evento de historia. Solo pasa una vez.)",
   "hub.editor": "Editor de salas",
-  "hub.editor.desc": "Construye y cambia salas en un plano, y luego recórrelas. Se guarda en el enlace del juego."
+  "hub.editor.desc": "Construye y cambia salas en un plano, y luego recórrelas. Se guarda en el enlace del juego.",
+  "title.continue": "Continuar",
+  "title.new_game": "Nueva partida",
+  "title.load": "Cargar partida",
+  "title.dev_hub": "Centro de desarrollo",
+  "save.title": "GUARDAR",
+  "save.load_title": "CARGAR",
+  "save.slot.auto": "Autoguardado",
+  "save.slot.n": "Ranura {n}",
+  "save.empty": "vacía",
+  "save.when": "Guardado el {date}",
+  "save.saved": "Guardado en {slot}.",
+  "save.failed": "No se pudo guardar: {why}"
 }

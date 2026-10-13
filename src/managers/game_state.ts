@@ -3,10 +3,39 @@
 // through a method so the EventBus hears about it.
 
 import type { CharacterDef } from '../types/data';
+import rules from '../data/rules.json';
 import { addXp as addXpRule } from '../battle/progression';
 import { bus as defaultBus, EventBus, type FlagValue, type GameEvents } from './event_bus';
 
+/** Bump when SaveData changes shape, and add a step to MIGRATIONS that upgrades the previous version. */
 export const SAVE_VERSION = 1;
+
+type Migration = (old: Record<string, unknown>) => Record<string, unknown>;
+/** MIGRATIONS[n] upgrades a version-n save to version n + 1. */
+export const MIGRATIONS: Record<number, Migration> = {};
+
+/**
+ * Brings a save from any older version up to the current one, one step at a
+ * time, so saves made with earlier builds keep working. A save from a newer
+ * build than this one can't be read.
+ */
+export function migrateSave(
+  raw: Record<string, unknown>,
+  migrations: Record<number, Migration> = MIGRATIONS,
+  target = SAVE_VERSION,
+): SaveData {
+  let s = structuredClone(raw);
+  let v = typeof s.version === 'number' ? s.version : 0;
+  if (v > target) throw new Error(`This save is from a newer version of the game (save format ${v})`);
+  while (v < target) {
+    const step = migrations[v];
+    if (!step) throw new Error(`No way to upgrade a save from format ${v}`);
+    s = step(s);
+    v++;
+    s.version = v;
+  }
+  return s as unknown as SaveData;
+}
 export const ITEM_CAP = 10;
 
 export type Facing = 'left' | 'right' | 'up' | 'down';
@@ -59,8 +88,8 @@ export function freshSave(hero: CharacterDef): SaveData {
     equippedPatches: [],
     belts: [],
     flags: {},
-    room: 'test_a',
-    pos: { x: 120, y: 260 },
+    room: rules.newGame.room,
+    pos: { x: 0, y: 0 },
     facing: 'right',
     playTimeMs: 0,
   };
@@ -191,7 +220,8 @@ export class GameState {
   // ── Location ───────────────────────────────────────────────────────
   setLocation(room: string, x: number, y: number, facing: Facing): void {
     this.d.room = room;
-    this.d.pos = { x: Math.round(x), y: Math.round(y) };
+    // world units (x across, y = depth), kept to two decimals
+    this.d.pos = { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
     this.d.facing = facing;
   }
 
@@ -205,8 +235,7 @@ export class GameState {
   }
 
   restore(save: SaveData): void {
-    if (save.version !== SAVE_VERSION) throw new Error(`Save version ${save.version} isn't supported yet`);
-    this.d = structuredClone(save);
+    this.d = migrateSave(save as unknown as Record<string, unknown>);
   }
 }
 

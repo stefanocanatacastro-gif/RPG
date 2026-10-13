@@ -190,7 +190,7 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
   // ── rooms ──
   const formationIds = new Set(data.formations.map((f) => f.id));
   const itemIds = new Set(data.items.map((i) => i.id));
-  const KINDS = ['npc', 'sign', 'chest', 'heal', 'trigger'];
+  const KINDS = ['npc', 'sign', 'chest', 'heal', 'save', 'trigger'];
   // room text is a string key, or { en, es } written into the room
   const checkText = (id: string, field: string, v: unknown) => {
     if (v && typeof v === 'object') {
@@ -221,7 +221,8 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
     // everything placed should be on the floor plan
     const outside = (x: number, z: number) => x < 0 || x > width || z < 0 || z > room.depth;
     room.blocks.forEach((b, i) => {
-      if (outside(b.x, b.z) || outside(b.x + b.w, b.z + b.d)) add('rooms', at(`block ${i + 1}`), 'sticks out of the room');
+      if (outside(b.x, b.z) || outside(b.x + b.w, b.z + b.d))
+        add('rooms', at(`block ${i + 1}`), 'sticks out of the room');
     });
     for (const thing of [...(room.enemies ?? []), ...(room.objects ?? [])])
       if (outside(thing.x, thing.z)) add('rooms', at(thing.id), 'is outside the room');

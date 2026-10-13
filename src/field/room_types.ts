@@ -118,7 +118,12 @@ export interface TriggerDef extends ObjectBase {
   once?: boolean;
 }
 
-export type ObjectDef = NpcDef | SignDef | ChestDef | HealDef | TriggerDef;
+/** A save block: pick a slot and save the game. */
+export interface SaveBlockDef extends ObjectBase {
+  kind: 'save';
+}
+
+export type ObjectDef = NpcDef | SignDef | ChestDef | HealDef | SaveBlockDef | TriggerDef;
 
 export interface LightDef {
   x: number;

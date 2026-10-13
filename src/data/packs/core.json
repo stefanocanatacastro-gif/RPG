@@ -31,6 +31,11 @@
       "key": "spr_obj_heal",
       "w": 32,
       "h": 32
+    },
+    {
+      "key": "spr_obj_save",
+      "w": 32,
+      "h": 32
     }
   ],
   "audio": []

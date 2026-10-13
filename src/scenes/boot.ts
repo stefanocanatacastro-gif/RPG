@@ -10,6 +10,7 @@ import { gameState, hasGame } from '../managers/game_state';
 import { rng } from '../systems/rng';
 import { debugState, setDebug } from '../systems/debug_state';
 import { loadSavedRooms } from '../managers/room_store';
+import { loadSaveSlots } from '../managers/save_manager';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -44,7 +45,8 @@ export class BootScene extends Phaser.Scene {
       this.registry.set('roomStore', where);
       Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
     });
-    Promise.all([waitForPixelFont(), rooms]).then(([ok]) => {
+    const saves = loadSaveSlots().then((where) => this.registry.set('saveStore', where));
+    Promise.all([waitForPixelFont(), rooms, saves]).then(([ok]) => {
       this.registry.set('fontReady', ok);
       document.getElementById('boot-note')?.remove();
       // Overlay scenes run for the whole session, above everything else.

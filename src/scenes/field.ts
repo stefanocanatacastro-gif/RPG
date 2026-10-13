@@ -44,6 +44,8 @@ import { drawRoom, type RoomView } from '../field/room_view';
 import { buildShape } from '../field/room_shape';
 import type { Condition, ObjectDef, RoomDef, RoomExit } from '../field/room_types';
 import { MessageBox, type Line } from '../ui/message_box';
+import { pickSlot } from '../ui/save_slots';
+import { SaveManager } from '../managers/save_manager';
 import { t, tf, tx } from '../managers/strings';
 import { blockDepth, type Block } from '../field/world';
 import { ROOMS } from '../field/rooms';
@@ -88,6 +90,7 @@ const OBJECT_LOOK: Record<string, { sprite?: string; w: number; d: number; h: nu
   sign: { sprite: 'spr_obj_sign', w: 0.7, d: 0.3, h: 1.2 },
   chest: { sprite: 'spr_obj_chest', w: 1, d: 0.7, h: 0.7 },
   heal: { sprite: 'spr_obj_heal', w: 1, d: 1, h: 1 },
+  save: { sprite: 'spr_obj_save', w: 1, d: 1, h: 1 },
   trigger: { w: 0, d: 0, h: 0 },
 };
 
@@ -158,6 +161,7 @@ export class FieldScene extends Phaser.Scene {
     for (const e of this.enemies) this.place(e);
     this.placeObjects();
     this.view.update(this.cx, this.time.now);
+    this.autosave();
     this.marker = pixelText(this, 0, 0, '!', 16, css(UI.spark)).setVisible(false).setDepth(950000);
     const offFlag = bus.on('flag.set', () => this.refreshObjects());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, offFlag);
@@ -428,6 +432,16 @@ export class FieldScene extends Phaser.Scene {
     this.drawDebug();
   }
 
+  /** Every room entered is saved to the autosave slot (Continue picks the newest save). */
+  private autosave(): void {
+    const gs = gameState();
+    const b = this.player.body;
+    gs.setLocation(this.roomId, b.x, b.z, this.facing);
+    SaveManager.save('auto', gs.snapshot(), tx(this.room.name)).catch(() => {
+      /* an autosave that fails just waits for the next room */
+    });
+  }
+
   // ── Objects ─────────────────────────────────────────────────────────
 
   /** Whether a door, enemy or object's flag condition holds right now. */
@@ -550,6 +564,26 @@ export class FieldScene extends Phaser.Scene {
         gs.setFlag(def.flag);
         this.tweens.add({ targets: o.sprite, scaleY: o.sprite!.scaleY * 1.15, duration: 90, yoyo: true });
         await this.say([{ text: tf('field.got_item', { item: name }) }]);
+        break;
+      }
+      case 'save': {
+        this.talking = true;
+        const slot = await pickSlot(this, 'save');
+        if (!slot) {
+          this.talking = false;
+          this.interactReadyAt = this.time.now + 250;
+          return;
+        }
+        const b = this.player.body;
+        gs.setLocation(this.roomId, b.x, b.z, this.facing);
+        try {
+          await SaveManager.save(slot, gs.snapshot(), tx(this.room.name));
+          await this.say([{ text: tf('save.saved', { slot: tf('save.slot.n', { n: slot }) }) }]);
+        } catch (e) {
+          await this.say([
+            { text: tf('save.failed', { why: (e as { message?: string }).message ?? String(e) }) },
+          ]);
+        }
         break;
       }
       case 'heal': {

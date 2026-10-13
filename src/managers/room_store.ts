@@ -10,18 +10,9 @@
 
 import { ROOMS, BUILTIN_ROOMS } from '../field/rooms';
 import type { RoomDef } from '../field/room_types';
+import { artifactDb, type DbLike } from './artifact_db';
 
 type Backend = 'shared' | 'local' | 'none';
-
-interface DocSnap {
-  exists: boolean;
-  id: string;
-  data(): Record<string, unknown> | undefined;
-}
-interface DbLike {
-  collection(path: string): { get(): Promise<{ docs: DocSnap[] }> };
-  doc(path: string): { set(d: Record<string, unknown>): Promise<void>; delete(): Promise<void> };
-}
 
 const LOCAL_KEY = 'kid-chispa.rooms';
 let backend: Backend = 'none';
@@ -47,11 +38,7 @@ function writeLocal(all: Record<string, RoomDef>): void {
 
 /** Connects to wherever saved rooms live and lays them over the shipped ones. */
 export async function loadSavedRooms(timeoutMs = 4000): Promise<Backend> {
-  const claude = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
-  if (claude?.use) {
-    const timeout = new Promise<null>((r) => setTimeout(() => r(null), timeoutMs));
-    db = (await Promise.race([claude.use('db').catch(() => null), timeout])) as DbLike | null;
-  }
+  db = await artifactDb(timeoutMs);
   let saved: Record<string, RoomDef> = {};
   if (db) {
     try {

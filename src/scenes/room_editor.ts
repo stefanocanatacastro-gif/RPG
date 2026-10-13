@@ -56,6 +56,7 @@ const TOOLS = [
   'sign',
   'chest',
   'heal',
+  'save',
   'trigger',
 ] as const;
 type Tool = (typeof TOOLS)[number];
@@ -71,6 +72,7 @@ const TOOL_HINT: Record<Tool, string> = {
   sign: 'Click to place a sign.',
   chest: 'Click to place a chest. Pick the item in the panel.',
   heal: 'Click to place a heal block.',
+  save: 'Click to place a save block.',
   trigger: 'Click to place a story trigger: an invisible area that fires when walked into.',
 };
 
@@ -486,6 +488,7 @@ export class RoomEditorScene extends Phaser.Scene {
         case 'sign':
         case 'chest':
         case 'heal':
+        case 'save':
         case 'trigger': {
           const id = this.newId(tool === 'npc' ? 'person' : tool);
           let o: ObjectDef;
@@ -503,6 +506,7 @@ export class RoomEditorScene extends Phaser.Scene {
           else if (tool === 'chest')
             o = { id, kind: 'chest', x, z, item: Database.data.items[0].id, flag: `${this.roomId}:${id}` };
           else if (tool === 'heal') o = { id, kind: 'heal', x, z };
+          else if (tool === 'save') o = { id, kind: 'save', x, z };
           else
             o = {
               id,
@@ -1360,6 +1364,7 @@ export class RoomEditorScene extends Phaser.Scene {
       sign: 0xb08050,
       chest: 0xffb238,
       heal: 0xff70a0,
+      save: 0x9fd8ff,
       trigger: 0xd070ff,
     };
     (r.objects ?? []).forEach((o, i) => {

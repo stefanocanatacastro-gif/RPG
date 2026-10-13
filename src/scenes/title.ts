@@ -4,7 +4,12 @@ import { pixelText } from '../ui/pixel_text';
 import { tinyText, tinyTextWidth } from '../ui/tiny_font';
 import { versionLabel } from '../systems/version';
 import { t } from '../managers/strings';
-import { newGame } from '../managers/game_state';
+import { gameState, newGame } from '../managers/game_state';
+import { MenuList, type MenuItem } from '../ui/components';
+import { SaveManager, type SlotId } from '../managers/save_manager';
+import { pickSlot } from '../ui/save_slots';
+import { ROOMS } from '../field/rooms';
+import rules from '../data/rules.json';
 import { Database } from '../managers/database';
 import { SceneLoader } from '../managers/scene_loader';
 import { input } from '../systems/input';
@@ -88,6 +93,9 @@ function ditherRamp(scene: Phaser.Scene, key: string, w: number, h: number, ramp
 export class TitleScene extends Phaser.Scene {
   private started = false;
   private prompt!: Phaser.GameObjects.Text;
+  /** The title menu, once Start has been pressed (the browser test reads it). */
+  menu: MenuList | null = null;
+  private busy = false;
 
   constructor() {
     super('title');
@@ -95,6 +103,8 @@ export class TitleScene extends Phaser.Scene {
 
   create(): void {
     this.started = false;
+    this.menu = null;
+    this.busy = false;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const rand = rng(1931);
 
@@ -427,22 +437,85 @@ export class TitleScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-F8', () => this.testCrash());
     this.input.on(Phaser.Input.Events.POINTER_UP, (p: Phaser.Input.Pointer) => {
       const debugCorner = p.x < 44 && p.y < 44;
-      if (!debugCorner && !input.onTouchControl(p.x, p.y)) this.start();
+      if (!debugCorner && !input.onTouchControl(p.x, p.y) && !this.started) this.start();
     });
 
     this.cameras.main.fadeIn(400, 11, 9, 16);
   }
 
   update(): void {
-    if (input.justPressed('confirm') || input.justPressed('menu')) this.start();
+    if (!this.started && (input.justPressed('confirm') || input.justPressed('menu'))) this.start();
   }
 
+  /** Start pressed: the title menu replaces the prompt. */
   private start(): void {
     if (this.started) return;
     this.started = true;
     this.cameras.main.flash(120, 255, 178, 56);
+    this.prompt.setVisible(false);
+    this.time.delayedCall(150, () => this.openMenu());
+  }
+
+  private openMenu(): void {
+    const saved = SaveManager.hasAny();
+    const items: MenuItem[] = [];
+    if (saved) items.push({ label: t('title.continue'), value: 'continue' });
+    items.push({ label: t('title.new_game'), value: 'new' });
+    if (saved) items.push({ label: t('title.load'), value: 'load' });
+    items.push({ label: t('title.dev_hub'), value: 'dev' });
+    const w = 220;
+    const x = (W - w) / 2;
+    const y = H - items.length * 22 - 40;
+    this.menu = new MenuList(this, x, y, {
+      width: w,
+      rows: items.length,
+      rowHeight: 22,
+      items,
+      cancellable: false,
+      onSelect: (item) => void this.choose(item.value),
+    });
+  }
+
+  private async choose(value: string): Promise<void> {
+    if (this.busy || !this.menu) return;
+    if (value === 'continue') {
+      const slot = SaveManager.latest();
+      if (slot) return this.play(slot);
+    } else if (value === 'load') {
+      this.menu.active = false;
+      const slot = await pickSlot(this, 'load');
+      this.menu.active = true;
+      if (slot) return this.play(slot);
+    } else if (value === 'new') {
+      this.busy = true;
+      newGame(Database.character('chispa'));
+      SceneLoader.enterRoom(this, 'field', { room: rules.newGame.room, spawn: rules.newGame.spawn });
+    } else {
+      this.busy = true;
+      newGame(Database.character('chispa'));
+      SceneLoader.goto(this, 'dev_hub');
+    }
+  }
+
+  /** Loads a save and walks back in where it was made. */
+  private play(slot: SlotId): void {
+    const data = SaveManager.load(slot);
+    if (!data) return;
+    this.busy = true;
     newGame(Database.character('chispa'));
-    this.time.delayedCall(150, () => SceneLoader.goto(this, 'dev_hub'));
+    gameState().restore(data);
+    if (!ROOMS[data.room])
+      // the room it was saved in no longer exists: start of the game's first room
+      return void SceneLoader.enterRoom(this, 'field', {
+        room: rules.newGame.room,
+        spawn: rules.newGame.spawn,
+      });
+    SceneLoader.enterRoom(this, 'field', {
+      room: data.room,
+      x: data.pos.x,
+      y: data.pos.y,
+      facing: data.facing,
+    });
   }
 
   /** M0 check of the error overlay: press F8 on the title screen. */

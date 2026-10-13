@@ -161,6 +161,13 @@ with sync_playwright() as p:
     problems = page.evaluate("window.__game.scene.getScene('dev_hub') && 0")
     page.screenshot(path=f"{out}/01_title.png")
 
+    # Start opens the title menu; with no saves it offers New game and Dev hub
+    press(page, "Enter", 400)
+    page.wait_for_function("!!window.__game.scene.getScene('title').menu", timeout=5000)
+    labels = page.evaluate("window.__game.scene.getScene('title').menu.items.map(i => i.value)")
+    check(labels == ["new", "dev"], f"a first visit offers New game and Dev hub ({labels})")
+    page.screenshot(path=f"{out}/01b_title_menu.png")
+    page.evaluate("window.__game.scene.getScene('title').menu.setCursor(1)")
     press(page, "Enter")
     wait_scene(page, "dev_hub")
     page.wait_for_timeout(500)
@@ -393,7 +400,7 @@ with sync_playwright() as p:
     h0 = battle_eval(page, "return s.engine.hero.hp;")
     h1, d1, g = enemy_attack("KeyZ", lead=90, shot="23_block")
     check(g == "guardcmd block" and h1 == h0, f"Block with A just before the hit takes no damage ({g}, HP {h0}->{h1})")
-    h2, d2, g = enemy_attack("KeyX", lead=45, shot="24_reversal")
+    h2, d2, g = enemy_attack("KeyX", lead=56, shot="24_reversal")
     check(g == "guardcmd reversal" and h2 == h1 and d2 < d1 - 0, f"Reversal with B: no damage and the dummy is hit back ({g}, dummy {d1}->{d2})")
     h3, d3, g = enemy_attack("KeyZ", early=True)
     check(g == "guardcmd none early" and h3 == h2 - 1, f"pressing during the wind-up is too early ({g}, HP {h2}->{h3})")
@@ -552,6 +559,17 @@ with sync_playwright() as p:
     close_messages()
     items2 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
     check(items2 == items1, "an opened chest is empty")
+    saves = lambda: page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.saves') || '{}')")
+    check("auto" in saves(), "entering a room autosaves")
+    # the save block: pick slot 1
+    fs("s.player.body.x = 17; s.player.body.z = 8.8; s.player.body.y = 0;")
+    page.wait_for_timeout(300)
+    press(page, "KeyZ", 700)
+    page.screenshot(path=f"{out}/07f_save_slots.png")
+    press(page, "Enter", 600)
+    close_messages()
+    sv = saves()
+    check("1" in sv and sv["1"]["meta"]["room"] == "test_b", f"the save block saves to slot 1 ({list(sv)})")
 
     # room B's east door leads into the octagon arena
     page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 18.6; s.player.body.z = 5; }")
@@ -747,6 +765,21 @@ with sync_playwright() as p:
     wait_scene(page, "title")
     press(page, "F8", 400)
     check(page.evaluate("!!document.getElementById('crash')"), "F8 on the title shows the crash screen")
+
+    # Continue: reload, and the newest save puts you back where it was made
+    page.reload()
+    wait_scene(page, "title", 15000)
+    page.wait_for_timeout(600)
+    press(page, "Enter", 400)
+    page.wait_for_function("!!window.__game.scene.getScene('title').menu", timeout=5000)
+    labels = page.evaluate("window.__game.scene.getScene('title').menu.items.map(i => i.value)")
+    check(labels[0] == "continue" and "load" in labels, f"with saves, the title offers Continue first ({labels})")
+    newest = page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('kid-chispa.saves')); return Object.values(s).sort((a, b) => a.meta.savedAt < b.meta.savedAt ? 1 : -1)[0].meta.room; })()")
+    press(page, "Enter")
+    wait_scene(page, "field", 10000)
+    room = page.evaluate("window.__game.scene.getScene('field').roomId")
+    check(room == newest, f"Continue loads the newest save ({room})")
+    page.screenshot(path=f"{out}/23_continue.png")
     real = [e for e in errors if "fonts.g" not in e and "ERR_" not in e and "Test crash" not in e]
     check(not real, f"no errors on desktop {real[:3]}")
     ctx.close()
