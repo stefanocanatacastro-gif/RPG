@@ -18,6 +18,7 @@ import moves from '../data/moves.json';
 import items from '../data/items.json';
 import formations from '../data/formations.json';
 import stages from '../data/stages.json';
+import { ROOMS } from '../field/rooms';
 
 export interface Problem {
   file: string;
@@ -186,6 +187,66 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
     else if (!stageIds.has(f.stage)) add('formations', f.id, `unknown stage "${f.stage}"`);
   }
 
+  // ── rooms ──
+  const formationIds = new Set(data.formations.map((f) => f.id));
+  const itemIds = new Set(data.items.map((i) => i.id));
+  const KINDS = ['npc', 'sign', 'chest', 'heal', 'trigger'];
+  for (const [rid, room] of Object.entries(data.rooms)) {
+    const at = (what: string) => `${rid}${what ? ` · ${what}` : ''}`;
+    if (!Number.isInteger(room.screens) || room.screens < 1)
+      add('rooms', rid, 'screens must be a whole number ≥ 1');
+    if (!isNum(room.depth) || room.depth <= 0) add('rooms', rid, 'depth must be > 0');
+    if (!room.spawns?.start) add('rooms', rid, 'needs a "start" spawn');
+    const width = room.screens * 20;
+    for (const [sid, sp] of Object.entries(room.spawns ?? {})) {
+      if (!Array.isArray(sp) || !isNum(sp[0]) || !isNum(sp[1]))
+        add('rooms', at(`spawn ${sid}`), 'must be [x, z, facing]');
+      else if (sp[0] < 0 || sp[0] > width || sp[1] < 0 || sp[1] > room.depth)
+        add('rooms', at(`spawn ${sid}`), 'is outside the room');
+    }
+    for (const exit of [...(room.doors ?? []), ...(room.gates ?? [])]) {
+      const target = data.rooms[exit.room];
+      if (!target) add('rooms', at(`exit to ${exit.room}`), "leads to a room that doesn't exist");
+      else if (!target.spawns?.[exit.spawn])
+        add('rooms', at(`exit to ${exit.room}`), `spawn "${exit.spawn}" doesn't exist there`);
+      if (exit.lockedText) checkString('rooms', at(`exit to ${exit.room}`), 'lockedText', exit.lockedText);
+    }
+    const ids = new Set<string>();
+    const unique = (id: string) => {
+      if (ids.has(id)) add('rooms', at(id), 'duplicate id in this room');
+      ids.add(id);
+    };
+    for (const e of room.enemies ?? []) {
+      unique(e.id);
+      if (!enemyIds.has(e.enemy)) add('rooms', at(e.id), `unknown enemy "${e.enemy}"`);
+      if (!formationIds.has(e.formation)) add('rooms', at(e.id), `unknown formation "${e.formation}"`);
+    }
+    for (const o of room.objects ?? []) {
+      unique(o.id);
+      if (!KINDS.includes(o.kind)) {
+        add('rooms', at(o.id), `unknown object kind "${(o as { kind: string }).kind}"`);
+        continue;
+      }
+      if (!isNum(o.x) || !isNum(o.z)) add('rooms', at(o.id), 'needs x and z');
+      if (o.kind === 'npc') {
+        checkSprite('rooms', at(o.id), o.sprite);
+        checkString('rooms', at(o.id), 'name', o.name);
+      }
+      if ((o.kind === 'npc' || o.kind === 'sign') && !(o.lines?.length > 0))
+        add('rooms', at(o.id), 'has nothing to say');
+      if ('lines' in o) for (const l of o.lines ?? []) checkString('rooms', at(o.id), 'line', l);
+      if (o.kind === 'chest') {
+        if (!itemIds.has(o.item)) add('rooms', at(o.id), `unknown item "${o.item}"`);
+        if (!o.flag) add('rooms', at(o.id), 'needs a flag to remember it was opened');
+      }
+      if (o.kind === 'trigger') {
+        if (!(o.w > 0 && o.d > 0)) add('rooms', at(o.id), 'needs a size (w and d)');
+        if (o.once !== false && !o.setFlag)
+          add('rooms', at(o.id), 'fires once, so it needs setFlag to remember');
+      }
+    }
+  }
+
   const COLOUR = /^#[0-9a-f]{6}$/i;
   const LENGTHS: Record<string, number> = {
     sky: 5,
@@ -223,6 +284,7 @@ const DATA: GameData = {
   items: items as ItemDef[],
   formations: formations as FormationDef[],
   stages: stages as StageDef[],
+  rooms: ROOMS,
 };
 
 function index<T extends { id: string }>(list: T[]): Map<string, T> {

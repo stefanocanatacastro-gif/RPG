@@ -41,11 +41,12 @@ import {
 } from '../field/world';
 import { drawRoom, type RoomView } from '../field/room_view';
 import { buildShape } from '../field/room_shape';
-import type { RoomDef, RoomExit } from '../field/room_types';
-import rooms from '../data/rooms/test_rooms.json';
+import type { Condition, ObjectDef, RoomDef, RoomExit } from '../field/room_types';
+import { MessageBox, type Line } from '../ui/message_box';
+import { t, tf } from '../managers/strings';
+import { blockDepth, type Block } from '../field/world';
+import { ROOMS } from '../field/rooms';
 import rules from '../data/rules.json';
-
-const ROOMS = rooms as unknown as Record<string, RoomDef>;
 
 interface Actor {
   body: Body;
@@ -57,6 +58,8 @@ interface Actor {
 
 interface FieldEnemy extends Actor {
   id: string;
+  /** false = a story fight: once beaten, gone for good. */
+  respawn: boolean;
   formation: string;
   spiky: boolean;
   flying: boolean;
@@ -66,7 +69,28 @@ interface FieldEnemy extends Actor {
   chasing: boolean;
 }
 
-export class FieldTestScene extends Phaser.Scene {
+/** A person, sign, chest, heal block or trigger placed in the room. */
+interface FieldObject {
+  def: ObjectDef;
+  sprite?: Phaser.GameObjects.Sprite;
+  shadow?: Phaser.GameObjects.Ellipse;
+  /** Solid footprint (not drawn: the sprite is the look). */
+  block?: Block;
+  visible: boolean;
+  /** Triggers: the player is standing in it (fires on the way in only). */
+  inside?: boolean;
+}
+
+/** Look and solid size (units) of each placeable thing. */
+const OBJECT_LOOK: Record<string, { sprite?: string; w: number; d: number; h: number }> = {
+  npc: { w: 0.8, d: 0.6, h: 2 },
+  sign: { sprite: 'spr_obj_sign', w: 0.7, d: 0.3, h: 1.2 },
+  chest: { sprite: 'spr_obj_chest', w: 1, d: 0.7, h: 0.7 },
+  heal: { sprite: 'spr_obj_heal', w: 1, d: 1, h: 1 },
+  trigger: { w: 0, d: 0, h: 0 },
+};
+
+export class FieldScene extends Phaser.Scene {
   roomId = 'test_a';
   private room!: RoomDef;
   private shape!: RoomShape;
@@ -85,9 +109,16 @@ export class FieldTestScene extends Phaser.Scene {
   /** World x at the middle of the screen, for the perspective projection. */
   private cx = 0;
   private exits: RoomExit[] = [];
+  objects: FieldObject[] = [];
+  msg!: MessageBox;
+  /** A message is up: the player can't move. */
+  talking = false;
+  private interactReadyAt = 0;
+  private marker!: Phaser.GameObjects.Text;
+  private lockedShown = false;
 
   constructor() {
-    super('field_test');
+    super('field');
   }
 
   create(entry: RoomEntry): void {
@@ -99,14 +130,19 @@ export class FieldTestScene extends Phaser.Scene {
     this.enemies = [];
 
     const built = buildShape(this.room);
-    this.shape = built.shape;
+    // a copy: solid objects add their footprints to it
+    this.shape = { ...built.shape, blocks: [...built.shape.blocks] };
     this.exits = built.exits;
+    this.talking = false;
+    this.lockedShown = false;
+    this.msg = new MessageBox(this);
     const width = this.shape.width;
     const view = drawRoom(this, this.room, this.shape);
     this.view = view;
     this.bounds = view.bounds;
     this.cameras.main.setBounds(0, view.bounds.top, width * U, view.bounds.bottom - view.bounds.top);
 
+    this.spawnObjects();
     this.spawnPlayer(entry);
     this.spawnEnemies();
     this.buildHud();
@@ -117,7 +153,11 @@ export class FieldTestScene extends Phaser.Scene {
     this.cx = cameraCentre(Math.round(this.camX), W);
     this.place(this.player);
     for (const e of this.enemies) this.place(e);
+    this.placeObjects();
     this.view.update(this.cx, this.time.now);
+    this.marker = pixelText(this, 0, 0, '!', 16, css(UI.spark)).setVisible(false).setDepth(950000);
+    const offFlag = bus.on('flag.set', () => this.refreshObjects());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offFlag);
 
     this.debugGfx = this.add.graphics().setDepth(900000);
     this.events.on(Phaser.Scenes.Events.WAKE, (_sys: unknown, end: BattleEnd) => this.onBattleEnd(end));
@@ -169,7 +209,10 @@ export class FieldTestScene extends Phaser.Scene {
   }
 
   private spawnEnemies(): void {
+    const gs = gameState();
     for (const e of this.room.enemies) {
+      if (!this.holds(e)) continue;
+      if (e.respawn === false && gs.isSet(this.beatenFlag(e.id))) continue;
       const def = Database.enemy(e.enemy);
       const flying = def.props.includes('airborne');
       const a = this.makeActor(e.x, e.z, flying ? 0.8 : 0, def.sprite);
@@ -177,6 +220,7 @@ export class FieldTestScene extends Phaser.Scene {
       this.enemies.push({
         ...a,
         id: e.id,
+        respawn: e.respawn !== false,
         formation: e.formation,
         spiky: def.props.includes('spiky'),
         flying,
@@ -197,7 +241,7 @@ export class FieldTestScene extends Phaser.Scene {
     SceneLoader.startBattle(this, 'battle', {
       formation: fe.formation,
       firstStrike,
-      returnTo: 'field_test',
+      returnTo: 'field',
       fieldEnemyId: fe.id,
     });
   }
@@ -207,6 +251,8 @@ export class FieldTestScene extends Phaser.Scene {
     if (!end) return;
     const fe = this.enemies.find((e) => e.id === end.fieldEnemyId);
     if (end.result === 'win' && fe) {
+      // story fights stay won
+      if (!fe.respawn) gameState().setFlag(this.beatenFlag(fe.id));
       // defeated enemies stay gone until you leave the room (respawn rules come with M2)
       fe.sprite.destroy();
       fe.shadow.destroy();
@@ -237,7 +283,7 @@ export class FieldTestScene extends Phaser.Scene {
   private useDoor(room: string, spawn: string): void {
     if (this.leaving) return;
     this.leaving = true;
-    SceneLoader.enterRoom(this, 'field_test', { room, spawn });
+    SceneLoader.enterRoom(this, 'field', { room, spawn });
   }
 
   // ── HUD ─────────────────────────────────────────────────────────────
@@ -283,7 +329,7 @@ export class FieldTestScene extends Phaser.Scene {
       setCoins();
     });
     hintLine(this, [
-      ['jump', 'jump'],
+      ['jump', 'jump / talk'],
       ['strike', 'strike'],
       ['menu', 'hub'],
     ])
@@ -297,6 +343,10 @@ export class FieldTestScene extends Phaser.Scene {
     gameState().addPlayTime(dtMs);
     if (this.graceMs > 0) this.graceMs = Math.max(0, this.graceMs - dtMs);
     if (this.leaving) return;
+    if (this.talking) {
+      this.marker.setVisible(false);
+      return;
+    }
 
     if (input.justPressed('menu')) {
       this.leaving = true;
@@ -310,10 +360,18 @@ export class FieldTestScene extends Phaser.Scene {
     const busy = this.striking;
     const dx = busy ? 0 : (x / len) * WORLD.walkSpeed * dt;
     const dz = busy ? 0 : (-y / len) * WORLD.depthSpeed * dt; // up = farther back
+    // next to someone or something: the jump button talks / opens instead
+    const near = !busy && b.grounded ? this.interactable() : null;
+    this.showMarker(near);
+    if (near && input.justPressed('confirm') && this.time.now >= this.interactReadyAt) {
+      void this.interact(near);
+      return;
+    }
     if (input.justPressed('jump') && b.grounded && !busy) {
       b.vy = WORLD.jumpSpeed;
       b.grounded = false;
     }
+    const prev = { x: b.x, z: b.z };
     moveBody(this.shape, b, dx, dz, dt);
 
     // camera follows sideways and into the depth, eased, on whole pixels;
@@ -336,7 +394,18 @@ export class FieldTestScene extends Phaser.Scene {
 
     // exits: walking out through a gap in the outline
     const gate = exitGate(this.shape, b.x, b.z);
-    if (gate >= 0) return this.useDoor(this.exits[gate].room, this.exits[gate].spawn);
+    if (gate >= 0) {
+      const exit = this.exits[gate];
+      if (!exit.requires || gameState().isSet(exit.requires)) return this.useDoor(exit.room, exit.spawn);
+      // locked: stay inside, and say so once per try
+      b.x = prev.x;
+      b.z = prev.z;
+      if (!this.lockedShown) {
+        this.lockedShown = true;
+        void this.say([{ text: t(exit.lockedText ?? 'field.locked') }]);
+      }
+    } else if (!this.nearExit(b.x, b.z)) this.lockedShown = false;
+    this.checkTriggers();
 
     this.place(this.player);
     const rate = this.graceMs > 1000 ? 120 : 60;
@@ -345,8 +414,170 @@ export class FieldTestScene extends Phaser.Scene {
     for (const e of this.enemies) this.updateEnemy(e, dt);
     this.checkTouches();
 
+    this.placeObjects();
     this.view.update(this.cx, this.time.now, this.player.sprite.x);
     this.drawDebug();
+  }
+
+  // ── Objects ─────────────────────────────────────────────────────────
+
+  /** Whether a door, enemy or object's flag condition holds right now. */
+  private holds(c: Condition): boolean {
+    const gs = gameState();
+    return (!c.if || gs.isSet(c.if)) && (!c.unless || !gs.isSet(c.unless));
+  }
+
+  private beatenFlag(id: string): string {
+    return `beaten:${this.roomId}:${id}`;
+  }
+
+  private spawnObjects(): void {
+    this.objects = [];
+    for (const def of this.room.objects ?? []) {
+      const look = OBJECT_LOOK[def.kind];
+      const o: FieldObject = { def, visible: false };
+      if (def.kind !== 'trigger') {
+        const key = def.kind === 'npc' ? def.sprite : look.sprite!;
+        o.shadow = this.add.ellipse(0, 0, 30, 8, 0x000000, 0.3);
+        o.sprite = this.add.sprite(0, 0, key).setOrigin(0.5, 1);
+        o.block = {
+          x: def.x - look.w / 2,
+          z: def.z - look.d / 2,
+          w: look.w,
+          d: look.d,
+          h: look.h,
+          kind: 'object',
+        };
+      }
+      this.objects.push(o);
+    }
+    this.refreshObjects();
+  }
+
+  /** Shows or hides objects by their flag conditions, and keeps the solid footprints in step. */
+  private refreshObjects(): void {
+    const solids = new Set(this.objects.map((o) => o.block));
+    this.shape.blocks = this.shape.blocks.filter((b) => !solids.has(b));
+    for (const o of this.objects) {
+      o.visible = this.holds(o.def);
+      o.sprite?.setVisible(o.visible);
+      o.shadow?.setVisible(o.visible);
+      if (o.visible && o.block) this.shape.blocks.push(o.block);
+      // an opened chest looks spent
+      if (o.def.kind === 'chest' && o.sprite) o.sprite.setAlpha(gameState().isSet(o.def.flag) ? 0.45 : 1);
+    }
+  }
+
+  /** Objects stand on the floor at their spot, scaled and hazed like everyone else. */
+  private placeObjects(): void {
+    for (const o of this.objects) {
+      if (!o.sprite || !o.block) continue;
+      const body = { x: o.def.x, y: 0, z: o.def.z };
+      const p = project(body, this.cx);
+      o.sprite.setPosition(p.x, p.y).setScale(spriteScale(body.z));
+      const haze = 0.6 * fogAmount(body.z, this.room.depth) * (1 - this.view.lightAt(body.x, body.z) * 0.8);
+      o.sprite.setTint(mixColor(0xffffff, this.view.fog, haze));
+      // in front of the footprint's own block depth, so anyone behind it is covered
+      o.sprite.setDepth(blockDepth(o.block) + 1);
+      o.shadow!.setPosition(p.x, p.y).setScale(depthScale(body.z)).setDepth(blockDepth(o.block));
+    }
+  }
+
+  /** The person or thing the player is next to and facing, if any. */
+  private interactable(): FieldObject | null {
+    const p = this.player.body;
+    const dir = this.facing === 'left' ? -1 : 1;
+    let best: { o: FieldObject; d: number } | null = null;
+    for (const o of this.objects) {
+      if (!o.visible || !o.block || o.def.kind === 'trigger') continue;
+      const look = OBJECT_LOOK[o.def.kind];
+      const dx = o.def.x - p.x;
+      const dz = o.def.z - p.z;
+      if (Math.abs(dx) > look.w / 2 + 0.9 || Math.abs(dz) > look.d / 2 + 0.6) continue;
+      if (dx * dir < -0.2) continue; // behind you
+      if (Math.abs(p.y - groundAt(this.shape, p.x, p.z, p.r).y) > 0.05) continue;
+      const d = Math.hypot(dx, dz);
+      if (!best || d < best.d) best = { o, d };
+    }
+    return best?.o ?? null;
+  }
+
+  private showMarker(o: FieldObject | null): void {
+    if (!o?.sprite) {
+      this.marker.setVisible(false);
+      return;
+    }
+    const bob = Math.floor(this.time.now / 250) % 2 ? 2 : 0;
+    this.marker.setVisible(true).setPosition(o.sprite.x, o.sprite.y - o.sprite.displayHeight - 14 - bob);
+  }
+
+  /** Shows lines in the message box; the player stands still meanwhile. */
+  private async say(lines: Line[]): Promise<void> {
+    this.talking = true;
+    this.player.sprite.play(animKey('spr_test_dummy', 'idle'));
+    await this.msg.show(lines);
+    this.talking = false;
+    this.interactReadyAt = this.time.now + 250;
+  }
+
+  private async interact(o: FieldObject): Promise<void> {
+    const gs = gameState();
+    const def = o.def;
+    switch (def.kind) {
+      case 'npc': {
+        // turn to face the player
+        o.sprite?.setFlipX(this.player.body.x < def.x);
+        await this.say(def.lines.map((k) => ({ name: t(def.name), text: t(k) })));
+        if (def.setFlag) gs.setFlag(def.setFlag);
+        break;
+      }
+      case 'sign':
+        await this.say(def.lines.map((k) => ({ text: t(k) })));
+        break;
+      case 'chest': {
+        if (gs.isSet(def.flag)) return this.say([{ text: t('field.empty') }]);
+        const name = t(Database.item(def.item).name);
+        if (!gs.addItem(def.item)) return this.say([{ text: tf('field.bag_full', { item: name }) }]);
+        gs.setFlag(def.flag);
+        this.tweens.add({ targets: o.sprite, scaleY: o.sprite!.scaleY * 1.15, duration: 90, yoyo: true });
+        await this.say([{ text: tf('field.got_item', { item: name }) }]);
+        break;
+      }
+      case 'heal': {
+        for (const m of gs.data.party) gs.setHp(m.id, m.maxHp);
+        gs.setGrit(gs.data.maxGrit);
+        this.cameras.main.flash(180, 255, 240, 200);
+        await this.say([{ text: t('field.healed') }]);
+        break;
+      }
+    }
+  }
+
+  /** Story triggers fire as the player walks into them. */
+  private checkTriggers(): void {
+    const p = this.player.body;
+    for (const o of this.objects) {
+      const def = o.def;
+      if (def.kind !== 'trigger') continue;
+      const inside =
+        o.visible && p.x >= def.x && p.x <= def.x + def.w && p.z >= def.z && p.z <= def.z + def.d;
+      const entered = inside && !o.inside;
+      o.inside = inside;
+      if (!entered) continue;
+      if (def.once !== false && def.setFlag && gameState().isSet(def.setFlag)) continue;
+      if (def.setFlag) gameState().setFlag(def.setFlag);
+      if (def.lines?.length) void this.say(def.lines.map((k) => ({ text: t(k) })));
+    }
+  }
+
+  /** Close to a way out (so a locked message isn't repeated while you lean on it). */
+  private nearExit(x: number, z: number): boolean {
+    return [
+      [0.5, 0],
+      [-0.5, 0],
+      [0, 0.5],
+      [0, -0.5],
+    ].some(([ox, oz]) => exitGate(this.shape, x + ox, z + oz) >= 0);
   }
 
   /** TTYD-style turn: squash to a sliver, flip, unsquash. */
@@ -458,6 +689,12 @@ export class FieldTestScene extends Phaser.Scene {
       g.lineBetween(a.x, a.y, c.x, c.y);
     }
     for (const k of this.room.blocks) quad(0xffb238, k.x, k.x + k.w, k.z, k.z + k.d, k.h);
+    for (const o of this.objects) {
+      if (!o.visible) continue;
+      if (o.block)
+        quad(0x5fd068, o.block.x, o.block.x + o.block.w, o.block.z, o.block.z + o.block.d, o.block.h);
+      if (o.def.kind === 'trigger') quad(0xd070ff, o.def.x, o.def.x + o.def.w, o.def.z, o.def.z + o.def.d, 0);
+    }
     // the room outline (walls, fences and gates follow it)
     const pts = outlineOf(this.shape).map(([x, z]) => P(x, 0, z));
     g.lineStyle(2, 0x5fd0ff, 0.9);

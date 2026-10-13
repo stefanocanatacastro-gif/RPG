@@ -133,6 +133,25 @@ describe('Database', () => {
     expect(msgs).toContain('items:steel_chair:duplicate id');
   });
 
+  it('catches broken rooms', () => {
+    const broken: GameData = structuredClone(Database.data);
+    const b = broken.rooms.test_b;
+    b.doors![0].spawn = 'nowhere';
+    b.objects!.push({ id: 'chest_b', kind: 'chest', x: 1, z: 1, item: 'golden_belt', flag: '' });
+    b.objects!.push({ id: 't1', kind: 'trigger', x: 1, z: 1, w: 1, d: 1 });
+    b.objects!.push({ id: 'n1', kind: 'npc', x: 1, z: 1, sprite: 'spr_nobody', name: 'npc.dock_kid', lines: [] });
+    b.enemies.push({ id: 'b9', enemy: 'dock_goon', formation: 'nope', x: 1, z: 1, patrol: 1 });
+    const msgs = validateGameData(broken, ctx).map((p) => `${p.file}:${p.id}:${p.message}`);
+    expect(msgs).toContain(`rooms:test_b · exit to test_a:spawn "nowhere" doesn't exist there`);
+    expect(msgs).toContain('rooms:test_b · chest_b:duplicate id in this room');
+    expect(msgs).toContain('rooms:test_b · chest_b:unknown item "golden_belt"');
+    expect(msgs).toContain('rooms:test_b · chest_b:needs a flag to remember it was opened');
+    expect(msgs).toContain('rooms:test_b · t1:fires once, so it needs setFlag to remember');
+    expect(msgs).toContain('rooms:test_b · n1:sprite "spr_nobody" is not in any asset pack');
+    expect(msgs).toContain('rooms:test_b · n1:has nothing to say');
+    expect(msgs).toContain('rooms:test_b · b9:unknown formation "nope"');
+  });
+
   it('has Spanish text for every English string', () => {
     const missing = Object.keys(en).filter((k) => !(k in es));
     expect(missing).toEqual([]);

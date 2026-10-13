@@ -21,7 +21,12 @@ export function buildShape(room: RoomDef): { shape: RoomShape; exits: RoomExit[]
         outline,
         gates: gates.map(({ edge, t0, t1 }) => ({ edge, t0, t1 })),
       },
-      exits: gates.map(({ room: r, spawn }) => ({ room: r, spawn })),
+      exits: gates.map(({ room: r, spawn, requires, lockedText }) => ({
+        room: r,
+        spawn,
+        requires,
+        lockedText,
+      })),
     };
   }
   const doors = room.doors ?? [];
@@ -32,6 +37,11 @@ export function buildShape(room: RoomDef): { shape: RoomShape; exits: RoomExit[]
       blocks: room.blocks,
       openings: doors.map(({ side, z0, z1 }) => ({ side, z0, z1 })),
     },
-    exits: doors.map(({ room: r, spawn }) => ({ room: r, spawn })),
+    exits: doors.map(({ room: r, spawn, requires, lockedText }) => ({
+      room: r,
+      spawn,
+      requires,
+      lockedText,
+    })),
   };
 }

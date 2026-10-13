@@ -110,5 +110,17 @@
   "battle.scout.stats": "PV {hp}/{max}   ATQ {atk}   DEF {def}",
   "battle.down": "¡FUERA!",
   "battle.partner_down_note": "{name} está fuera de combate y se levantará al terminar la pelea.",
-  "battle.reason.down": "No puede actuar mientras está en el suelo."
+  "battle.reason.down": "No puede actuar mientras está en el suelo.",
+  "field.got_item": "¡Conseguiste {item}!",
+  "field.bag_full": "Tu bolsa está llena. Dejas {item} donde está por ahora.",
+  "field.empty": "Está vacío.",
+  "field.healed": "¡PV y Garra restaurados!",
+  "field.locked": "No se abre.",
+  "field.locked.octagon": "La reja del Octágono está encadenada.",
+  "npc.dock_kid": "Chico del Muelle",
+  "npc.dock_kid.1": "¿Quieres entrar al Octágono? Nadie entra sin conocer a alguien.",
+  "npc.dock_kid.2": "Por suerte, yo conozco a todos. Listo, la reja está abierta.",
+  "npc.dock_kid.after": "Anda, la reja está abierta. No digas que fui yo.",
+  "sign.octagon": "ESTE: EL OCTÁGONO. Solo luchadores. Sin reembolsos.",
+  "trigger.test_a": "(Aquí se activó un evento de historia. Solo pasa una vez.)"
 }

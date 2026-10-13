@@ -110,5 +110,17 @@
   "battle.scout.stats": "HP {hp}/{max}   ATK {atk}   DEF {def}",
   "battle.down": "DOWN!",
   "battle.partner_down_note": "{name} is down and will get back up after the fight.",
-  "battle.reason.down": "Can't act while knocked down."
+  "battle.reason.down": "Can't act while knocked down.",
+  "field.got_item": "You got a {item}!",
+  "field.bag_full": "Your bag is full. You leave the {item} where it is for now.",
+  "field.empty": "It's empty.",
+  "field.healed": "HP and Grit fully restored!",
+  "field.locked": "It won't open.",
+  "field.locked.octagon": "The gate to the Octagon is chained shut.",
+  "npc.dock_kid": "Dock Kid",
+  "npc.dock_kid.1": "You want into the Octagon? Nobody gets in without knowing someone.",
+  "npc.dock_kid.2": "Lucky for you, I know everyone. There, the gate's open.",
+  "npc.dock_kid.after": "Go on, the gate's open. Don't tell anyone it was me.",
+  "sign.octagon": "EAST: THE OCTAGON. Fighters only. No refunds.",
+  "trigger.test_a": "(A story trigger fired here. It only happens once.)"
 }

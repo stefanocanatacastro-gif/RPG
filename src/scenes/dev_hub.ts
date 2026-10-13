@@ -32,7 +32,7 @@ export class DevHubScene extends Phaser.Scene {
     pixelText(this, 16, 296, dataLine, 8, css(problems.length ? UI.rope : UI.good)).setOrigin(0, 0);
 
     const targets: Record<string, string> = {
-      field: 'field_test',
+      field: 'field',
       sandbox: 'battle_sandbox',
       input: 'input_test',
       ui: 'ui_kit',

@@ -8,7 +8,7 @@ import { BootScene } from './scenes/boot';
 import { PreloadScene } from './scenes/preload';
 import { TitleScene } from './scenes/title';
 import { DevHubScene } from './scenes/dev_hub';
-import { FieldTestScene } from './scenes/field_test';
+import { FieldScene } from './scenes/field';
 import { BattleScene } from './scenes/battle';
 import { BattleSandboxScene } from './scenes/battle_sandbox';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
@@ -44,7 +44,7 @@ function startGame(): void {
       PreloadScene,
       TitleScene,
       DevHubScene,
-      FieldTestScene,
+      FieldScene,
       BattleScene,
       BattleSandboxScene,
       InputTestScene,

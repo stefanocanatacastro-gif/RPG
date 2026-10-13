@@ -10,7 +10,7 @@ It's a PC game: it runs in a desktop browser with keyboard or gamepad (the plann
 | --- | --- |
 | M0 Skeleton: build, loader, placeholder art, crash reports | Done |
 | Shared foundations: data, state, events, input, UI kit, transitions, debug menu | Done |
-| Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates | Mostly done |
+| Overworld core: 3D-style rooms, camera, jumping, field enemies, First Strike, gates, people, signs, chests, heal blocks, story triggers, locked doors | Mostly done (partner follower to come) |
 | M1 Battle system | Done for now: turns and damage, action commands, Block and Reversal, enemy patterns, results screen, arena and camera overhaul, battle sandbox. Still to come at M1: the battle HUD's crowd/Hype parts and more input types |
 | M2 Prologue playable | Planned |
 
@@ -49,7 +49,7 @@ npm run format
 ```
 src/
   main.ts            game config: 640×360, pixel art, integer scaling
-  scenes/            title, dev hub, field, battle, overlays (touch controls, debug, curtain)
+  scenes/            title, dev hub, field, battle, battle sandbox, overlays (debug, curtain)
   field/             the 3D world: units, projection, movement, room drawing
   battle/            battle system (M1)
   ui/                pixel panels, menus, bars, fonts, theme colours
@@ -84,6 +84,26 @@ Rooms are 3D spaces seen through a perspective camera, like TTYD's field camera:
 - Blocks (crates, steps, platforms, the ring) have width, depth and height in units. Anything up to 0.3 units high is climbed by walking; a jump reaches about 1.6 units.
 
 All of these numbers are in `src/data/world.json`; field rules such as the flee grace period are in `src/data/rules.json`.
+
+## What a room can hold
+
+Rooms live in `src/data/rooms/` (any number of files, each a set of rooms by id; one per chapter later) and are checked at start-up like all other data: exits must lead to a real room and spawn point, enemies and formations must exist, chests must name a real item, and so on.
+
+Besides blocks, doors and enemies, a room has `objects`:
+
+| Kind | What it does |
+| --- | --- |
+| `npc` | Someone to talk to: sprite, name, lines (string keys); can set a flag once you've heard them out. |
+| `sign` | Lines to read. |
+| `chest` | Gives an item once; its `flag` remembers it was opened. |
+| `heal` | Restores the party's HP and Grit. |
+| `trigger` | An invisible area that fires when walked into: sets a flag and/or shows lines. Once only by default. |
+
+Walk up to a person or thing and a **!** appears over it; the jump button (Z / A) talks or opens instead of jumping. Text shows in a simple message box for now (the dialogue system with bubbles and choices comes later).
+
+**Story flags drive the rooms.** Any door, enemy or object can carry `if` (only while a flag is set) and `unless` (only while it isn't), so a character can say something different after an event, or disappear. Doors and gates can be locked with `requires` (a flag) and `lockedText`. Enemies with `"respawn": false` are story fights: once beaten they stay gone (a `beaten:<room>:<id>` flag). The debug menu's flag list shows every flag the rooms use.
+
+The test rooms show all of it: in room B the kid unlocks the Octagon gate when you talk to him (and says something else afterwards), plus a sign, a chest and a heal block; room A has a one-time trigger by its east door; the Bruiser crew in the Octagon is a story fight.
 
 ## Battle presentation
 

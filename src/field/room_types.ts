@@ -1,6 +1,23 @@
 import type { Block, Pt } from './world';
 import type { Facing } from '../managers/game_state';
 
+/**
+ * Story-flag conditions any door, enemy or object can carry:
+ * `if` — only while this flag is set; `unless` — only while it isn't.
+ */
+export interface Condition {
+  if?: string;
+  unless?: string;
+}
+
+/** A door or gate that's there but shut until its condition holds. */
+export interface Lock {
+  /** Flag that must be set for the way to open. */
+  requires?: string;
+  /** What the player is told when they try a locked way (string key). */
+  lockedText?: string;
+}
+
 /** A room as stored in data. All sizes and positions are world units. */
 export interface RoomDef {
   name: string;
@@ -20,9 +37,9 @@ export interface RoomDef {
   /** Decorative ropes between two floor points, at the given heights. */
   ropes?: { from: Pt; to: Pt; heights: number[]; base?: number }[];
   /** Rectangle rooms: doors in the side walls. */
-  doors?: { side: 'west' | 'east'; z0: number; z1: number; room: string; spawn: string }[];
+  doors?: ({ side: 'west' | 'east'; z0: number; z1: number; room: string; spawn: string } & Lock)[];
   /** Shaped rooms: gaps in an outline edge (edge index, 0–1 along it). */
-  gates?: { edge: number; t0: number; t1: number; room: string; spawn: string }[];
+  gates?: ({ edge: number; t0: number; t1: number; room: string; spawn: string } & Lock)[];
   /** Haze colour things fade into toward the back (defaults to the backdrop's). */
   fog?: number;
   /** Pools of light on the floor (or on a block top), optionally with a beam from above. */
@@ -31,8 +48,70 @@ export interface RoomDef {
   foreground?: ForegroundDef[];
   /** Named spawn points: [x, z, facing]. */
   spawns: Record<string, [number, number, Facing]>;
-  enemies: { id: string; enemy: string; formation: string; x: number; z: number; patrol: number }[];
+  enemies: FieldEnemyDef[];
+  /** People, signs, chests, heal blocks and story triggers. */
+  objects?: ObjectDef[];
 }
+
+export interface FieldEnemyDef extends Condition {
+  id: string;
+  enemy: string;
+  formation: string;
+  x: number;
+  z: number;
+  patrol: number;
+  /**
+   * false = beaten for good (story fights, bosses): a flag remembers the win.
+   * Others come back the next time you enter the room.
+   */
+  respawn?: boolean;
+}
+
+interface ObjectBase extends Condition {
+  id: string;
+  x: number;
+  z: number;
+}
+
+/** Someone to talk to. Lines are string keys, shown one after another. */
+export interface NpcDef extends ObjectBase {
+  kind: 'npc';
+  sprite: string;
+  name: string;
+  lines: string[];
+  /** Set once the player has heard them out. */
+  setFlag?: string;
+}
+
+export interface SignDef extends ObjectBase {
+  kind: 'sign';
+  lines: string[];
+}
+
+/** An item box: opens once (its flag remembers), gives the item. */
+export interface ChestDef extends ObjectBase {
+  kind: 'chest';
+  item: string;
+  flag: string;
+}
+
+/** Restores the party's HP and Grit. */
+export interface HealDef extends ObjectBase {
+  kind: 'heal';
+}
+
+/** An invisible area that fires when walked into: sets a flag and/or shows lines. */
+export interface TriggerDef extends ObjectBase {
+  kind: 'trigger';
+  w: number;
+  d: number;
+  setFlag?: string;
+  lines?: string[];
+  /** Fires only once (needs setFlag to remember). Default true. */
+  once?: boolean;
+}
+
+export type ObjectDef = NpcDef | SignDef | ChestDef | HealDef | TriggerDef;
 
 export interface LightDef {
   x: number;
@@ -56,7 +135,7 @@ export interface ForegroundDef {
   every?: number;
 }
 
-export interface RoomExit {
+export interface RoomExit extends Lock {
   room: string;
   spawn: string;
 }

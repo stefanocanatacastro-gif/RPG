@@ -1,6 +1,6 @@
 {
   "test_a": {
-    "name": "Grey box A \u00b7 2 screens",
+    "name": "Grey box A · 2 screens",
     "screens": 2,
     "depth": 8,
     "wallHeight": 4,
@@ -137,10 +137,22 @@
         "every": 13,
         "z": -2.6
       }
+    ],
+    "objects": [
+      {
+        "id": "east_trigger",
+        "kind": "trigger",
+        "x": 34,
+        "z": 0,
+        "w": 2,
+        "d": 8,
+        "setFlag": "test_a_trigger",
+        "lines": ["trigger.test_a"]
+      }
     ]
   },
   "test_b": {
-    "name": "Grey box B \u00b7 1 screen, deep",
+    "name": "Grey box B · 1 screen, deep",
     "screens": 1,
     "depth": 11,
     "wallHeight": 3,
@@ -189,7 +201,9 @@
         "z0": 4,
         "z1": 6,
         "room": "test_octagon",
-        "spawn": "west"
+        "spawn": "west",
+        "requires": "test_gate_open",
+        "lockedText": "field.locked.octagon"
       }
     ],
     "spawns": {
@@ -226,10 +240,54 @@
         "x": 18,
         "z": -2.2
       }
+    ],
+    "objects": [
+      {
+        "id": "kid_before",
+        "kind": "npc",
+        "x": 4,
+        "z": 6.5,
+        "sprite": "spr_npc_dock_kid",
+        "name": "npc.dock_kid",
+        "lines": ["npc.dock_kid.1", "npc.dock_kid.2"],
+        "setFlag": "test_gate_open",
+        "unless": "test_gate_open"
+      },
+      {
+        "id": "kid_after",
+        "kind": "npc",
+        "x": 4,
+        "z": 6.5,
+        "sprite": "spr_npc_dock_kid",
+        "name": "npc.dock_kid",
+        "lines": ["npc.dock_kid.after"],
+        "if": "test_gate_open"
+      },
+      {
+        "id": "octagon_sign",
+        "kind": "sign",
+        "x": 17.5,
+        "z": 7.4,
+        "lines": ["sign.octagon"]
+      },
+      {
+        "id": "chest_b",
+        "kind": "chest",
+        "x": 10,
+        "z": 9.9,
+        "item": "water_bottle",
+        "flag": "test_chest_b"
+      },
+      {
+        "id": "heal_b",
+        "kind": "heal",
+        "x": 15,
+        "z": 9.6
+      }
     ]
   },
   "test_octagon": {
-    "name": "The Octagon \u00b7 3 screens",
+    "name": "The Octagon · 3 screens",
     "screens": 3,
     "depth": 30,
     "wallHeight": 4,
@@ -436,7 +494,8 @@
         "formation": "test_crew",
         "x": 40,
         "z": 24,
-        "patrol": 3
+        "patrol": 3,
+        "respawn": false
       }
     ],
     "lights": [

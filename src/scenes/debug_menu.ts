@@ -216,7 +216,7 @@ export class DebugMenuScene extends Phaser.Scene {
   }
 
   private showRooms(): void {
-    const rooms = ['test_a', 'test_b', 'test_octagon'];
+    const rooms = Object.keys(Database.data.rooms);
     this.setMenu(
       rooms.map((r) => ({ label: r, value: r })),
       (item) => {
@@ -224,7 +224,7 @@ export class DebugMenuScene extends Phaser.Scene {
         if (!host) return;
         this.ensureGame();
         this.close();
-        SceneLoader.enterRoom(host, 'field_test', { room: item.value, spawn: 'start' });
+        SceneLoader.enterRoom(host, 'field', { room: item.value, spawn: 'start' });
       },
       () => this.showMain(1),
     );
@@ -244,8 +244,19 @@ export class DebugMenuScene extends Phaser.Scene {
 
   private showFlags(): void {
     this.ensureGame();
-    const keys = ['met_pip', 'ch1_started', 'brick_defeated'];
-    const list = () => keys.map((k) => ({ label: k, value: k, right: gameState().isSet(k) ? 'ON' : 'off' }));
+    // every flag the rooms read or set, plus a few story ones
+    const keys = new Set(['met_pip', 'ch1_started', 'brick_defeated']);
+    for (const room of Object.values(Database.data.rooms)) {
+      const things = [...(room.doors ?? []), ...(room.gates ?? []), ...room.enemies, ...(room.objects ?? [])];
+      for (const o of things)
+        for (const f of ['if', 'unless', 'requires', 'setFlag', 'flag']) {
+          const v = (o as unknown as Record<string, unknown>)[f];
+          if (typeof v === 'string') keys.add(v);
+        }
+    }
+    for (const k of Object.keys(gameState().data.flags)) keys.add(k);
+    const list = () =>
+      [...keys].sort().map((k) => ({ label: k, value: k, right: gameState().isSet(k) ? 'ON' : 'off' }));
     this.setMenu(
       list(),
       (item) => {

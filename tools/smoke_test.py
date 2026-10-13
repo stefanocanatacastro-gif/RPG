@@ -6,7 +6,7 @@ enemy gone and coins added -> through the door -> debug menu -> every test
 screen, the sandbox and the crash screen. Screenshots go to the folder given
 as the first argument.
 """
-import sys, threading, http.server, functools, os
+import sys, threading, http.server, functools, os, json
 from playwright.sync_api import sync_playwright
 
 out = sys.argv[1] if len(sys.argv) > 1 else "test-shots"
@@ -171,29 +171,29 @@ with sync_playwright() as p:
     check("no problems" in hub_text, "database loaded with no problems")
 
     press(page, "Enter")  # field test
-    wait_scene(page, "field_test")
+    wait_scene(page, "field")
     page.wait_for_timeout(500)
     page.screenshot(path=f"{out}/03_field.png")
 
     # walk right for a moment to prove movement
-    x0 = page.evaluate("window.__game.scene.getScene('field_test').player.body.x")
+    x0 = page.evaluate("window.__game.scene.getScene('field').player.body.x")
     # hold right until the player has moved (slow software rendering clamps the time step)
     page.keyboard.down("ArrowRight")
     try:
-        page.wait_for_function(f"window.__game.scene.getScene('field_test').player.body.x > {x0 + 1.2}", timeout=4000)
+        page.wait_for_function(f"window.__game.scene.getScene('field').player.body.x > {x0 + 1.2}", timeout=4000)
     except Exception:
         pass
     page.keyboard.up("ArrowRight")
-    x1 = page.evaluate("window.__game.scene.getScene('field_test').player.body.x")
+    x1 = page.evaluate("window.__game.scene.getScene('field').player.body.x")
     check(x1 > x0 + 1, f"player walks right in world units ({x0:.1f} -> {x1:.1f})")
 
     # put the player next to enemy a1 so they touch
     bx = page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field_test');
+        """() => { const s = window.__game.scene.getScene('field');
         const e = s.enemies.find(e => e.id === 'a1'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; return s.player.body.x; }"""
     )
     wait_scene(page, "battle")
-    st = page.evaluate("window.__game.scene.getScene('field_test').sys.settings.status")
+    st = page.evaluate("window.__game.scene.getScene('field').sys.settings.status")
     check(st == 7, f"field sleeps during the battle (status {st})")
     wait_battle_input(page, "menu")
     page.screenshot(path=f"{out}/04_battle_menu.png")
@@ -204,10 +204,10 @@ with sync_playwright() as p:
     page.screenshot(path=f"{out}/05b_battle_hit.png")
     result = fight(page, out, "05c")
     check(result == "victory", f"a real fight against two goons is won ({result})")
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.wait_for_timeout(500)
     state = page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field_test');
+        """() => { const s = window.__game.scene.getScene('field');
         return { ids: s.enemies.map(e => e.id), x: s.player.body.x }; }"""
     )
     check("a1" not in state["ids"] and "a2" in state["ids"], f"won enemy removed, others kept ({state['ids']})")
@@ -218,7 +218,7 @@ with sync_playwright() as p:
 
     # run away from a2, then stand right on it: no battle during the grace period
     page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field_test');
+        """() => { const s = window.__game.scene.getScene('field');
         const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; }"""
     )
     wait_scene(page, "battle")
@@ -232,24 +232,24 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field_test');
+        """() => { const s = window.__game.scene.getScene('field');
         const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x; s.player.body.z = e.body.z; }"""
     )
     page.wait_for_timeout(1500)
     page.screenshot(path=f"{out}/06b_grace.png")
-    grace = page.evaluate("window.__game.scene.getScene('field_test').graceMs")
+    grace = page.evaluate("window.__game.scene.getScene('field').graceMs")
     check(not active(page, "battle") and grace > 0, f"no battle while protected after running (grace left {grace:.0f} ms)")
     page.wait_for_function("window.__game.scene.isActive('battle')", timeout=5000)
     check(True, "enemy can engage again once the grace period ends")
     result = fight(page, out, "06c")
     check(result in ("victory", "defeat"), f"the mixed fight (spiky, flyer, goon) ends ({result})")
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.wait_for_timeout(300)
 
     # ── Action commands, fought against the sparring dummy with real key timing ──
-    page.evaluate("window.__game.scene.getScene('field_test').graceMs = 99999")
+    page.evaluate("window.__game.scene.getScene('field').graceMs = 99999")
     pick_debug = lambda value: page.evaluate(
         f"(() => {{ const m = window.__game.scene.getScene('debug').menu; m.setCursor(m.items.findIndex(i => i.value === '{value}')); }})()"
     )
@@ -359,7 +359,7 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.wait_for_timeout(300)
 
     # ── Block and Reversal against the sparring dummy (1 damage per hit) ──
@@ -410,7 +410,7 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.wait_for_timeout(300)
 
     # ── Enemy patterns: the Bruiser winds up and lets go, a GREAT hit staggers him, the Medic heals ──
@@ -475,69 +475,134 @@ with sync_playwright() as p:
     check(phase == "victory", f"the crew is beaten ({phase})")
     check(os.path.exists(f"{out}/28_crew_results.png"), "the results screen waits for a button press")
     page.evaluate("window.__debug.set('god', false); window.__debug.set('autoCommands', false)")
-    wait_scene(page, "field_test", 10000)
+    wait_scene(page, "field", 10000)
     page.wait_for_timeout(300)
 
+    fs = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('field'); {js} }})()")
+
+    def close_messages(limit=12):
+        for _ in range(limit):
+            if not fs("return s.msg.open;"):
+                return
+            press(page, "Enter", 250)
+
+    def flags():
+        return json.loads(page.evaluate("window.__debug.save()"))["flags"]
+
+    # a story trigger near room A's east door fires once
+    fs("s.graceMs = 99999; s.player.body.x = 32.5; s.player.body.z = 4;")
+    page.keyboard.down("ArrowRight")
+    try:
+        page.wait_for_function("window.__game.scene.getScene('field').msg.open", timeout=4000)
+    except Exception:
+        pass
+    page.keyboard.up("ArrowRight")
+    page.wait_for_timeout(500)
+    check(fs("return s.msg.open;") and flags().get("test_a_trigger") is True, "walking into a story trigger shows its text and sets its flag")
+    page.screenshot(path=f"{out}/06d_trigger.png")
+    close_messages()
+    fs("s.player.body.x = 33; s.player.body.z = 4;")
+    page.keyboard.down("ArrowRight")
+    page.wait_for_timeout(500)
+    page.keyboard.up("ArrowRight")
+    check(not fs("return s.msg.open;"), "a once-only trigger stays quiet the second time")
+
     # through the east door
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 39; s.player.body.z = 4; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 39; s.player.body.z = 4; }")
     page.keyboard.down("ArrowRight")
     page.wait_for_timeout(600)
     page.keyboard.up("ArrowRight")
     page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field_test').roomId")
+    room = page.evaluate("window.__game.scene.getScene('field').roomId")
     check(room == "test_b", f"door leads to room B (in {room})")
     page.screenshot(path=f"{out}/07_room_b.png")
 
+    # room B: the Octagon gate is locked until the kid lets you in
+    fs("s.graceMs = 99999; s.player.body.x = 18.6; s.player.body.z = 5;")
+    page.keyboard.down("ArrowRight")
+    page.wait_for_timeout(500)
+    page.keyboard.up("ArrowRight")
+    page.wait_for_timeout(500)
+    check(fs("return s.roomId;") == "test_b" and fs("return s.msg.open;"), "a locked gate keeps you in and says why")
+    page.screenshot(path=f"{out}/07a_locked.png")
+    close_messages()
+    # talk to the kid: face him and press Z (jump becomes talk next to someone)
+    fs("s.player.body.x = 2.7; s.player.body.z = 6.5;")
+    page.keyboard.down("ArrowRight")
+    page.wait_for_timeout(60)
+    page.keyboard.up("ArrowRight")
+    page.wait_for_timeout(300)
+    check(fs("return s.marker.visible;"), "a ! appears next to someone you can talk to")
+    press(page, "KeyZ", 600)
+    check(fs("return s.msg.open;"), "Z talks instead of jumping")
+    page.screenshot(path=f"{out}/07e_talk.png")
+    close_messages()
+    check(flags().get("test_gate_open") is True, "talking to the kid opens the gate (sets its flag)")
+    after = fs("return s.objects.filter(o => o.visible).map(o => o.def.id);")
+    check("kid_after" in after and "kid_before" not in after, f"the kid's lines change with the flag ({after})")
+    # the chest gives its item once
+    items0 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
+    fs("s.player.body.x = 10; s.player.body.z = 9.3; s.player.body.y = 0;")
+    page.wait_for_timeout(300)
+    press(page, "KeyZ", 500)
+    close_messages()
+    items1 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
+    check(items1 == items0 + 1 and flags().get("test_chest_b") is True, f"the chest gives a Water Bottle ({items0} -> {items1} items)")
+    press(page, "KeyZ", 500)
+    close_messages()
+    items2 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
+    check(items2 == items1, "an opened chest is empty")
+
     # room B's east door leads into the octagon arena
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 18.6; s.player.body.z = 5; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 18.6; s.player.body.z = 5; }")
     page.keyboard.down("ArrowRight")
     page.wait_for_timeout(500)
     page.keyboard.up("ArrowRight")
     page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field_test').roomId")
+    room = page.evaluate("window.__game.scene.getScene('field').roomId")
     check(room == "test_octagon", f"room B's east door leads into the octagon ({room})")
     page.screenshot(path=f"{out}/07b_octagon_gate.png")
     # a slanted wall: walk into the front-left diagonal and slide along it
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 12; s.player.body.z = 3; s.graceMs = 99999; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 12; s.player.body.z = 3; s.graceMs = 99999; }")
     page.keyboard.down("ArrowLeft")
     page.wait_for_timeout(1600)
     page.keyboard.up("ArrowLeft")
-    pos = page.evaluate("(() => { const b = window.__game.scene.getScene('field_test').player.body; return [b.x, b.z]; })()")
+    pos = page.evaluate("(() => { const b = window.__game.scene.getScene('field').player.body; return [b.x, b.z]; })()")
     check(pos[0] + pos[1] >= 10 and pos[1] > 3.3, f"slanted wall holds and slides you ({pos[0]:.1f}, {pos[1]:.1f})")
     page.wait_for_timeout(600)
     page.screenshot(path=f"{out}/07c_octagon_corner.png")
     # stand by the ring, then at the back: the camera scrolls up into the depth
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 30; s.player.body.z = 6; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 30; s.player.body.z = 6; }")
     page.wait_for_timeout(900)
     page.screenshot(path=f"{out}/07d_octagon_ring.png")
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 26; s.player.body.z = 14; s.player.body.y = 1.5; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 26; s.player.body.z = 14; s.player.body.y = 1.5; }")
     page.wait_for_timeout(900)
-    on_ring = page.evaluate("window.__game.scene.getScene('field_test').player.body.y")
+    on_ring = page.evaluate("window.__game.scene.getScene('field').player.body.y")
     check(abs(on_ring - 1) < 0.01, f"you can stand on the ring (y {on_ring:.2f})")
     page.screenshot(path=f"{out}/07f_in_ring.png")
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 30; s.player.body.z = 27; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 30; s.player.body.z = 27; }")
     page.wait_for_timeout(1200)
     # in perspective the deep room fits on screen: the player at the back is in view
-    feet = page.evaluate("(() => { const s = window.__game.scene.getScene('field_test'); return s.player.sprite.y - s.cameras.main.scrollY; })()")
+    feet = page.evaluate("(() => { const s = window.__game.scene.getScene('field'); return s.player.sprite.y - s.cameras.main.scrollY; })()")
     check(40 < feet < 360, f"the back of a deep room is in view (player's feet at y {feet:.0f})")
     page.screenshot(path=f"{out}/07e_octagon_back.png")
     # out through the gate on the left wall, back to room B
-    page.evaluate("() => { const s = window.__game.scene.getScene('field_test'); s.player.body.x = 1.2; s.player.body.z = 15; }")
+    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 1.2; s.player.body.z = 15; }")
     # hold left until the room changes (slow software rendering clamps the time step)
     page.keyboard.down("ArrowLeft")
     try:
-        page.wait_for_function("window.__game.scene.getScene('field_test').roomId === 'test_b'", timeout=4000)
+        page.wait_for_function("window.__game.scene.getScene('field').roomId === 'test_b'", timeout=4000)
     except Exception:
         pass
     page.keyboard.up("ArrowLeft")
     page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field_test').roomId")
+    room = page.evaluate("window.__game.scene.getScene('field').roomId")
     check(room == "test_b", f"octagon gate leads back to room B ({room})")
 
     # debug menu
     press(page, "F1", 400)
     check(page.evaluate("window.__game.scene.getScene('debug').open"), "F1 opens the debug menu")
-    check(page.evaluate("window.__game.scene.isPaused('field_test')"), "game pauses under the debug menu")
+    check(page.evaluate("window.__game.scene.isPaused('field')"), "game pauses under the debug menu")
     page.screenshot(path=f"{out}/08_debug.png")
     press(page, "ArrowDown")
     press(page, "ArrowDown")

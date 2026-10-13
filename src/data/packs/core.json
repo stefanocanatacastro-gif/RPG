@@ -11,6 +11,26 @@
       "key": "spr_sparring_dummy",
       "w": 48,
       "h": 64
+    },
+    {
+      "key": "spr_npc_dock_kid",
+      "w": 36,
+      "h": 52
+    },
+    {
+      "key": "spr_obj_sign",
+      "w": 28,
+      "h": 36
+    },
+    {
+      "key": "spr_obj_chest",
+      "w": 36,
+      "h": 28
+    },
+    {
+      "key": "spr_obj_heal",
+      "w": 32,
+      "h": 32
     }
   ],
   "audio": []
