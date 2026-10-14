@@ -16,7 +16,7 @@ export const ARENA = {
   /** The partner stands a step in front of Chispa, toward the opponents (as in TTYD). */
   partnerX: -1.3,
   enemyX: [0.9, 2.0, 3.1, 3.4],
-  flyerLift: 1.6,
+  flyerLift: 0.9,
 };
 
 export function P(X: number, Y: number, Z: number): { x: number; y: number } {

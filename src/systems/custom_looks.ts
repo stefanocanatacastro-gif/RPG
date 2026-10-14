@@ -6,6 +6,7 @@ import { TEST_COLORS } from './test_sprites';
 import { Builds, type ColorSlot } from '../managers/builds';
 import { drawLook, maxWidthFor } from './pictures';
 import { Database } from '../managers/database';
+import { opponentArt } from './opponent_art';
 
 /** Colours each texture was last painted with, so unchanged looks aren't repainted. */
 const painted = new Map<string, string>();
@@ -79,6 +80,9 @@ export function fighterTexture(
     ensureLook(scene, defId);
     return { key: l.key, ownSize: own(l.look.base) };
   }
+  // the built-in opponents' finished art, drawn at their size
+  const art = opponentArt(scene, defId);
+  if (art) return { key: art, ownSize: true };
   return { key: fallback, ownSize: false };
 }
 

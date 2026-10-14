@@ -6,6 +6,7 @@ import { t } from '../managers/strings';
 import { makeTestWrestler } from '../systems/test_sprites';
 import { buildAnimations } from '../systems/anim_builder';
 import { prepareHeroArt } from '../systems/hero_art';
+import { prepareOpponentArt } from '../systems/opponent_art';
 
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -38,6 +39,6 @@ export class PreloadScene extends Phaser.Scene {
       fps: { idle: 3, walk: 8, chop: 12, hurt: 6 },
       once: ['chop', 'hurt'],
     });
-    void prepareHeroArt(this).then(() => this.scene.start('title'));
+    void Promise.all([prepareHeroArt(this), prepareOpponentArt(this)]).then(() => this.scene.start('title'));
   }
 }

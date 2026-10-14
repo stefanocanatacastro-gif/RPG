@@ -59,13 +59,13 @@ Everything to fill in on itch.io's "Create a new project" form, in the form's or
 >
 > Your battles live in this browser on this device: SHARE the ones you want to keep as a backup.
 >
-> Early build: Kid Chispa has his finished art, the opponents are still placeholders.
+> Early build: Kid Chispa and every opponent have their finished art; his partner Pip is still a placeholder.
 
 | Field | Value |
 |---|---|
 | Genre | Role Playing |
 | Tags | turn-based, wrestling, level-editor, pixel-art, retro, singleplayer, sandbox, 2d |
-| AI generation disclosure | itch asks whether the project uses generative AI. The code and Kid Chispa's sprite were made with Claude: answer for code and graphics accordingly. |
+| AI generation disclosure | itch asks whether the project uses generative AI. The code and the fighter sprites were made with Claude: answer for code and graphics accordingly. |
 | Custom noun | battle maker |
 | Inputs | Keyboard, Mouse, Touchscreen |
 | Accessibility | (leave empty) |
