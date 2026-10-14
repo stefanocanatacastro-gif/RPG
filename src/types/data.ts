@@ -1,4 +1,3 @@
-
 // TypeScript types for every game-data JSON file. The Database checks the JSON
 // against these at startup, so a typo in a data file shows up as a clear problem
 // in the dev build instead of a crash halfway through a battle.

@@ -51,7 +51,13 @@ export type Difficulty = 'easy' | 'normal' | 'expert' | 'super expert';
 export const MIN_PLAYS_FOR_DIFFICULTY = 5;
 
 export function difficultyOf(clearRate: number): Difficulty {
-  return clearRate >= 0.7 ? 'easy' : clearRate >= 0.4 ? 'normal' : clearRate >= 0.15 ? 'expert' : 'super expert';
+  return clearRate >= 0.7
+    ? 'easy'
+    : clearRate >= 0.4
+      ? 'normal'
+      : clearRate >= 0.15
+        ? 'expert'
+        : 'super expert';
 }
 
 export const Plays = {
