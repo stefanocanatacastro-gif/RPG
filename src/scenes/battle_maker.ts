@@ -443,7 +443,12 @@ export class BattleMakerScene extends Phaser.Scene {
     });
     if (desc !== null) this.draft.desc = desc.trim().slice(0, 140);
     if (await this.save(true)) {
-      this.say(`"${this.draft.title}" is in the Battle World!`, UI.good);
+      this.say(
+        Builds.backend() === 'local'
+          ? `"${this.draft.title}" is in your Battle World. SHARE it to send it to friends.`
+          : `"${this.draft.title}" is in the Battle World!`,
+        UI.good,
+      );
       this.refresh();
     }
   }

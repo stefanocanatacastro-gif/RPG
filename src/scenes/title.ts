@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH as GW, GAME_HEIGHT as GH } from '../systems/integer_scale';
 import { pixelText } from '../ui/pixel_text';
 import { tinyText, tinyTextWidth } from '../ui/tiny_font';
-import { versionLabel } from '../systems/version';
+import { IS_DEV, versionLabel } from '../systems/version';
 import { t } from '../managers/strings';
 import { newGame } from '../managers/game_state';
 import { drawPanel } from '../ui/components';
@@ -442,7 +442,7 @@ export class TitleScene extends Phaser.Scene {
       this.time.addEvent({
         delay: 530,
         loop: true,
-        callback: () => this.prompt.setVisible(this.started || !this.prompt.visible),
+        callback: () => this.prompt.setVisible(!this.started && !this.prompt.visible),
       });
     }
     const v = versionLabel();
@@ -451,9 +451,11 @@ export class TitleScene extends Phaser.Scene {
       .setScale(2);
 
     // ── Input: keyboard, mouse/touch and gamepad all start ────────────
-    this.input.keyboard?.on('keydown-F8', () => this.testCrash());
-    // the builder's tools, for whoever knows the key
-    this.input.keyboard?.on('keydown-BACKTICK', () => void this.choose('dev'));
+    if (IS_DEV) {
+      this.input.keyboard?.on('keydown-F8', () => this.testCrash());
+      // the builder's tools (not in the public build)
+      this.input.keyboard?.on('keydown-BACKTICK', () => void this.choose('dev'));
+    }
     this.input.on(Phaser.Input.Events.POINTER_UP, (p: Phaser.Input.Pointer) => {
       const debugCorner = p.x < 66 && p.y < 66;
       if (!debugCorner && !input.onTouchControl(p.x, p.y) && !this.started) this.start();

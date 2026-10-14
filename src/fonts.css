@@ -1,0 +1,9 @@
+/* Press Start 2P (SIL Open Font License 1.1), packed into the game so it plays
+   offline and never calls out to a font server. Latin covers English and Spanish. */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('@fontsource/press-start-2p/files/press-start-2p-latin-400-normal.woff2') format('woff2');
+}

@@ -478,7 +478,12 @@ export class PlayScene extends Phaser.Scene {
               'No battles at this difficulty yet.',
               'Difficulty comes from everyone’s clear rate after 5 plays.',
             ]
-          : ['No battles uploaded yet.', 'Be the first: make one, beat it, and upload it.'];
+          : Builds.backend() === 'local'
+            ? [
+                'Your Battle World is on this device.',
+                'Upload battles you beat, and IMPORT the ones friends SHARE with you.',
+              ]
+            : ['No battles uploaded yet.', 'Be the first: make one, beat it, and upload it.'];
     txt(W / 2, 200, lines[0], UI.ink, 16).setOrigin(0.5, 0);
     txt(W / 2, 232, lines[1], UI.inkDim).setOrigin(0.5, 0);
     if (this.tab !== 'world' || this.filter === 'all')

@@ -52,9 +52,18 @@ export async function exportBattle(
     const saved = await saveFile(fileNameFor(battle.title), text);
     if (!saved) return { ok: false, message: 'Not saved.' };
     const kb = Math.max(1, Math.round(text.length / 1024));
+    // small battles also go to the clipboard: paste them into a chat, and the friend pastes them into the game
+    let copied = false;
+    if (text.length < 200_000)
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch {
+        /* no clipboard here: the file is enough */
+      }
     return {
       ok: true,
-      message: `Saved ${fileNameFor(battle.title)} (${kb} KB): send it to anyone, they IMPORT it.`,
+      message: `Saved ${fileNameFor(battle.title)} (${kb} KB)${copied ? ' and copied it' : ''}: send it to anyone, they IMPORT it${copied ? ' or paste it into the game' : ''}.`,
     };
   } catch (e) {
     return { ok: false, message: `Couldn't share it: ${String((e as { message?: string }).message ?? e)}` };

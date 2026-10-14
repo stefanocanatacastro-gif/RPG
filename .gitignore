@@ -5,3 +5,5 @@ test-shots/
 .DS_Store
 .vite/
 coverage/
+release/itch/game/
+release/*.zip

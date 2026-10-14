@@ -4,6 +4,7 @@ import { installErrorOverlay, showCrash } from './systems/error_overlay';
 installErrorOverlay();
 
 import Phaser from 'phaser';
+import './fonts.css';
 import { BootScene } from './scenes/boot';
 import { PreloadScene } from './scenes/preload';
 import { TitleScene } from './scenes/title';
