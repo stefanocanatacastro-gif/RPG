@@ -88,7 +88,6 @@ export class BattleScene extends Phaser.Scene {
   /** Last menu row picked, per party member. */
   private menuCursor: Record<string, number> = {};
   /** Losing this fight doesn't end the game. */
-  private loseOk = false;
   /** How far the wide shots look up, so a tall boss fits in the frame. */
   private lookUp = 0;
   private hypeBar!: Bar;
@@ -108,7 +107,6 @@ export class BattleScene extends Phaser.Scene {
     const gs = gameState();
     const hero = Database.character(gs.hero().id);
     const formation = start.formationDef ?? Database.formation(start.formation);
-    this.loseOk = !!(start.loseOk || formation.loseOk);
     const pm = gs.partner();
     this.engine = new BattleEngine(
       Database,
@@ -1692,14 +1690,10 @@ export class BattleScene extends Phaser.Scene {
     else await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 12, duration: 300 });
     await this.banner(t('battle.defeat'), UI.rope, 900);
     await this.wait(700);
-    if (this.loseOk) {
-      // a fight the story lets you lose: back to the room on your feet
-      const gs = gameState();
-      gs.setHp(gs.hero().id, gs.hero().maxHp);
-      return this.finish('lose');
-    }
-    this.inputState = 'busy';
-    SceneLoader.gameOver(this, this.start.returnTo);
+    // every fight is a match: losing sends you back to where it started
+    const gs = gameState();
+    gs.setHp(gs.hero().id, gs.hero().maxHp);
+    this.finish('lose');
   }
 
   /** Uses the first item that revives, if there is one. Returns whether Chispa got back up. */

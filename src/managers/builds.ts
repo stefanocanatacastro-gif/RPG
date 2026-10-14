@@ -210,6 +210,12 @@ export interface Encounter {
   title: string;
   setup: BattleSetup;
   savedAt?: string;
+  /** A line for players: what makes this battle special. */
+  desc?: string;
+  /** The setup its maker beat (its fingerprint), which upload requires. */
+  clearedHash?: string;
+  /** When it was uploaded to the Battle World (missing: a draft only its maker sees). */
+  published?: string;
 }
 
 /** An item made in the item maker. One kind of effect each. */
@@ -691,6 +697,14 @@ export const Builds = {
     const out: { owner: string; encounter: Encounter }[] = [];
     for (const [owner, set] of sets)
       if (owner !== myOwnerId()) for (const e of set.encounters ?? []) out.push({ owner, encounter: e });
+    return out;
+  },
+
+  /** Everyone's uploaded battles (the Battle World), yours included, with their maker. */
+  worldEncounters(): { owner: string; encounter: Encounter }[] {
+    const out: { owner: string; encounter: Encounter }[] = [];
+    for (const [owner, set] of sets)
+      for (const e of set.encounters ?? []) if (e.published) out.push({ owner, encounter: e });
     return out;
   },
 

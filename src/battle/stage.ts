@@ -48,7 +48,9 @@ function rng(seed: number): () => number {
  * of shapes; redrawing them every frame halved the frame rate, an image costs
  * almost nothing.
  */
-function bake(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, key: string): Phaser.GameObjects.Image {
+function bake(scene: Phaser.Scene, g: Phaser.GameObjects.Graphics, name: string): Phaser.GameObjects.Image {
+  // one per scene: a battle opened over the Battle Maker bakes its own, not over the maker's
+  const key = `${name}@${scene.sys.settings.key}`;
   if (scene.textures.exists(key)) scene.textures.remove(key);
   g.generateTexture(key, ARENA.width, ARENA.height);
   const img = scene.add.image(0, 0, key).setOrigin(0).setDepth(g.depth);
@@ -342,7 +344,7 @@ export function drawStage(scene: Phaser.Scene, stage: StageDef): Arena {
     const g = scene.make.graphics({}, false);
     g.translateCanvas(-x0, -y0);
     drawPost(g, X, Z);
-    const k = `__arena_post${i}`;
+    const k = `__arena_post${i}@${scene.sys.settings.key}`;
     if (scene.textures.exists(k)) scene.textures.remove(k);
     g.generateTexture(k, pad * 2, Math.ceil(b.y - y0) + 2);
     g.destroy();

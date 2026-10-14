@@ -101,6 +101,8 @@ export function tryMoveInSandbox(scene: Phaser.Scene, id: string): void {
 }
 
 export class MoveMakerScene extends Phaser.Scene {
+  /** The screen to go back to (the Battle Maker, or the dev hub). */
+  private backTo = 'dev_hub';
   mine: CustomMove[] = [];
   pick: Pick | null = null;
   dirty = false;
@@ -114,7 +116,8 @@ export class MoveMakerScene extends Phaser.Scene {
     super('move_maker');
   }
 
-  create(): void {
+  create(data?: { from?: string }): void {
+    this.backTo = data?.from === 'battle_maker' ? 'battle_maker' : 'dev_hub';
     if (!hasGame()) newGame(Database.character('chispa'));
     this.mine = Builds.myMoves();
     this.dirty = false;
@@ -245,7 +248,7 @@ export class MoveMakerScene extends Phaser.Scene {
   }
 
   leave(): void {
-    SceneLoader.goto(this, 'dev_hub', { cursor: 6 });
+    SceneLoader.goto(this, this.backTo, this.backTo === 'dev_hub' ? { cursor: 6 } : {});
   }
 
   // ── Input ───────────────────────────────────────────────────────────

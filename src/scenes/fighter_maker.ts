@@ -144,6 +144,8 @@ function fromBuiltin(kind: 'hero' | 'enemy', id: string, newId: string): CustomF
 }
 
 export class FighterMakerScene extends Phaser.Scene {
+  /** The screen to go back to (the Battle Maker, or the dev hub). */
+  private backTo = 'dev_hub';
   mine: CustomFighter[] = [];
   pick: Pick | null = null;
   dirty = false;
@@ -164,7 +166,8 @@ export class FighterMakerScene extends Phaser.Scene {
     super('fighter_maker');
   }
 
-  create(data?: { select?: string }): void {
+  create(data?: { select?: string; from?: string }): void {
+    if (data?.from) this.backTo = data.from === 'battle_maker' ? 'battle_maker' : 'dev_hub';
     if (!hasGame()) newGame(Database.character('chispa'));
     this.mine = Builds.mine();
     this.dirty = false;
@@ -334,7 +337,7 @@ export class FighterMakerScene extends Phaser.Scene {
   }
 
   private leave(): void {
-    SceneLoader.goto(this, 'dev_hub', { cursor: 3 });
+    SceneLoader.goto(this, this.backTo, this.backTo === 'dev_hub' ? { cursor: 3 } : {});
   }
 
   /** Opens the file picker for one of the fighter's pictures. */

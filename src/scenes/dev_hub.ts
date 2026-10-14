@@ -35,9 +35,9 @@ export class DevHubScene extends Phaser.Scene {
       .setWordWrapWidth(W - 688);
 
     const targets: Record<string, string> = {
-      field: 'field',
+      play: 'play',
+      battlemaker: 'battle_maker',
       sandbox: 'battle_sandbox',
-      editor: 'room_editor',
       maker: 'fighter_maker',
       items: 'item_maker',
       encounters: 'encounters',
@@ -60,8 +60,7 @@ export class DevHubScene extends Phaser.Scene {
       cancellable: true,
       onSelect: (item) => {
         menu.active = false;
-        const entry = item.value === 'field' ? { room: 'test_a', spawn: 'start' } : { from: 'hub' };
-        SceneLoader.goto(this, targets[item.value], entry);
+        SceneLoader.goto(this, targets[item.value], { from: 'dev_hub' });
       },
       onCancel: () => {
         menu.active = false;

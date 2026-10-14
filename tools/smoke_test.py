@@ -178,47 +178,26 @@ with sync_playwright() as p:
     problems = page.evaluate("window.__game.scene.getScene('dev_hub') && 0")
     page.screenshot(path=f"{out}/01_title.png")
 
-    # Start opens the title menu; with no saves it offers New game and Dev hub
-    press(page, "Enter", 400)
-    page.wait_for_function("!!window.__game.scene.getScene('title').menu", timeout=5000)
-    labels = page.evaluate("window.__game.scene.getScene('title').menu.items.map(i => i.value)")
-    check(labels == ["new", "dev"], f"a first visit offers New game and Dev hub ({labels})")
-    page.screenshot(path=f"{out}/01b_title_menu.png")
-    page.evaluate("window.__game.scene.getScene('title').menu.setCursor(1)")
-    press(page, "Enter")
-    wait_scene(page, "dev_hub")
-    page.wait_for_timeout(500)
-    page.screenshot(path=f"{out}/02_hub.png")
-    hub_text = page.evaluate(
-        "window.__game.scene.getScene('dev_hub').children.list.filter(o=>o.type==='Text').map(o=>o.text).join('|')"
-    )
-    check("no problems" in hub_text, "database loaded with no problems")
-
-    press(page, "Enter")  # field test
-    wait_scene(page, "field")
-    page.wait_for_timeout(500)
-    page.screenshot(path=f"{out}/03_field.png")
-
-    # walk right for a moment to prove movement
-    x0 = page.evaluate("window.__game.scene.getScene('field').player.body.x")
-    # hold right until the player has moved (slow software rendering clamps the time step)
-    page.keyboard.down("ArrowRight")
-    try:
-        page.wait_for_function(f"window.__game.scene.getScene('field').player.body.x > {x0 + 1.2}", timeout=4000)
-    except Exception:
-        pass
-    page.keyboard.up("ArrowRight")
-    x1 = page.evaluate("window.__game.scene.getScene('field').player.body.x")
-    check(x1 > x0 + 1, f"player walks right in world units ({x0:.1f} -> {x1:.1f})")
-
-    # put the player next to enemy a1 so they touch
-    bx = page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field');
-        const e = s.enemies.find(e => e.id === 'a1'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; return s.player.body.x; }"""
-    )
+    # Start lights up the two doors: PLAY and MAKE
+    press(page, "Enter", 600)
+    page.wait_for_function("!!window.__game.scene.getScene('title').doors", timeout=5000)
+    doors = page.evaluate("window.__game.scene.getScene('title').doors.map(d => d.value)")
+    check(doors == ["play", "make"], f"the title offers two doors, PLAY and MAKE ({doors})")
+    page.screenshot(path=f"{out}/01b_title_doors.png")
+    press(page, "Enter")  # PLAY is lit first
+    wait_scene(page, "play")
+    page.wait_for_timeout(600)
+    pl = lambda js: page.evaluate("(() => { const s = window.__game.scene.getScene('play'); " + js + " })()")
+    shelf = pl("return s.entries().map(e => e.key);")
+    check(len(shelf) == 7 and shelf[0] == "show:dock_rumble", f"PLAY opens on the 7 showcase fights ({len(shelf)})")
+    page.screenshot(path=f"{out}/02_play.png")
+    press(page, "Enter", 300)  # the focused card's details
+    check(pl("return s.open && s.open.key;") == "show:dock_rumble", "Enter opens the focused fight's details")
+    page.screenshot(path=f"{out}/02b_details.png")
+    press(page, "Enter")  # FIGHT!
     wait_scene(page, "battle")
-    st = page.evaluate("window.__game.scene.getScene('field').sys.settings.status")
-    check(st == 7, f"field sleeps during the battle (status {st})")
+    st = page.evaluate("window.__game.scene.getScene('play').sys.settings.status")
+    check(st == 7, f"the Battle World sleeps during the fight (status {st})")
     wait_battle_input(page, "menu")
     page.screenshot(path=f"{out}/04_battle_menu.png")
     press(page, "Enter", 300)  # Chop
@@ -227,58 +206,36 @@ with sync_playwright() as p:
     press(page, "Enter", 450)
     page.screenshot(path=f"{out}/05b_battle_hit.png")
     result = fight(page, out, "05c")
-    check(result == "victory", f"a real fight against two goons is won ({result})")
-    wait_scene(page, "field", 10000)
-    page.wait_for_timeout(500)
-    state = page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field');
-        return { ids: s.enemies.map(e => e.id), x: s.player.body.x }; }"""
-    )
-    check("a1" not in state["ids"] and "a2" in state["ids"], f"won enemy removed, others kept ({state['ids']})")
-    check(abs(state["x"] - bx) < 1, f"player is where the battle started (x {state['x']:.1f})")
+    check(result == "victory", f"a real fight against three goons is won ({result})")
     gs = page.evaluate("(() => { const s = window.__game.scene.getScene('battle').engine; return s.log; })()")
     check(any("hero chop" in l for l in gs) and any("goon_shove hero" in l for l in gs), "both sides attacked during the fight")
-    page.screenshot(path=f"{out}/06_field_after.png")
-
-    # run away from a2, then stand right on it: no battle during the grace period
-    page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field');
-        const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x - 0.5; s.player.body.z = e.body.z; }"""
-    )
-    page.evaluate("window.__debug.set('god', true)")  # this checks running away; losing is tested later
-    wait_scene(page, "battle")
-    for _ in range(12):
-        wait_battle_input(page, "menu")
-        page.evaluate("(() => { const m = window.__game.scene.getScene('battle').menu; m.setCursor(m.items.length - 1); })()")
-        press(page, "Enter", 300)  # Run away
-        page.wait_for_function(
-            "!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').inputState === 'menu' || window.__game.scene.getScene('battle').engine.phase === 'fled'",
-            timeout=20000,
-        )
-        if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
-            break
-    wait_scene(page, "field", 10000)
-    page.evaluate("window.__debug.set('god', false)")
-    page.evaluate(
-        """() => { const s = window.__game.scene.getScene('field');
-        const e = s.enemies.find(e => e.id === 'a2'); s.player.body.x = e.body.x; s.player.body.z = e.body.z; }"""
-    )
-    page.wait_for_timeout(1500)
-    page.screenshot(path=f"{out}/06b_grace.png")
-    grace = page.evaluate("window.__game.scene.getScene('field').graceMs")
-    check(not active(page, "battle") and grace > 0, f"no battle while protected after running (grace left {grace:.0f} ms)")
-    page.wait_for_function("window.__game.scene.isActive('battle')", timeout=5000)
-    check(True, "enemy can engage again once the grace period ends")
-    # god mode: this checks the fight plays out to the end (losing now means Game Over, tested later)
-    page.evaluate("window.__debug.set('god', true)")
-    result = fight(page, out, "06c")
-    page.evaluate("window.__debug.set('god', false)")
-    check(result == "victory", f"the mixed fight (spiky, flyer, goon) ends ({result})")
-    wait_scene(page, "field", 10000)
+    wait_scene(page, "play", 10000)
+    page.wait_for_function("!!window.__game.scene.getScene('play').result", timeout=8000)
+    res = pl("return s.result;")
+    check(res and res["result"] == "win", f"after the bell the Battle World shows how it went ({res})")
+    page.wait_for_timeout(600)
+    rec = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.plays') || '{}')['show:dock_rumble']")
+    check(rec and rec["plays"] == 1 and rec["wins"] == 1, f"the win is recorded ({rec})")
+    page.screenshot(path=f"{out}/06_result.png")
+    pl("s.like(s.open); return 0;")
     page.wait_for_timeout(300)
+    liked = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.likes') || '[]')")
+    check("encounter:show:dock_rumble" in liked, f"LIKE IT likes the fight ({liked})")
+    # Escape closes the panel, then goes back to the title; the backtick opens the builder's hub
+    press(page, "Escape", 400)
+    press(page, "Escape")
+    wait_scene(page, "title")
+    page.wait_for_timeout(700)
+    press(page, "Backquote")
+    wait_scene(page, "dev_hub")
+    page.wait_for_timeout(500)
+    page.screenshot(path=f"{out}/02_hub.png")
+    hub_text = page.evaluate(
+        "window.__game.scene.getScene('dev_hub').children.list.filter(o=>o.type==='Text').map(o=>o.text).join('|')"
+    )
+    check("no problems" in hub_text, "database loaded with no problems")
 
     # ── Action commands, fought against the sparring dummy with real key timing ──
-    page.evaluate("window.__game.scene.getScene('field').graceMs = 99999")
     pick_debug = lambda value: page.evaluate(
         f"(() => {{ const m = window.__game.scene.getScene('debug').menu; m.setCursor(m.items.findIndex(i => i.value === '{value}')); }})()"
     )
@@ -388,7 +345,7 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
-    wait_scene(page, "field", 10000)
+    wait_scene(page, "dev_hub", 10000)
     page.wait_for_timeout(300)
 
     # ── Block and Reversal against the sparring dummy (1 damage per hit) ──
@@ -439,7 +396,7 @@ with sync_playwright() as p:
         )
         if page.evaluate("!window.__game.scene.isActive('battle') || window.__game.scene.getScene('battle').engine.phase === 'fled'"):
             break
-    wait_scene(page, "field", 10000)
+    wait_scene(page, "dev_hub", 10000)
     page.wait_for_timeout(300)
 
     # ── Enemy patterns: the Bruiser winds up and lets go, a GREAT hit staggers him, the Medic heals ──
@@ -504,145 +461,13 @@ with sync_playwright() as p:
     check(phase == "victory", f"the crew is beaten ({phase})")
     check(os.path.exists(f"{out}/28_crew_results.png"), "the results screen waits for a button press")
     page.evaluate("window.__debug.set('god', false); window.__debug.set('autoCommands', false)")
-    wait_scene(page, "field", 10000)
+    wait_scene(page, "dev_hub", 10000)
     page.wait_for_timeout(300)
-
-    fs = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('field'); {js} }})()")
-
-    def close_messages(limit=12):
-        for _ in range(limit):
-            if not fs("return s.msg.open;"):
-                return
-            press(page, "Enter", 250)
-
-    def flags():
-        return json.loads(page.evaluate("window.__debug.save()"))["flags"]
-
-    # a story trigger near room A's east door fires once
-    fs("s.graceMs = 99999; s.player.body.x = 32.5; s.player.body.z = 4;")
-    page.keyboard.down("ArrowRight")
-    try:
-        page.wait_for_function("window.__game.scene.getScene('field').msg.open", timeout=4000)
-    except Exception:
-        pass
-    page.keyboard.up("ArrowRight")
-    page.wait_for_timeout(500)
-    check(fs("return s.msg.open;") and flags().get("test_a_trigger") is True, "walking into a story trigger shows its text and sets its flag")
-    page.screenshot(path=f"{out}/06d_trigger.png")
-    close_messages()
-    fs("s.player.body.x = 33; s.player.body.z = 4;")
-    page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(500)
-    page.keyboard.up("ArrowRight")
-    check(not fs("return s.msg.open;"), "a once-only trigger stays quiet the second time")
-
-    # through the east door
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 39; s.player.body.z = 4; }")
-    page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(600)
-    page.keyboard.up("ArrowRight")
-    page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field').roomId")
-    check(room == "test_b", f"door leads to room B (in {room})")
-    page.screenshot(path=f"{out}/07_room_b.png")
-
-    # room B: the Octagon gate is locked until the kid lets you in
-    fs("s.graceMs = 99999; s.player.body.x = 18.6; s.player.body.z = 5;")
-    page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(500)
-    page.keyboard.up("ArrowRight")
-    page.wait_for_timeout(500)
-    check(fs("return s.roomId;") == "test_b" and fs("return s.msg.open;"), "a locked gate keeps you in and says why")
-    page.screenshot(path=f"{out}/07a_locked.png")
-    close_messages()
-    # talk to the kid: face him and press Z (jump becomes talk next to someone)
-    fs("s.player.body.x = 2.7; s.player.body.z = 6.5;")
-    page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(60)
-    page.keyboard.up("ArrowRight")
-    page.wait_for_timeout(300)
-    check(fs("return s.marker.visible;"), "a ! appears next to someone you can talk to")
-    press(page, "KeyZ", 600)
-    check(fs("return s.msg.open;"), "Z talks instead of jumping")
-    page.screenshot(path=f"{out}/07e_talk.png")
-    close_messages()
-    check(flags().get("test_gate_open") is True, "talking to the kid opens the gate (sets its flag)")
-    after = fs("return s.objects.filter(o => o.visible).map(o => o.def.id);")
-    check("kid_after" in after and "kid_before" not in after, f"the kid's lines change with the flag ({after})")
-    # the chest gives its item once
-    items0 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
-    fs("s.player.body.x = 10; s.player.body.z = 9.3; s.player.body.y = 0;")
-    page.wait_for_timeout(300)
-    press(page, "KeyZ", 500)
-    close_messages()
-    items1 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
-    check(items1 == items0 + 1 and flags().get("test_chest_b") is True, f"the chest gives a Water Bottle ({items0} -> {items1} items)")
-    press(page, "KeyZ", 500)
-    close_messages()
-    items2 = len(json.loads(page.evaluate("window.__debug.save()"))["items"])
-    check(items2 == items1, "an opened chest is empty")
-    saves = lambda: page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.saves') || '{}')")
-    check("auto" in saves(), "entering a room autosaves")
-    # the save block: pick slot 1
-    fs("s.player.body.x = 17; s.player.body.z = 8.8; s.player.body.y = 0;")
-    page.wait_for_timeout(300)
-    press(page, "KeyZ", 700)
-    page.screenshot(path=f"{out}/07f_save_slots.png")
-    press(page, "Enter", 600)
-    close_messages()
-    sv = saves()
-    check("1" in sv and sv["1"]["meta"]["room"] == "test_b", f"the save block saves to slot 1 ({list(sv)})")
-
-    # room B's east door leads into the octagon arena
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 18.6; s.player.body.z = 5; }")
-    page.keyboard.down("ArrowRight")
-    page.wait_for_timeout(500)
-    page.keyboard.up("ArrowRight")
-    page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field').roomId")
-    check(room == "test_octagon", f"room B's east door leads into the octagon ({room})")
-    page.screenshot(path=f"{out}/07b_octagon_gate.png")
-    # a slanted wall: walk into the front-left diagonal and slide along it
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 12; s.player.body.z = 3; s.graceMs = 99999; }")
-    page.keyboard.down("ArrowLeft")
-    page.wait_for_timeout(2800)
-    page.keyboard.up("ArrowLeft")
-    pos = page.evaluate("(() => { const b = window.__game.scene.getScene('field').player.body; return [b.x, b.z]; })()")
-    check(pos[0] + pos[1] >= 10 and pos[1] > 3.3, f"slanted wall holds and slides you ({pos[0]:.1f}, {pos[1]:.1f})")
-    page.wait_for_timeout(600)
-    page.screenshot(path=f"{out}/07c_octagon_corner.png")
-    # stand by the ring, then at the back: the camera scrolls up into the depth
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 30; s.player.body.z = 6; }")
-    page.wait_for_timeout(900)
-    page.screenshot(path=f"{out}/07d_octagon_ring.png")
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 26; s.player.body.z = 14; s.player.body.y = 1.5; }")
-    page.wait_for_timeout(900)
-    on_ring = page.evaluate("window.__game.scene.getScene('field').player.body.y")
-    check(abs(on_ring - 1) < 0.01, f"you can stand on the ring (y {on_ring:.2f})")
-    page.screenshot(path=f"{out}/07f_in_ring.png")
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 30; s.player.body.z = 27; }")
-    page.wait_for_timeout(1200)
-    # in perspective the deep room fits on screen: the player at the back is in view
-    feet = page.evaluate("(() => { const s = window.__game.scene.getScene('field'); return s.player.sprite.y - s.cameras.main.scrollY; })()")
-    check(40 < feet < 360, f"the back of a deep room is in view (player's feet at y {feet:.0f})")
-    page.screenshot(path=f"{out}/07e_octagon_back.png")
-    # out through the gate on the left wall, back to room B
-    page.evaluate("() => { const s = window.__game.scene.getScene('field'); s.player.body.x = 1.2; s.player.body.z = 15; }")
-    # hold left until the room changes (slow software rendering clamps the time step)
-    page.keyboard.down("ArrowLeft")
-    try:
-        page.wait_for_function("window.__game.scene.getScene('field').roomId === 'test_b'", timeout=4000)
-    except Exception:
-        pass
-    page.keyboard.up("ArrowLeft")
-    page.wait_for_timeout(900)
-    room = page.evaluate("window.__game.scene.getScene('field').roomId")
-    check(room == "test_b", f"octagon gate leads back to room B ({room})")
 
     # debug menu
     press(page, "F1", 400)
     check(page.evaluate("window.__game.scene.getScene('debug').open"), "F1 opens the debug menu")
-    check(page.evaluate("window.__game.scene.isPaused('field')"), "game pauses under the debug menu")
+    check(page.evaluate("window.__game.scene.isPaused('dev_hub')"), "the screen pauses under the debug menu")
     page.screenshot(path=f"{out}/08_debug.png")
     press(page, "ArrowDown")
     press(page, "ArrowDown")
@@ -653,13 +478,8 @@ with sync_playwright() as p:
     page.wait_for_timeout(200)
     page.screenshot(path=f"{out}/09_hitboxes.png")
 
-    press(page, "Escape")  # back to hub
-    wait_scene(page, "dev_hub")
-
     # ── Battle sandbox ──
-    page.wait_for_timeout(400)
-    press(page, "ArrowDown")
-    press(page, "Enter")
+    hub_open(page, 2)
     wait_scene(page, "battle_sandbox")
     page.wait_for_timeout(400)
     page.screenshot(path=f"{out}/15_sandbox.png")
@@ -739,55 +559,6 @@ with sync_playwright() as p:
     check(any(l.startswith("spotlight") for l in log), "the spotlight picks someone")
     wait_scene(page, "battle_sandbox", 10000)
     press(page, "x", 300)
-    wait_scene(page, "dev_hub")
-    page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
-
-    # ── Room editor ──
-    page.wait_for_timeout(400)
-    press(page, "ArrowDown")
-    press(page, "ArrowDown")
-    press(page, "Enter")
-    wait_scene(page, "room_editor")
-    page.wait_for_timeout(400)
-    ed = lambda js: page.evaluate(f"(() => {{ const s = window.__game.scene.getScene('room_editor'); {js} }})()")
-    ed("s.switchRoom('test_b');")
-    page.screenshot(path=f"{out}/20_editor.png")
-    nb = ed("return s.room.blocks.length;")
-    # place a block by clicking with the block tool
-    box = page.locator("#game canvas").bounding_box()
-    k = box["width"] / 640
-    ed("s.tool = 'block'; s.refresh(false);")
-    # click the middle of the plan
-    page.mouse.click(box["x"] + 227 * k, box["y"] + 180 * k)
-    page.wait_for_timeout(300)
-    check(ed("return s.room.blocks.length;") == nb + 1, "the block tool places a block where you click")
-    page.keyboard.press("Control+z")
-    page.wait_for_timeout(200)
-    check(ed("return s.room.blocks.length;") == nb, "Ctrl+Z undoes it")
-    ed("s.place('npc', 6, 2);")
-    obj = ed("return s.room.objects[s.room.objects.length - 1];")
-    check(obj["kind"] == "npc" and ed("return s.problems.length;") == 0, f"a new person is valid room data ({obj['id']})")
-    page.screenshot(path=f"{out}/21_editor_npc.png")
-    ed("s.play();")
-    wait_scene(page, "field", 10000)
-    page.wait_for_timeout(600)
-    ids = page.evaluate("window.__game.scene.getScene('field').objects.map(o => o.def.id)")
-    check(obj["id"] in ids, f"PLAY walks into the edited room ({obj['id']} is there)")
-    page.screenshot(path=f"{out}/22_editor_play.png")
-    # F2 is ignored while the room is still fading in: try again until the editor opens
-    for _ in range(10):
-        press(page, "F2", 600)
-        if active(page, "room_editor"):
-            break
-    wait_scene(page, "room_editor", 10000)
-    page.keyboard.press("Control+s")
-    page.wait_for_timeout(400)
-    saved = page.evaluate("JSON.parse(localStorage.getItem('kid-chispa.rooms') || '{}')")
-    check("test_b" in saved and any(o["id"] == obj["id"] for o in saved["test_b"].get("objects", [])), "Ctrl+S saves the room")
-    ed("s.revert();")
-    page.wait_for_timeout(300)
-    check(not any(o["id"] == obj["id"] for o in ed("return s.room.objects;")), "REVERT puts the room back as it ships")
-    ed("s.leave();")
     wait_scene(page, "dev_hub")
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
@@ -1038,54 +809,91 @@ with sync_playwright() as p:
     press(page, "F8", 400)
     check(page.evaluate("!!document.getElementById('crash')"), "F8 on the title shows the crash screen")
 
-    # Continue: reload, and the newest save puts you back where it was made
+    # ── Battle Maker: build on the ring, the clear check, upload, then play it from the Battle World ──
     page.reload()
     wait_scene(page, "title", 15000)
     page.wait_for_timeout(600)
-    press(page, "Enter", 400)
-    page.wait_for_function("!!window.__game.scene.getScene('title').menu", timeout=5000)
-    labels = page.evaluate("window.__game.scene.getScene('title').menu.items.map(i => i.value)")
-    check(labels[0] == "continue" and "load" in labels, f"with saves, the title offers Continue first ({labels})")
-    newest = page.evaluate("(() => { const s = JSON.parse(localStorage.getItem('kid-chispa.saves')); return Object.values(s).sort((a, b) => a.meta.savedAt < b.meta.savedAt ? 1 : -1)[0].meta.room; })()")
+    press(page, "Enter", 600)
+    page.wait_for_function("!!window.__game.scene.getScene('title').doors", timeout=5000)
+    press(page, "ArrowRight", 200)
     press(page, "Enter")
-    wait_scene(page, "field", 10000)
-    room = page.evaluate("window.__game.scene.getScene('field').roomId")
-    check(room == newest, f"Continue loads the newest save ({room})")
-    page.screenshot(path=f"{out}/23_continue.png")
+    wait_scene(page, "battle_maker")
+    page.wait_for_timeout(500)
+    mk = lambda js: page.evaluate("(async () => { const s = window.__game.scene.getScene('battle_maker'); " + js + " })()")
+    mk("s.newBattle(); return 0;")
+    wait_scene(page, "battle_maker")
+    foes = mk("return s.draft.setup.enemies.map(e => e.id);")
+    check(foes == ["dock_goon", "dock_goon"], f"MAKE opens on a new battle: Kid Chispa against two goons ({foes})")
+    mk("s.addFoe('spiky_bouncer'); return 0;")
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{out}/30_maker.png")
+    check(mk("return s.draft.setup.enemies.length;") == 3, "picking an opponent puts it in the ring")
+    mk("await s.upload(); return 0;")
+    check("Clear check" in mk("return s.status;"), "UPLOAD asks for a clear first")
+    mk("s.playTest(); return 0;")
+    wait_scene(page, "battle")
+    page.evaluate("window.__debug.set('god', true)")  # a play-test sets the switches; turn god mode on inside the fight
+    phase = fight(page, out, "31_test")
+    page.evaluate("window.__debug.set('god', false)")
+    wait_scene(page, "battle_maker", 10000)
+    page.wait_for_timeout(300)
+    check(phase == "victory" and mk("return s.cleared();"), f"winning the play-test clears the battle ({phase})")
+    page.screenshot(path=f"{out}/32_cleared.png")
+    mk("s.draft.setup.items = []; s.changed(); return 0;")
+    check(not mk("return s.cleared();"), "changing it after the clear needs a new clear")
+    mk("s.draft.setup.items = ['water_bottle']; s.changed(); return 0;")
+    check(mk("return s.cleared();"), "putting it back as it was cleared counts again")
+    mk("s.draft.title = 'Smoke Bout'; return 0;")
+    check(mk("return await s.save(true);"), "the cleared battle uploads")
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('battle_maker'); g.scene.start('play'); })()")
+    wait_scene(page, "play")
+    pl("s.setTab('world'); return 0;")
+    world = pl("return s.entries().map(e => e.title);")
+    check("Smoke Bout" in world, f"the upload is in the Battle World ({world})")
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{out}/33_world.png")
+    pl("s.details(s.entries().find(e => e.title === 'Smoke Bout')); s.playOpen(); return 0;")
+    wait_scene(page, "battle")
+    page.evaluate("window.__debug.set('god', true)")
+    phase = fight(page, out, "34_world")
+    page.evaluate("window.__debug.set('god', false)")
+    wait_scene(page, "play", 10000)
+    page.wait_for_function("!!window.__game.scene.getScene('play').result", timeout=8000)
+    page.wait_for_timeout(500)
+    plays = pl("const k = s.open.key; return [k, s.result.result];")
+    check(plays[1] == "win", f"a Battle World fight is played and recorded ({plays})")
 
-    # losing for real: Smelling Salts first, then Game Over, then Continue
-    page.evaluate("window.__debug.set('god', false); window.__debug.set('autoCommands', false); window.__debug.setHp(1); window.__debug.give('smelling_salts')")
-    page.evaluate("window.__game.scene.getScene('field').graceMs = 99999")
-    page.wait_for_timeout(1000)  # let the curtain finish opening
-    press(page, "F1", 600)
-    pick_debug("battle")
-    press(page, "Enter", 250)
-    pick_debug("test_goons")
-    press(page, "Enter")
+    # losing: Smelling Salts first, then back to the Battle World (there is no Game Over)
+    pl("s.close(); s.setTab('showcase'); s.details(s.entries().find(e => e.key === 'show:main_event')); s.playOpen(); return 0;")
     wait_scene(page, "battle")
     revived = False
-    for _ in range(80):
-        if page.evaluate("window.__game.scene.isActive('game_over')"):
-            break
+    for _ in range(120):
         if not active(page, "battle"):
-            page.wait_for_timeout(300)
-            continue
+            break
         st = page.evaluate("(() => { const s = window.__game.scene.getScene('battle'); return [s.inputState, s.engine.log.some(l => l.startsWith('revive hero smelling_salts'))]; })()")
         revived = revived or st[1]
         if st[0] == "menu":
-            battle_eval(page, "s.menu.setCursor(s.menu.items.findIndex(i => i.value === 'defend'));")
+            battle_eval(page, "s.engine.hero.hp = Math.min(s.engine.hero.hp, 1); s.menu.setCursor(s.menu.items.findIndex(i => i.value === 'defend'));")
             press(page, "Enter", 300)
         else:
             page.wait_for_timeout(300)
     check(revived, "Smelling Salts get Chispa back up when he's knocked out")
-    wait_scene(page, "game_over", 15000)
-    page.wait_for_function("!!window.__game.scene.getScene('game_over').menu", timeout=5000)
-    page.screenshot(path=f"{out}/24_game_over.png")
-    check(not active(page, "field"), "Game Over closes the room the fight started in")
+    wait_scene(page, "play", 15000)
+    page.wait_for_function("!!window.__game.scene.getScene('play').result", timeout=8000)
+    check(pl("return s.result.result;") == "lose", "a lost fight goes back to the Battle World with the result")
+    page.screenshot(path=f"{out}/35_lost.png")
+
+    # your battles are still there after a reload
+    page.reload()
+    wait_scene(page, "title", 15000)
+    page.wait_for_timeout(600)
+    press(page, "Enter", 600)
+    page.wait_for_function("!!window.__game.scene.getScene('title').doors", timeout=5000)
     press(page, "Enter")
-    wait_scene(page, "field", 10000)
-    hp = json.loads(page.evaluate("window.__debug.save()"))["party"][0]["hp"]
-    check(page.evaluate("window.__game.scene.getScene('field').roomId") == newest and hp > 1, f"Continue after Game Over loads the last save ({hp} HP)")
+    wait_scene(page, "play")
+    pl("s.setTab('mine'); return 0;")
+    mine = pl("return s.entries().map(e => [e.title, !!e.draft]);")
+    check(["Smoke Bout", False] in mine, f"YOURS keeps the uploaded battle after a reload ({mine})")
     real = [e for e in errors if "fonts.g" not in e and "ERR_" not in e and "Test crash" not in e]
     check(not real, f"no errors on desktop {real[:3]}")
     ctx.close()

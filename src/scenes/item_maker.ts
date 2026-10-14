@@ -76,6 +76,8 @@ function fromBuiltin(def: ItemDef, id: string): CustomItem {
 }
 
 export class ItemMakerScene extends Phaser.Scene {
+  /** The screen to go back to (the Battle Maker, or the dev hub). */
+  private backTo = 'dev_hub';
   mine: CustomItem[] = [];
   pick: Pick | null = null;
   dirty = false;
@@ -89,7 +91,8 @@ export class ItemMakerScene extends Phaser.Scene {
     super('item_maker');
   }
 
-  create(): void {
+  create(data?: { from?: string }): void {
+    this.backTo = data?.from === 'battle_maker' ? 'battle_maker' : 'dev_hub';
     if (!hasGame()) newGame(Database.character('chispa'));
     this.mine = Builds.myItems();
     this.dirty = false;
@@ -209,7 +212,7 @@ export class ItemMakerScene extends Phaser.Scene {
   }
 
   leave(): void {
-    SceneLoader.goto(this, 'dev_hub', { cursor: 4 });
+    SceneLoader.goto(this, this.backTo, this.backTo === 'dev_hub' ? { cursor: 4 } : {});
   }
 
   // ── Input ───────────────────────────────────────────────────────────

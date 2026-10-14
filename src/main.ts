@@ -8,17 +8,16 @@ import { BootScene } from './scenes/boot';
 import { PreloadScene } from './scenes/preload';
 import { TitleScene } from './scenes/title';
 import { DevHubScene } from './scenes/dev_hub';
-import { FieldScene } from './scenes/field';
 import { BattleScene } from './scenes/battle';
 import { BattleSandboxScene } from './scenes/battle_sandbox';
-import { RoomEditorScene } from './scenes/room_editor';
-import { GameOverScene } from './scenes/game_over';
 import { FighterMakerScene } from './scenes/fighter_maker';
 import { EncountersScene } from './scenes/encounters';
 import { ItemMakerScene } from './scenes/item_maker';
 import { MoveMakerScene } from './scenes/move_maker';
 import { SpriteStudioScene } from './scenes/sprite_studio';
 import { GalleryScene } from './scenes/gallery';
+import { PlayScene } from './scenes/play';
+import { BattleMakerScene } from './scenes/battle_maker';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
 import { TouchControlsScene } from './scenes/touch_controls';
 import { DebugMenuScene } from './scenes/debug_menu';
@@ -52,16 +51,15 @@ function startGame(): void {
       PreloadScene,
       TitleScene,
       DevHubScene,
-      FieldScene,
       BattleScene,
       BattleSandboxScene,
-      RoomEditorScene,
-      GameOverScene,
       FighterMakerScene,
       EncountersScene,
       ItemMakerScene,
       MoveMakerScene,
       GalleryScene,
+      PlayScene,
+      BattleMakerScene,
       SpriteStudioScene,
       InputTestScene,
       UiKitScene,

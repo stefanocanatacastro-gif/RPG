@@ -35,6 +35,28 @@ export function formationOf(s: BattleSetup): FormationDef {
   return f;
 }
 
+/**
+ * A fingerprint of a setup: the same fight gives the same text, any change a
+ * different one (the clear check compares them).
+ */
+export function setupHash(s: BattleSetup): string {
+  const sorted = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(sorted)
+      : v && typeof v === 'object'
+        ? Object.fromEntries(
+            Object.keys(v as object)
+              .sort()
+              .filter((k) => (v as Record<string, unknown>)[k] !== undefined)
+              .map((k) => [k, sorted((v as Record<string, unknown>)[k])]),
+          )
+        : v;
+  const text = JSON.stringify(sorted(s));
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
 /** What's wrong with a setup (a fighter deleted by its maker, no opponents…), or [] if it can be played. */
 export function setupProblems(s: BattleSetup): string[] {
   const out: string[] = [];

@@ -63,6 +63,8 @@ interface Row {
 }
 
 export class SpriteStudioScene extends Phaser.Scene {
+  /** The screen to go back to (the Battle Maker, or the dev hub). */
+  private backTo = 'dev_hub';
   target: Target = { kind: 'skin', id: 'chispa' };
   /** Animation being edited (cells clicked on the sheet go to it). */
   sel: SheetAnim = 'idle';
@@ -91,7 +93,8 @@ export class SpriteStudioScene extends Phaser.Scene {
     super('sprite_studio');
   }
 
-  create(data?: { target?: Target }): void {
+  create(data?: { target?: Target; from?: string }): void {
+    if (data?.from) this.backTo = data.from === 'battle_maker' ? 'battle_maker' : 'dev_hub';
     if (!hasGame()) newGame(Database.character('chispa'));
     this.skins = Builds.mySkins();
     this.fighters = Builds.mine();
@@ -321,7 +324,7 @@ export class SpriteStudioScene extends Phaser.Scene {
   }
 
   private leave(): void {
-    SceneLoader.goto(this, 'dev_hub', { cursor: 8 });
+    SceneLoader.goto(this, this.backTo, this.backTo === 'dev_hub' ? { cursor: 8 } : {});
   }
 
   // ── Input ───────────────────────────────────────────────────────────

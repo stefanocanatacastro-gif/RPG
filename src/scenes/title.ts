@@ -5,11 +5,11 @@ import { tinyText, tinyTextWidth } from '../ui/tiny_font';
 import { versionLabel } from '../systems/version';
 import { t } from '../managers/strings';
 import { newGame } from '../managers/game_state';
-import { MenuList, type MenuItem } from '../ui/components';
-import { SaveManager, type SlotId } from '../managers/save_manager';
-import { pickSlot } from '../ui/save_slots';
-import { startFromSave, startNewGame } from '../managers/game_flow';
+import { drawPanel } from '../ui/components';
+import { UI, css } from '../ui/theme';
 import { Database } from '../managers/database';
+import { animKey } from '../systems/anim_builder';
+import { HERO_ART } from '../systems/hero_art';
 import { SceneLoader } from '../managers/scene_loader';
 import { input } from '../systems/input';
 
@@ -99,8 +99,11 @@ function ditherRamp(scene: Phaser.Scene, key: string, w: number, h: number, ramp
 export class TitleScene extends Phaser.Scene {
   private started = false;
   private prompt!: Phaser.GameObjects.Text;
-  /** The title menu, once Start has been pressed (the browser test reads it). */
-  menu: MenuList | null = null;
+  /** The two doors, once Start has been pressed (the browser test reads them). */
+  doors: { value: 'play' | 'make'; x: number }[] | null = null;
+  /** Which door is lit (0 = PLAY, 1 = MAKE). */
+  door = 0;
+  private doorArt: Phaser.GameObjects.GameObject[] = [];
   private busy = false;
 
   constructor() {
@@ -109,7 +112,9 @@ export class TitleScene extends Phaser.Scene {
 
   create(): void {
     this.started = false;
-    this.menu = null;
+    this.doors = null;
+    this.door = 0;
+    this.doorArt = [];
     this.busy = false;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const rand = rng(1931);
@@ -335,14 +340,16 @@ export class TitleScene extends Phaser.Scene {
       ring.lineBetween(br, backRopes[i] + 1, fr, frontRopes[i] + 1);
     }
 
-    // ── Kid Chispa (placeholder) with a stepped idle bob ──────────────
+    // ── Kid Chispa, in his guard ──────────────────────────────────────
     this.add.ellipse(ringCX, 266, 40, 8, 0x000000, 0.25);
     // art is made for the 960×540 screen; the title is drawn on a 640×360 grid
+    const hasArt = this.textures.exists(HERO_ART);
     const chispa = this.add
-      .image(ringCX, 266, 'spr_chispa')
+      .sprite(ringCX, 266, hasArt ? HERO_ART : 'spr_chispa', hasArt ? 'idle_00' : undefined)
       .setOrigin(0.5, 1)
       .setScale(1 / ZOOM);
-    if (!reduced) {
+    if (hasArt) chispa.play(animKey(HERO_ART, 'idle'));
+    else if (!reduced) {
       this.tweens.add({
         targets: chispa,
         y: 264,
@@ -445,6 +452,8 @@ export class TitleScene extends Phaser.Scene {
 
     // ── Input: keyboard, mouse/touch and gamepad all start ────────────
     this.input.keyboard?.on('keydown-F8', () => this.testCrash());
+    // the builder's tools, for whoever knows the key
+    this.input.keyboard?.on('keydown-BACKTICK', () => void this.choose('dev'));
     this.input.on(Phaser.Input.Events.POINTER_UP, (p: Phaser.Input.Pointer) => {
       const debugCorner = p.x < 66 && p.y < 66;
       if (!debugCorner && !input.onTouchControl(p.x, p.y) && !this.started) this.start();
@@ -466,64 +475,98 @@ export class TitleScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (!this.started && (input.justPressed('confirm') || input.justPressed('menu'))) this.start();
+    if (!this.started && (input.justPressed('confirm') || input.justPressed('menu'))) return this.start();
+    if (!this.doors || this.busy) return;
+    if (input.justPressed('left') || input.justPressed('right')) {
+      this.door = 1 - this.door;
+      this.drawDoors();
+    } else if (input.justPressed('confirm')) void this.choose(this.doors[this.door].value);
   }
 
-  /** Start pressed: the title menu replaces the prompt. */
+  /** Start pressed: the two doors replace the prompt. */
   private start(): void {
     if (this.started) return;
     this.started = true;
     this.cameras.main.flash(120, 255, 178, 56);
     this.prompt.setVisible(false);
-    this.time.delayedCall(150, () => this.openMenu());
+    this.time.delayedCall(150, () => this.openDoors());
   }
 
-  private openMenu(): void {
-    const saved = SaveManager.hasAny();
-    const items: MenuItem[] = [];
-    if (saved) items.push({ label: t('title.continue'), value: 'continue' });
-    items.push({ label: t('title.new_game'), value: 'new' });
-    if (saved) items.push({ label: t('title.load'), value: 'load' });
-    items.push({ label: t('title.dev_hub'), value: 'dev' });
-    const w = 330;
-    const x = (GW - w) / 2;
-    const y = GH - items.length * 36 - 54;
-    this.menu = new MenuList(this, x, y, {
-      width: w,
-      rows: items.length,
-      rowHeight: 36,
-      items,
-      cancellable: false,
-      onSelect: (item) => void this.choose(item.value),
+  private openDoors(): void {
+    const w = 300;
+    const gap = 40;
+    const x0 = (GW - (w * 2 + gap)) / 2;
+    this.doors = [
+      { value: 'play', x: x0 },
+      { value: 'make', x: x0 + w + gap },
+    ];
+    this.drawDoors();
+    // a click or tap on a door goes through it; hovering lights it
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (p: Phaser.Input.Pointer) => {
+      const i = this.doorAt(p.x, p.y);
+      if (i >= 0 && i !== this.door) {
+        this.door = i;
+        this.drawDoors();
+      }
+    });
+    this.input.on(Phaser.Input.Events.POINTER_UP, (p: Phaser.Input.Pointer) => {
+      const i = this.doorAt(p.x, p.y);
+      if (i >= 0 && this.doors) void this.choose(this.doors[i].value);
     });
   }
 
-  private async choose(value: string): Promise<void> {
-    if (this.busy || !this.menu) return;
-    if (value === 'continue') {
-      const slot = SaveManager.latest();
-      if (slot) return this.play(slot);
-    } else if (value === 'load') {
-      this.menu.active = false;
-      const slot = await pickSlot(this, 'load');
-      this.menu.active = true;
-      if (slot) return this.play(slot);
-    } else if (value === 'new') {
-      this.busy = true;
-      startNewGame(this);
-    } else {
-      this.busy = true;
-      newGame(Database.character('chispa'));
-      SceneLoader.goto(this, 'dev_hub');
-    }
+  private static readonly DOOR_Y = GH - 176;
+  private static readonly DOOR_W = 300;
+  private static readonly DOOR_H = 132;
+
+  private doorAt(x: number, y: number): number {
+    if (!this.doors) return -1;
+    const { DOOR_Y, DOOR_W, DOOR_H } = TitleScene;
+    return this.doors.findIndex((d) => x >= d.x && x < d.x + DOOR_W && y >= DOOR_Y && y < DOOR_Y + DOOR_H);
   }
 
-  /** Loads a save and walks back in where it was made. */
-  private play(slot: SlotId): void {
-    const data = SaveManager.load(slot);
-    if (!data) return;
+  private drawDoors(): void {
+    for (const o of this.doorArt) o.destroy();
+    this.doorArt = [];
+    if (!this.doors) return;
+    const { DOOR_Y, DOOR_W, DOOR_H } = TitleScene;
+    const text = {
+      play: [t('title.play'), t('title.play_desc')],
+      make: [t('title.make'), t('title.make_desc')],
+    };
+    this.doors.forEach((d, i) => {
+      const lit = i === this.door;
+      const g = this.add.graphics();
+      drawPanel(g, d.x, DOOR_Y, DOOR_W, DOOR_H, { alpha: 0.94 });
+      if (lit) {
+        g.lineStyle(3, UI.spark, 1).strokeRect(d.x - 2, DOOR_Y - 2, DOOR_W + 4, DOOR_H + 4);
+        g.fillStyle(UI.spark, 0.12).fillRect(d.x, DOOR_Y, DOOR_W, DOOR_H);
+      }
+      const [title, desc] = text[d.value];
+      const big = pixelText(
+        this,
+        d.x + DOOR_W / 2,
+        DOOR_Y + 22,
+        title,
+        48,
+        css(lit ? UI.spark : UI.ink),
+      ).setOrigin(0.5, 0);
+      const small = pixelText(this, d.x + DOOR_W / 2, DOOR_Y + 86, desc, 8, css(lit ? UI.ink : UI.inkDim))
+        .setOrigin(0.5, 0)
+        .setAlign('center')
+        .setWordWrapWidth(DOOR_W - 30)
+        .setLineSpacing(5);
+      this.doorArt.push(g, big, small);
+    });
+  }
+
+  /** Through a door: play fights, make them, or (hidden) the builder's hub. */
+  async choose(value: string): Promise<void> {
+    if (this.busy) return;
     this.busy = true;
-    startFromSave(this, data);
+    newGame(Database.character('chispa'));
+    const to = value === 'play' ? 'play' : value === 'make' ? 'battle_maker' : 'dev_hub';
+    SceneLoader.goto(this, to);
   }
 
   /** M0 check of the error overlay: press F8 on the title screen. */

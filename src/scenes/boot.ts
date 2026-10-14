@@ -9,8 +9,6 @@ import { englishKeys } from '../managers/strings';
 import { gameState, hasGame } from '../managers/game_state';
 import { rng } from '../systems/rng';
 import { debugState, setDebug } from '../systems/debug_state';
-import { loadSavedRooms } from '../managers/room_store';
-import { loadSaveSlots } from '../managers/save_manager';
 import { Builds, loadBuilds } from '../managers/builds';
 import { preparePictures } from '../systems/pictures';
 
@@ -39,24 +37,20 @@ export class BootScene extends Phaser.Scene {
       zoom: this.registry.get('zoom'),
       fontReady: this.registry.get('fontReady'),
       input: input.device,
-      room: hasGame() ? gameState().data.room : null,
       rngSeed: rng.seed,
       battleSeed: this.registry.get('battleSeed') ?? null,
     }));
 
-    // rooms saved from the room editor are laid over the shipped ones, then checked too
-    // rooms from the room editor and fighters from the fighter maker join the
-    // shipped data; then everything is checked together
-    const rooms = Promise.all([loadSavedRooms(), loadBuilds()]).then(async ([where, builds]) => {
-      this.registry.set('roomStore', where);
-      this.registry.set('buildStore', builds);
+    // everyone's made fighters, moves and items join the shipped data; then
+    // everything is checked together
+    const builds = loadBuilds().then(async (where) => {
+      this.registry.set('buildStore', where);
       // uploaded fighter pictures become textures now, and again after every save
       await preparePictures(this);
       Builds.onChange(() => preparePictures(this));
       Database.validate({ spriteKeys: allSpriteKeys(), stringKeys: englishKeys() });
     });
-    const saves = loadSaveSlots().then((where) => this.registry.set('saveStore', where));
-    Promise.all([waitForPixelFont(), rooms, saves]).then(([ok]) => {
+    Promise.all([waitForPixelFont(), builds]).then(([ok]) => {
       this.registry.set('fontReady', ok);
       document.getElementById('boot-note')?.remove();
       // Overlay scenes run for the whole session, above everything else.

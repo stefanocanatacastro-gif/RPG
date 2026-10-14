@@ -831,6 +831,6 @@ export class BattleSandboxScene extends Phaser.Scene {
   private leave(): void {
     if (this.page === 'ring') return this.openPage('fight');
     this.busy = true;
-    SceneLoader.goto(this, 'dev_hub', { cursor: 1 });
+    SceneLoader.goto(this, 'dev_hub', { cursor: 2 });
   }
 }

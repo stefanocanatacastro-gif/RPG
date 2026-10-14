@@ -1,21 +1,11 @@
 // SceneLoader: every screen change goes through here so it gets the curtain
-// wipe, and so the field is put to sleep (not destroyed) during a battle and
-// woken exactly as it was afterwards.
+// wipe, and so the screen that starts a battle is put to sleep (not destroyed)
+// and woken exactly as it was afterwards.
 
 import Phaser from 'phaser';
 import type { TransitionScene } from '../scenes/transition';
 import { bus, type BattleResult } from './event_bus';
-import { gameState, hasGame, type Facing } from './game_state';
 import type { FormationDef } from '../types/data';
-
-export interface RoomEntry {
-  room: string;
-  /** Named spawn point in the room (a door id), or explicit coordinates. */
-  spawn?: string;
-  x?: number;
-  y?: number;
-  facing?: Facing;
-}
 
 export interface BattleStart {
   formation: string;
@@ -81,12 +71,6 @@ export const SceneLoader = {
     }
   },
 
-  /** Moves to another room through the field scene, carrying spawn and facing. */
-  async enterRoom(from: Phaser.Scene, fieldKey: string, entry: RoomEntry): Promise<void> {
-    await SceneLoader.goto(from, fieldKey, entry);
-    bus.emit('room.entered', { room: entry.room, spawn: entry.spawn ?? '' });
-  },
-
   /** Field → battle. The field sleeps so its state is exactly as left. */
   async startBattle(field: Phaser.Scene, battleKey: string, start: BattleStart): Promise<void> {
     if (!(await settled(field))) return;
@@ -118,26 +102,5 @@ export const SceneLoader = {
     } finally {
       busy = false;
     }
-  },
-
-  /** Battle lost for real: the battle and the sleeping room close, and the Game Over screen opens. */
-  async gameOver(battle: Phaser.Scene, returnTo: string): Promise<void> {
-    if (!(await settled(battle))) return;
-    busy = true;
-    try {
-      await wipe(battle.game, () => {
-        battle.scene.stop();
-        battle.scene.stop(returnTo);
-        battle.scene.start('game_over');
-      });
-      bus.emit('battle.ended', { formation: '', result: 'lose' });
-    } finally {
-      busy = false;
-    }
-  },
-
-  /** Saves the player's position before leaving a room or starting a battle. */
-  rememberPosition(room: string, x: number, y: number, facing: Facing): void {
-    if (hasGame()) gameState().setLocation(room, x, y, facing);
   },
 };

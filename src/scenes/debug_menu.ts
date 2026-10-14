@@ -136,7 +136,6 @@ export class DebugMenuScene extends Phaser.Scene {
     const onOff = (k: DebugKey) => (debugState[k] ? 'ON' : 'off');
     const items: MenuItem[] = [
       { label: 'Start battle', value: 'battle', right: '>' },
-      { label: 'Warp to room', value: 'warp', right: '>' },
       { label: 'God mode', value: 'god', right: onOff('god') },
       { label: 'Hitboxes', value: 'hitboxes', right: onOff('hitboxes') },
       { label: 'Show FPS', value: 'fps', right: onOff('fps') },
@@ -144,7 +143,6 @@ export class DebugMenuScene extends Phaser.Scene {
       { label: 'Pip in party', value: 'pip', right: hasGame() && gameState().partner() ? 'ON' : 'off' },
       { label: 'Give 100 coins', value: 'coins' },
       { label: 'Give item', value: 'item', right: '>' },
-      { label: 'Toggle flag', value: 'flag', right: '>' },
       { label: 'New RNG seed', value: 'seed' },
       { label: 'Close', value: 'close' },
     ];
@@ -156,12 +154,8 @@ export class DebugMenuScene extends Phaser.Scene {
         switch (item.value) {
           case 'battle':
             return this.showBattles();
-          case 'warp':
-            return this.showRooms();
           case 'item':
             return this.showItems();
-          case 'flag':
-            return this.showFlags();
           case 'god':
           case 'hitboxes':
           case 'fps':
@@ -216,21 +210,6 @@ export class DebugMenuScene extends Phaser.Scene {
     );
   }
 
-  private showRooms(): void {
-    const rooms = Object.keys(Database.data.rooms);
-    this.setMenu(
-      rooms.map((r) => ({ label: r, value: r })),
-      (item) => {
-        const host = this.host();
-        if (!host) return;
-        this.ensureGame();
-        this.close();
-        SceneLoader.enterRoom(host, 'field', { room: item.value, spawn: 'start' });
-      },
-      () => this.showMain(1),
-    );
-  }
-
   private showItems(): void {
     this.setMenu(
       Database.data.items.map((it) => ({ label: t(it.name), value: it.id })),
@@ -239,34 +218,7 @@ export class DebugMenuScene extends Phaser.Scene {
         const ok = gameState().addItem(item.value);
         this.flash(ok ? `bag: ${gameState().data.items.length}/10` : 'bag is full');
       },
-      () => this.showMain(7),
-    );
-  }
-
-  private showFlags(): void {
-    this.ensureGame();
-    // every flag the rooms read or set, plus a few story ones
-    const keys = new Set(['met_pip', 'ch1_started', 'brick_defeated']);
-    for (const room of Object.values(Database.data.rooms)) {
-      const things = [...(room.doors ?? []), ...(room.gates ?? []), ...room.enemies, ...(room.objects ?? [])];
-      for (const o of things)
-        for (const f of ['if', 'unless', 'requires', 'setFlag', 'flag']) {
-          const v = (o as unknown as Record<string, unknown>)[f];
-          if (typeof v === 'string') keys.add(v);
-        }
-    }
-    for (const k of Object.keys(gameState().data.flags)) keys.add(k);
-    const list = () =>
-      [...keys].sort().map((k) => ({ label: k, value: k, right: gameState().isSet(k) ? 'ON' : 'off' }));
-    this.setMenu(
-      list(),
-      (item) => {
-        gameState().setFlag(item.value, !gameState().isSet(item.value));
-        const c = this.menu?.cursor ?? 0;
-        this.menu?.setItems(list());
-        this.menu?.setCursor(c);
-      },
-      () => this.showMain(8),
+      () => this.showMain(6),
     );
   }
 }
