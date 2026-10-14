@@ -9,6 +9,7 @@ import { GAME_WIDTH as W, GAME_HEIGHT as H } from '../systems/integer_scale';
 import { input } from '../systems/input';
 import { IS_DEV } from '../systems/version';
 import { animKey } from '../systems/anim_builder';
+import { fighterTexture } from '../systems/custom_looks';
 import { debugState } from '../systems/debug_state';
 import { Bar, BAR_STYLES, drawPanel } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
@@ -101,6 +102,8 @@ export class FieldScene extends Phaser.Scene {
   player!: Actor;
   enemies: FieldEnemy[] = [];
   private facing: Facing = 'right';
+  /** Kid Chispa's texture: the test wrestler, or your skin for him. */
+  private heroTex = 'spr_test_dummy';
   private striking = false;
   private leaving = false;
   /** Time left (ms) during which enemies can't start a battle or notice you, after running away. */
@@ -210,9 +213,11 @@ export class FieldScene extends Phaser.Scene {
     const x = entry?.x ?? sp[0];
     const z = entry?.y ?? sp[1];
     this.facing = entry?.facing ?? sp[2];
-    this.player = this.makeActor(x, z, 0, 'spr_test_dummy', 'idle_00');
+    // Kid Chispa wears your skin when you gave him one
+    this.heroTex = fighterTexture(this, 'chispa', 'spr_test_dummy').key;
+    this.player = this.makeActor(x, z, 0, this.heroTex, 'idle_00');
     this.player.body.y = groundAt(this.shape, x, z, this.player.body.r).y;
-    this.player.sprite.play(animKey('spr_test_dummy', 'idle')).setFlipX(this.facing === 'left');
+    this.player.sprite.play(animKey(this.heroTex, 'idle')).setFlipX(this.facing === 'left');
   }
 
   private spawnEnemies(): void {
@@ -222,7 +227,11 @@ export class FieldScene extends Phaser.Scene {
       if (e.respawn === false && gs.isSet(this.beatenFlag(e.id))) continue;
       const def = Database.enemy(e.enemy);
       const flying = def.props.includes('airborne');
-      const a = this.makeActor(e.x, e.z, flying ? 0.8 : 0, def.sprite);
+      const tex = fighterTexture(this, def.id, def.sprite).key;
+      const animated = this.anims.exists(animKey(tex, 'idle'));
+      const a = this.makeActor(e.x, e.z, flying ? 0.8 : 0, tex, animated ? 'idle_00' : undefined);
+      // skinned enemies are drawn facing right like the hero: turn them toward him
+      if (animated) a.sprite.play(animKey(tex, 'idle')).setFlipX(true);
       if (!flying) a.body.y = groundAt(this.shape, e.x, e.z, a.body.r).y;
       this.enemies.push({
         ...a,
@@ -400,7 +409,7 @@ export class FieldScene extends Phaser.Scene {
     }
     if (!busy) {
       const moving = x !== 0 || y !== 0;
-      const want = animKey('spr_test_dummy', moving && b.grounded ? 'walk' : 'idle');
+      const want = animKey(this.heroTex, moving && b.grounded ? 'walk' : 'idle');
       if (this.player.sprite.anims.currentAnim?.key !== want) this.player.sprite.play(want);
     }
     if (input.justPressed('strike') && !busy && b.grounded) this.strike();
@@ -537,7 +546,7 @@ export class FieldScene extends Phaser.Scene {
   /** Shows lines in the message box; the player stands still meanwhile. */
   private async say(lines: Line[]): Promise<void> {
     this.talking = true;
-    this.player.sprite.play(animKey('spr_test_dummy', 'idle'));
+    this.player.sprite.play(animKey(this.heroTex, 'idle'));
     await this.msg.show(lines);
     this.talking = false;
     this.interactReadyAt = this.time.now + 250;
@@ -641,7 +650,7 @@ export class FieldScene extends Phaser.Scene {
   private strike(): void {
     this.striking = true;
     const s = this.player.sprite;
-    s.play(animKey('spr_test_dummy', 'chop'));
+    s.play(animKey(this.heroTex, 'chop'));
     const dir = this.facing === 'left' ? -1 : 1;
     this.time.delayedCall(140, () => {
       const p = this.player.body;

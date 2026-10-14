@@ -11,6 +11,7 @@ import { pixelText } from '../ui/pixel_text';
 import { tinyText } from '../ui/tiny_font';
 import { UI, css } from '../ui/theme';
 import { editText, textFieldOpen } from '../ui/text_field';
+import { pickFile } from '../ui/pick_file';
 import { SceneLoader } from '../managers/scene_loader';
 import { Database, validateGameData } from '../managers/database';
 import { hasGame, newGame } from '../managers/game_state';
@@ -34,6 +35,7 @@ import {
 } from '../managers/builds';
 import type { EnemyProp } from '../types/data';
 import { paintWrestler } from '../systems/custom_looks';
+import { drawSheetLook } from '../systems/sheets';
 import { cleanPicture, decodePicture, drawPictureLook, maxHeightFor, maxWidthFor } from '../systems/pictures';
 
 const TOP = 40;
@@ -74,34 +76,6 @@ const SIZE_LABEL = {
   huge: 'huge boss (half the ring)',
 };
 const RULE_WHEN: CustomAiRule['when'][] = ['opener', 'hp_below', 'ally_hurt', 'every'];
-
-/** Asks the browser for a picture file (must be called from a click). */
-function pickFile(): Promise<File | null> {
-  return new Promise((resolve) => {
-    const el = document.createElement('input');
-    el.type = 'file';
-    el.accept = 'image/png,image/jpeg,image/gif,image/webp';
-    el.style.display = 'none';
-    document.body.appendChild(el);
-    el.addEventListener('change', () => {
-      resolve(el.files?.[0] ?? null);
-      el.remove();
-    });
-    // closing the dialog without a choice: the page gets focus back
-    window.addEventListener(
-      'focus',
-      () =>
-        setTimeout(() => {
-          if (!el.files?.length) {
-            resolve(null);
-            el.remove();
-          }
-        }, 600),
-      { once: true },
-    );
-    el.click();
-  });
-}
 
 /** What's selected in the list. */
 type Pick =
@@ -400,6 +374,15 @@ export class FighterMakerScene extends Phaser.Scene {
     }
   }
 
+  /** Saves, then opens the Sprite studio on this fighter (it edits saved fighters). */
+  private async openStudio(f: CustomFighter): Promise<void> {
+    if (this.dirty) {
+      await this.save();
+      if (this.dirty) return;
+    }
+    SceneLoader.goto(this, 'sprite_studio', { target: { kind: 'mine', id: f.id } });
+  }
+
   // ── Input ───────────────────────────────────────────────────────────
 
   private topButtons(): { label: string; x: number; act: () => void }[] {
@@ -573,6 +556,7 @@ export class FighterMakerScene extends Phaser.Scene {
     const looks = [
       'wrestler',
       'picture',
+      'sheet',
       ...[...allSpriteKeys()]
         .filter((k) => k.startsWith('spr_c0_') || k === 'spr_pip' || k === 'spr_sparring_dummy')
         .sort(),
@@ -584,7 +568,9 @@ export class FighterMakerScene extends Phaser.Scene {
           ? 'wrestler (recolour it)'
           : f.look.base === 'picture'
             ? 'your pictures'
-            : f.look.base.replace(/^spr_(c0_)?/, ''),
+            : f.look.base === 'sheet'
+              ? 'sprite sheet'
+              : f.look.base.replace(/^spr_(c0_)?/, ''),
       step: (dir) => {
         const i = looks.indexOf(f.look.base);
         f.look = { ...f.look, base: looks[(i + dir + looks.length) % looks.length] };
@@ -608,6 +594,15 @@ export class FighterMakerScene extends Phaser.Scene {
             this.changed();
           },
         });
+    if (f.look.base === 'sheet')
+      rows.push({
+        label: '  Sheet',
+        value: () =>
+          f.look.sheet
+            ? `${f.look.sheet.frameW}×${f.look.sheet.frameH} frames (click: studio)`
+            : 'click: open Sprite studio',
+        edit: () => void this.openStudio(f),
+      });
     if (f.look.base === 'picture') {
       const pic = () => (f.look.picture ??= { ...DEFAULT_PICTURE });
       for (const pose of ['idle', 'attack', 'hurt'] as Pose[]) {
@@ -1020,14 +1015,24 @@ export class FighterMakerScene extends Phaser.Scene {
 
   /** Texture the preview uses for a fighter's look. */
   private previewKey(f: CustomFighter): string {
-    return f.look.base === 'picture' ? PREVIEW_PIC : f.look.base === 'wrestler' ? PREVIEW_KEY : f.look.base;
+    return f.look.base === 'picture' || f.look.base === 'sheet'
+      ? PREVIEW_PIC
+      : f.look.base === 'wrestler'
+        ? PREVIEW_KEY
+        : f.look.base;
   }
 
   /** Shows the fighter on the little ring, in its own colours, playing the chosen animation. */
   private showPreview(f: CustomFighter): void {
     // park the sprite on another texture while its own is (re)drawn
     this.preview.stop().setTexture('spr_test_dummy', 'idle_00');
-    if (f.look.base === 'picture') {
+    if (f.look.base === 'sheet') {
+      if (!f.look.sheet) return void this.preview.setVisible(false);
+      if (!drawSheetLook(this, PREVIEW_PIC, f.look.sheet)) {
+        void decodePicture(f.look.sheet.url).then(() => this.refresh());
+        return void this.preview.setVisible(false);
+      }
+    } else if (f.look.base === 'picture') {
       if (!f.look.pictures?.idle) return void this.preview.setVisible(false);
       const size = f.kind === 'enemy' ? f.size : 'normal';
       if (!drawPictureLook(this, PREVIEW_PIC, f.look, maxWidthFor(size))) {

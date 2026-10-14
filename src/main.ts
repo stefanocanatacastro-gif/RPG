@@ -17,6 +17,7 @@ import { FighterMakerScene } from './scenes/fighter_maker';
 import { EncountersScene } from './scenes/encounters';
 import { ItemMakerScene } from './scenes/item_maker';
 import { MoveMakerScene } from './scenes/move_maker';
+import { SpriteStudioScene } from './scenes/sprite_studio';
 import { GalleryScene } from './scenes/gallery';
 import { InputTestScene, UiKitScene, AnimTestScene, DataReportScene } from './scenes/bench_scenes';
 import { TouchControlsScene } from './scenes/touch_controls';
@@ -61,6 +62,7 @@ function startGame(): void {
       ItemMakerScene,
       MoveMakerScene,
       GalleryScene,
+      SpriteStudioScene,
       InputTestScene,
       UiKitScene,
       AnimTestScene,

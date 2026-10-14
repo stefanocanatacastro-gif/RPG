@@ -16,6 +16,7 @@ import {
   type Pose,
 } from '../managers/builds';
 import { animKey, buildAnimations } from './anim_builder';
+import { drawSheetLook } from './sheets';
 
 /** Largest kept upload, in pixels (the source the game texture is drawn from). */
 export const SOURCE_MAX = 160;
@@ -93,6 +94,11 @@ export async function cleanPicture(file: Blob | string, clearBackground: boolean
   octx.imageSmoothingQuality = 'high';
   octx.drawImage(c, box.x, box.y, box.w, box.h, 0, 0, o.width, o.height);
   return o.toDataURL('image/png');
+}
+
+/** A picture already decoded, or undefined. */
+export function decodedPicture(url: string): HTMLImageElement | undefined {
+  return decoded.get(url);
 }
 
 /** Decodes a stored picture once (they're needed synchronously when drawing). */
@@ -269,19 +275,38 @@ export function drawPictureLook(
   return true;
 }
 
-/** Decodes every picture any fighter uses and draws their textures (start-up, and after each save). */
+/** Every stored image a look draws from. */
+export function lookUrls(look: FighterLook): string[] {
+  if (look.base === 'picture') return Object.values(look.pictures ?? {}).filter((u): u is string => !!u);
+  if (look.base === 'sheet' && look.sheet) return [look.sheet.url];
+  return [];
+}
+
+/**
+ * Decodes every picture and sheet any fighter (or skin) uses and draws their
+ * textures (start-up, and after each save).
+ */
 export async function preparePictures(scene: Phaser.Scene): Promise<void> {
   const looks: { key: string; look: FighterLook; maxW: number }[] = [];
   for (const { owner, set } of Builds.allSets())
     for (const f of set.fighters) {
-      if (f.look.base !== 'picture') continue;
+      if (!lookUrls(f.look).length) continue;
       const l = Builds.lookOf(globalId(owner, f.id));
       if (l) looks.push({ ...l, maxW: maxWidthFor(l.size) });
     }
+  for (const id of Object.keys(Builds.mySkins())) {
+    const l = Builds.skinOf(id);
+    if (l && lookUrls(l.look).length) looks.push({ ...l, maxW: maxWidthFor(l.size) });
+  }
   await Promise.all(
-    looks.flatMap((l) =>
-      Object.values(l.look.pictures ?? {}).map((u) => decodePicture(u!).catch(() => undefined)),
-    ),
+    looks.flatMap((l) => lookUrls(l.look).map((u) => decodePicture(u).catch(() => undefined))),
   );
-  for (const l of looks) drawPictureLook(scene, l.key, l.look, l.maxW);
+  for (const l of looks) drawLook(scene, l.key, l.look, l.maxW);
+}
+
+/** Draws a picture or sheet look's texture (false while still loading). */
+export function drawLook(scene: Phaser.Scene, key: string, look: FighterLook, maxW: number): boolean {
+  if (look.base === 'sheet') return look.sheet ? drawSheetLook(scene, key, look.sheet) : true;
+  if (look.base === 'picture') return drawPictureLook(scene, key, look, maxW);
+  return true;
 }

@@ -956,7 +956,7 @@ with sync_playwright() as p:
     page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
     for i, (name, shot) in enumerate(
-        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=8
+        [("input_test", "10_input"), ("ui_kit", "11_ui_kit"), ("anim_test", "12_anim"), ("data_report", "13_data")], start=9
     ):
         page.wait_for_timeout(400)
         for _ in range(i):
@@ -987,6 +987,31 @@ with sync_playwright() as p:
         wait_scene(page, "dev_hub")
         # return the hub cursor to the top for the next loop
         page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
+
+    # ── Sprite studio: a sprite sheet skin for Kid Chispa, worn in a fight ──
+    import base64 as _b64
+    starter = "data:image/png;base64," + _b64.b64encode(open("art/templates/starter_kid_chispa_96.png", "rb").read()).decode()
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('dev_hub'); g.scene.start('sprite_studio'); })()")
+    wait_scene(page, "sprite_studio")
+    studio = lambda js: page.evaluate("(async () => { const s = window.__game.scene.getScene('sprite_studio'); " + js + " })()")
+    studio(f"await s.useSheet('{starter}');")
+    cut = studio("const x = s.sheet(); return [x.frameW, x.frameH, Object.keys(x.anims).join(',')];")
+    check(cut == [96, 96, "idle,walk,chop,hurt"], f"the studio cuts a sheet into frames and finds its animations ({cut})")
+    studio("s.sel = 'win'; s.clickCell(0); s.clickCell(1); return 0;")
+    win = studio("return s.sheet().anims.win;")
+    check(win and win["start"] == 0 and win["count"] == 2, f"clicking cells sets an animation ({win})")
+    page.screenshot(path=f"{out}/18_sprite_studio.png")
+    check(studio("return await s.save();"), "the skin saves")
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('sprite_studio'); g.scene.start('battle', { formation: 'test_goons', firstStrike: null, returnTo: 'dev_hub' }); })()")
+    wait_battle_input(page, "menu", 30000)
+    hero = battle_eval(page, "const v = s.views.get('hero'); return [v.texture, v.sprite.frame.name, s.anims.exists('spr_skin_chispa:win')];")
+    check(hero == ["spr_skin_chispa", "idle_00", True], f"Kid Chispa fights in the skin, with its animations ({hero})")
+    page.screenshot(path=f"{out}/18b_skin_battle.png")
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('battle'); g.scene.start('sprite_studio'); })()")
+    wait_scene(page, "sprite_studio")
+    studio("s.skins = {}; return await s.save();")
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('sprite_studio'); g.scene.start('dev_hub'); })()")
+    wait_scene(page, "dev_hub")
 
     # ── Boss: walks in with a name card, gets serious at half HP ──
     page.evaluate("(() => { const g = window.__game; g.scene.stop('dev_hub'); g.scene.start('battle', { formation: 'test_boss', firstStrike: null, returnTo: 'dev_hub' }); })()")

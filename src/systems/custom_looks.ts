@@ -4,7 +4,8 @@ import Phaser from 'phaser';
 import { paletteSwap } from './anim_builder';
 import { TEST_COLORS } from './test_sprites';
 import { Builds, type ColorSlot } from '../managers/builds';
-import { drawPictureLook, maxWidthFor } from './pictures';
+import { drawLook, maxWidthFor } from './pictures';
+import { Database } from '../managers/database';
 
 /** Colours each texture was last painted with, so unchanged looks aren't repainted. */
 const painted = new Map<string, string>();
@@ -41,15 +42,52 @@ export function paintWrestler(
   });
 }
 
-/** Makes sure a made fighter's texture exists: the recoloured wrestler, or its pictures. */
+/** Makes sure a made fighter's texture exists: the recoloured wrestler, its pictures or its sheet. */
 export function ensureLook(scene: Phaser.Scene, gid: string): void {
   const l = Builds.lookOf(gid);
   if (!l) return;
   if (l.look.base === 'wrestler') paintWrestler(scene, l.key, l.look.colors ?? {});
-  else if (l.look.base === 'picture') drawPictureLook(scene, l.key, l.look, maxWidthFor(l.size));
+  else drawLook(scene, l.key, l.look, maxWidthFor(l.size));
 }
 
 /** Whether a made fighter is drawn from uploaded pictures (they face right, and have no animations). */
 export function isPictureLook(gid: string): boolean {
   return Builds.lookOf(gid)?.look.base === 'picture';
+}
+
+/**
+ * The texture to draw a fighter with: your skin when you gave it one, a made
+ * fighter's own look, or `fallback` (its usual sprite); a skin still loading
+ * falls back too. `ownSize`: the art was made at its size (pictures and
+ * sheets), so big and huge fighters aren't scaled up again.
+ */
+export function fighterTexture(
+  scene: Phaser.Scene,
+  defId: string,
+  fallback: string,
+): { key: string; ownSize: boolean } {
+  const own = (base: string) => base === 'picture' || base === 'sheet';
+  const skin = Builds.skinOf(defId);
+  if (skin) {
+    if (skin.look.base === 'wrestler') paintWrestler(scene, skin.key, skin.look.colors ?? {});
+    else drawLook(scene, skin.key, skin.look, maxWidthFor(skin.size));
+    if (scene.textures.exists(skin.key)) return { key: skin.key, ownSize: own(skin.look.base) };
+    return { key: fallback, ownSize: false };
+  }
+  const l = Builds.lookOf(defId);
+  if (l) {
+    ensureLook(scene, defId);
+    return { key: l.key, ownSize: own(l.look.base) };
+  }
+  return { key: fallback, ownSize: false };
+}
+
+/** A built-in fighter's usual sprite (Kid Chispa uses the test wrestler until his real art exists). */
+export function baseSprite(defId: string): string {
+  if (defId === 'chispa') return 'spr_test_dummy';
+  return (
+    Database.data.characters.find((c) => c.id === defId)?.sprite ??
+    Database.data.enemies.find((e) => e.id === defId)?.sprite ??
+    'spr_test_dummy'
+  );
 }

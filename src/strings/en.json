@@ -185,5 +185,7 @@
   "title.rafter_king": "Lord of the Lighting Rig",
   "line.rafter_king": "You're in MY kingdom now!",
   "phase2.rafter_king": "Enough games. The King rules this ring!",
-  "scout.rafter_king": "He drops in from the lighting rig and opens with a Spike Charge. Below half HP he patches himself up and starts throwing lariats every other round."
+  "scout.rafter_king": "He drops in from the lighting rig and opens with a Spike Charge. Below half HP he patches himself up and starts throwing lariats every other round.",
+  "hub.sprites": "Sprite studio",
+  "hub.sprites.desc": "Bring your own art: upload frame-by-frame sprite sheets for Kid Chispa, Pip, any built-in enemy or your own fighters, and set up their animations."
 }

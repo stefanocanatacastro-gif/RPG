@@ -64,3 +64,26 @@ export async function profileNames(ids: string[], timeoutMs = 4000): Promise<Rec
   }
   return out;
 }
+
+interface AssetsLike {
+  upload(blob: Blob, options?: { type?: string }): Promise<{ id: string; url: string; sizeBytes: number }>;
+}
+let assetsNs: Promise<AssetsLike | null> | null = null;
+
+/**
+ * Stores an image with the game link (the artifact's asset store) and returns
+ * the path it is served at ("/_blob/<id>"), or null when there's no asset
+ * store here (outside the viewer, or for people who can't edit the link):
+ * then callers keep the image inline.
+ */
+export async function storeImage(blob: Blob, timeoutMs = 4000): Promise<string | null> {
+  assetsNs ??= use('assets', timeoutMs) as Promise<AssetsLike | null>;
+  const assets = await assetsNs;
+  if (!assets) return null;
+  try {
+    const r = await assets.upload(blob, { type: 'image/png' });
+    return `/_blob/${r.id}`;
+  } catch {
+    return null;
+  }
+}

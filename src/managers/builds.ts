@@ -53,6 +53,46 @@ export interface PictureSettings {
   motion?: number;
 }
 
+/** The animations a sprite sheet can have, in the row order of the templates. */
+export const SHEET_ANIMS = ['idle', 'walk', 'chop', 'hurt', 'ko', 'win'] as const;
+export type SheetAnim = (typeof SHEET_ANIMS)[number];
+export const SHEET_ANIM_LABEL: Record<SheetAnim, string> = {
+  idle: 'Idle',
+  walk: 'Walk',
+  chop: 'Attack',
+  hurt: 'Hurt',
+  ko: 'Knocked out',
+  win: 'Victory',
+};
+/** Animations that play once and hold their last frame; the rest loop. */
+export const SHEET_ONCE: SheetAnim[] = ['chop', 'hurt', 'ko', 'win'];
+/** Frames per second each animation starts at. */
+export const SHEET_FPS: Record<SheetAnim, number> = { idle: 6, walk: 10, chop: 12, hurt: 10, ko: 8, win: 8 };
+
+/** Frame size to draw at, by size class: one art pixel is one game pixel. */
+export const SHEET_FRAME: Record<FighterSize, number> = { normal: 96, big: 144, huge: 240 };
+
+/** A run of cells on a sprite sheet (cells counted left to right, top to bottom). */
+export interface SheetRun {
+  start: number;
+  count: number;
+  fps: number;
+}
+
+/** A fighter drawn from a frame-by-frame sprite sheet. */
+export interface SheetLook {
+  /** The sheet: an uploaded asset (/_blob/…) or a PNG data URL. */
+  url: string;
+  /** Sheet size in pixels (to slice it before it's loaded). */
+  w: number;
+  h: number;
+  frameW: number;
+  frameH: number;
+  anims: Partial<Record<SheetAnim, SheetRun>>;
+  /** Drawn facing left: turn it to face right like everything else. */
+  flip?: boolean;
+}
+
 /** How much room a fighter takes: huge ones are bosses that fill half the ring. */
 export type FighterSize = 'normal' | 'big' | 'huge';
 
@@ -71,6 +111,8 @@ export interface FighterLook {
   /** Uploaded pictures (background cleared, cropped, PNG data URLs). Idle is the main one. */
   pictures?: Partial<Record<Pose, string>>;
   picture?: PictureSettings;
+  /** base 'sheet': frame-by-frame animations from a sprite sheet. */
+  sheet?: SheetLook;
 }
 
 /** A special rule in an enemy's pattern, on top of how often it uses each move. */
@@ -222,6 +264,8 @@ export interface BuildSet {
   encounters?: Encounter[];
   items?: CustomItem[];
   moves?: CustomMove[];
+  /** New looks for built-in fighters (Kid Chispa, Pip, the enemies), by their id. Only their maker sees them. */
+  skins?: Record<string, FighterLook>;
   savedAt?: string;
 }
 
@@ -235,6 +279,8 @@ let uid: string | null = null;
 const sets = new Map<string, BuildSet>();
 const looks = new Map<string, FighterLook>();
 const sizes = new Map<string, FighterSize>();
+/** Whose skins are worn: the viewer's own. */
+let skins: Record<string, FighterLook> = {};
 
 /** Short owner tag used in fighter ids: c.<owner>.<id>. */
 function ownerTag(owner: string): string {
@@ -262,11 +308,12 @@ export function isMine(id: string): boolean {
   return id.startsWith(`c.${ownerTag(myOwnerId())}.`);
 }
 
+/** Looks drawn into a texture of their own (the rest name an existing sprite). */
+const OWN_LOOKS = ['wrestler', 'picture', 'sheet'];
+
 /** Texture key for a fighter's look. */
 function textureFor(gid: string, look: FighterLook): string {
-  return look.base === 'wrestler' || look.base === 'picture'
-    ? `spr_custom_${gid.replace(/\./g, '_')}`
-    : look.base;
+  return OWN_LOOKS.includes(look.base) ? `spr_custom_${gid.replace(/\./g, '_')}` : look.base;
 }
 
 /** An enemy's special rules as engine AI rules. */
@@ -308,7 +355,7 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
   const name = `${gid}.name`;
   addStrings({ [name]: f.name || 'Nameless' });
   const sprite = textureFor(gid, f.look);
-  if (f.look.base === 'wrestler' || f.look.base === 'picture') registerSpriteKey(sprite);
+  if (OWN_LOOKS.includes(f.look.base)) registerSpriteKey(sprite);
   const extra: { title?: string; line?: string } = {};
   if (f.title) {
     extra.title = `${gid}.title`;
@@ -614,6 +661,7 @@ export async function loadBuilds(timeoutMs = 4000): Promise<'shared' | 'local'> 
       (set.moves ?? []).map((m) => toMoveDef(owner, m)),
     );
   for (const [owner, set] of sets) register(owner, set);
+  skins = sets.get(myOwnerId())?.skins ?? {};
   return db ? 'shared' : 'local';
 }
 
@@ -683,6 +731,7 @@ export const Builds = {
     encounters?: Encounter[];
     items?: CustomItem[];
     moves?: CustomMove[];
+    skins?: Record<string, FighterLook>;
   }): Promise<void> {
     const cur = sets.get(myOwnerId());
     const set: BuildSet = {
@@ -690,6 +739,7 @@ export const Builds = {
       encounters: structuredClone(update.encounters ?? cur?.encounters ?? []),
       items: structuredClone(update.items ?? cur?.items ?? []),
       moves: structuredClone(update.moves ?? cur?.moves ?? []),
+      skins: structuredClone(update.skins ?? cur?.skins ?? {}),
       savedAt: new Date().toISOString(),
     };
     const json = JSON.stringify(set);
@@ -706,6 +756,7 @@ export const Builds = {
       }
     sets.set(myOwnerId(), set);
     register(myOwnerId(), set);
+    skins = set.skins ?? {};
     await afterChange?.();
   },
 
@@ -761,6 +812,19 @@ export const Builds = {
     list.push({ ...structuredClone(thing as Encounter), id, savedAt: new Date().toISOString() });
     await Builds.saveMine({ encounters: list });
     return id;
+  },
+
+  /** This person's skins for built-in fighters, by fighter id. */
+  mySkins(): Record<string, FighterLook> {
+    return structuredClone(skins);
+  },
+
+  /** The skin this person gave a built-in fighter: its look, texture key and size. */
+  skinOf(defId: string): { look: FighterLook; key: string; size: FighterSize } | null {
+    const look = skins[defId];
+    if (!look) return null;
+    const size = Database.data.enemies.find((e) => e.id === defId)?.size ?? 'normal';
+    return { look, key: `spr_skin_${defId}`, size };
   },
 
   /** A made fighter's look and texture key (for drawing it). */

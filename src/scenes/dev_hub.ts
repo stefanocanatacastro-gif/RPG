@@ -43,6 +43,7 @@ export class DevHubScene extends Phaser.Scene {
       encounters: 'encounters',
       moves: 'move_maker',
       gallery: 'gallery',
+      sprites: 'sprite_studio',
       input: 'input_test',
       ui: 'ui_kit',
       anim: 'anim_test',

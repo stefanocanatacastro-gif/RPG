@@ -24,8 +24,7 @@ import { CommandRunner } from '../battle/command_view';
 import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle/commands';
 import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
-import { isCustomId } from '../managers/builds';
-import { ensureLook, isPictureLook } from '../systems/custom_looks';
+import { fighterTexture } from '../systems/custom_looks';
 import { makePlaceholder } from '../systems/placeholder';
 import { CROWD_DENSITY, SPECIALS, conditionLines, goalText, hazard, special } from '../battle/conditions';
 import type { RoundEvent } from '../battle/engine';
@@ -213,9 +212,9 @@ export class BattleScene extends Phaser.Scene {
 
   private addFighter(f: Fighter, x?: number): void {
     const home = homeOf(f.side, f.order, f.airborne, x);
-    // Kid Chispa uses the test wrestler until his real art exists; made fighters bring their own look
-    const texture = f.defId === 'chispa' ? HERO_TEXTURE : f.sprite;
-    if (isCustomId(f.defId)) ensureLook(this, f.defId);
+    // your skin, a made fighter's own look, or the usual sprite (Kid Chispa uses the test wrestler for now)
+    const look = fighterTexture(this, f.defId, f.defId === 'chispa' ? HERO_TEXTURE : f.sprite);
+    const texture = look.key;
     // a picture still loading (or a missing sprite) shows as a placeholder box rather than nothing
     if (!this.textures.exists(texture)) makePlaceholder(this, { key: texture, w: 72, h: 96 });
     const animated = this.anims.exists(animKey(texture, 'idle'));
@@ -225,7 +224,7 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(10 + f.order);
     if (animated) sprite.play(animKey(texture, 'idle'));
     // big and huge opponents: drawn bigger, unless their pictures already have the size they were made at
-    const picture = isCustomId(f.defId) && isPictureLook(f.defId);
+    const picture = look.ownSize;
     if (!picture && f.size !== 'normal') sprite.setScale(f.size === 'huge' ? 2 : 1.5);
     const sw = Math.max(60, sprite.displayWidth * 0.8);
     const shadow = this.add
@@ -1300,11 +1299,25 @@ export class BattleScene extends Phaser.Scene {
   }
 
   /** Plays a one-shot animation; sprites without one get a quick lunge instead (in their attack pose, if any). */
-  private async playAnimOnce(v: FighterView, anim: string): Promise<void> {
+  private async playAnimOnce(v: FighterView, anim: string, backToIdle = true): Promise<void> {
     if (this.hasAnim(v, anim)) {
-      v.sprite.play(animKey(v.texture, anim));
-      await new Promise<void>((r) => v.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => r()));
-      this.playAnim(v, 'idle');
+      const key = animKey(v.texture, anim);
+      v.sprite.play(key);
+      // finished, interrupted, or (to be safe) taking too long
+      const a = this.anims.get(key);
+      const ms = (a.frames.length / Math.max(1, a.frameRate)) * 1000 + 400;
+      await new Promise<void>((r) => {
+        const done = () => {
+          v.sprite.off(Phaser.Animations.Events.ANIMATION_COMPLETE, done);
+          v.sprite.off(Phaser.Animations.Events.ANIMATION_STOP, done);
+          timer.remove();
+          r();
+        };
+        const timer = this.time.delayedCall(ms, done);
+        v.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, done);
+        v.sprite.once(Phaser.Animations.Events.ANIMATION_STOP, done);
+      });
+      if (backToIdle) this.playAnim(v, 'idle');
     } else {
       const dir = v.f.side === 'hero' ? 1 : -1;
       await this.tween({
@@ -1352,6 +1365,7 @@ export class BattleScene extends Phaser.Scene {
     if (v.f.side === 'hero') {
       // a partner stays down, flattened on the canvas, until the fight is over
       void this.popText(v, t('battle.down'), UI.rope);
+      if (this.hasAnim(v, 'ko')) return this.playAnimOnce(v, 'ko', false);
       await this.tween({
         targets: v.sprite,
         scaleY: 0.3,
@@ -1368,9 +1382,12 @@ export class BattleScene extends Phaser.Scene {
       v.rage.destroy();
       v.rage = undefined;
     }
-    // paper flip: spin flat, fade away
     this.tweens.killTweensOf(v.sprite);
-    await this.tween({ targets: v.sprite, scaleX: 0, duration: 90, yoyo: true, repeat: 2 });
+    // drawn knock-outs play out; otherwise a paper flip: spin flat, fade away
+    if (this.hasAnim(v, 'ko')) {
+      await this.playAnimOnce(v, 'ko', false);
+      await this.wait(250);
+    } else await this.tween({ targets: v.sprite, scaleX: 0, duration: 90, yoyo: true, repeat: 2 });
     await this.tween({ targets: [v.sprite, v.shadow], alpha: 0, y: '-=18', duration: 220 });
     v.bar?.setVisible(false);
   }
@@ -1546,7 +1563,10 @@ export class BattleScene extends Phaser.Scene {
     // close-up on the winner while the crowd goes wild
     this.director.to({ x: hero.sprite.x + 45, y: STAGE.floorY - 72, zoom: 1.6 }, 3);
     this.arena.cheer(2);
-    this.playAnim(hero, 'chop');
+    // a drawn victory pose, or a chop for the crowd
+    for (const v of [hero, this.views.get('partner')])
+      if (v && v.f.hp > 0)
+        void this.playAnimOnce(v, this.hasAnim(v, 'win') ? 'win' : 'chop', !this.hasAnim(v, 'win'));
     await this.banner(t('battle.victory'), UI.spark, 700);
     await this.showResults(r, before, levels);
     this.finish('win');
@@ -1668,7 +1688,8 @@ export class BattleScene extends Phaser.Scene {
   private async defeat(): Promise<void> {
     const hero = this.views.get('hero')!;
     this.director.to({ x: hero.sprite.x, y: STAGE.floorY - 45, zoom: 1.45 }, 2.5);
-    await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 12, duration: 300 });
+    if (this.hasAnim(hero, 'ko')) await this.playAnimOnce(hero, 'ko', false);
+    else await this.tween({ targets: hero.sprite, angle: -90, y: STAGE.floorY - 12, duration: 300 });
     await this.banner(t('battle.defeat'), UI.rope, 900);
     await this.wait(700);
     if (this.loseOk) {
