@@ -84,7 +84,7 @@ export function fighterTexture(
 
 /** A built-in fighter's usual sprite (Kid Chispa uses the test wrestler until his real art exists). */
 export function baseSprite(defId: string): string {
-  if (defId === 'chispa') return 'spr_test_dummy';
+  if (defId === 'chispa') return 'spr_kid_chispa';
   return (
     Database.data.characters.find((c) => c.id === defId)?.sprite ??
     Database.data.enemies.find((e) => e.id === defId)?.sprite ??

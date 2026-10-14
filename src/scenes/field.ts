@@ -10,6 +10,7 @@ import { input } from '../systems/input';
 import { IS_DEV } from '../systems/version';
 import { animKey } from '../systems/anim_builder';
 import { fighterTexture } from '../systems/custom_looks';
+import { heroSprite } from '../systems/hero_art';
 import { debugState } from '../systems/debug_state';
 import { Bar, BAR_STYLES, drawPanel } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
@@ -214,7 +215,7 @@ export class FieldScene extends Phaser.Scene {
     const z = entry?.y ?? sp[1];
     this.facing = entry?.facing ?? sp[2];
     // Kid Chispa wears your skin when you gave him one
-    this.heroTex = fighterTexture(this, 'chispa', 'spr_test_dummy').key;
+    this.heroTex = fighterTexture(this, 'chispa', heroSprite(this)).key;
     this.player = this.makeActor(x, z, 0, this.heroTex, 'idle_00');
     this.player.body.y = groundAt(this.shape, x, z, this.player.body.r).y;
     this.player.sprite.play(animKey(this.heroTex, 'idle')).setFlipX(this.facing === 'left');

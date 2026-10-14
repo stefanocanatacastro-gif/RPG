@@ -25,6 +25,7 @@ import { COMMANDS, ratingMult, type CommandResult, type Rating } from '../battle
 import type { GuardResult } from '../battle/engine';
 import { xpToNext } from '../battle/progression';
 import { fighterTexture } from '../systems/custom_looks';
+import { heroSprite } from '../systems/hero_art';
 import { makePlaceholder } from '../systems/placeholder';
 import { CROWD_DENSITY, SPECIALS, conditionLines, goalText, hazard, special } from '../battle/conditions';
 import type { RoundEvent } from '../battle/engine';
@@ -56,7 +57,6 @@ interface FighterView {
 }
 
 /** The hero uses the test wrestler until Kid Chispa's real sprite exists. */
-const HERO_TEXTURE = 'spr_test_dummy';
 
 /** Fixed camera framings. Moves use tracking shots instead (see playMove). */
 const SHOTS: Record<string, Shot> = {
@@ -213,7 +213,7 @@ export class BattleScene extends Phaser.Scene {
   private addFighter(f: Fighter, x?: number): void {
     const home = homeOf(f.side, f.order, f.airborne, x);
     // your skin, a made fighter's own look, or the usual sprite (Kid Chispa uses the test wrestler for now)
-    const look = fighterTexture(this, f.defId, f.defId === 'chispa' ? HERO_TEXTURE : f.sprite);
+    const look = fighterTexture(this, f.defId, f.defId === 'chispa' ? heroSprite(this) : f.sprite);
     const texture = look.key;
     // a picture still loading (or a missing sprite) shows as a placeholder box rather than nothing
     if (!this.textures.exists(texture)) makePlaceholder(this, { key: texture, w: 72, h: 96 });

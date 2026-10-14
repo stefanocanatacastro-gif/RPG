@@ -35,6 +35,7 @@ import {
 } from '../managers/builds';
 import { decodePicture, decodedPicture } from '../systems/pictures';
 import { drawSheetLook, importSheet, sheetPixels } from '../systems/sheets';
+import { heroSprite } from '../systems/hero_art';
 import { detectGrid, fitRuns, frameSizes, guessAnims } from '../systems/sheet_ops';
 
 const TOP = 40;
@@ -115,9 +116,9 @@ export class SpriteStudioScene extends Phaser.Scene {
       .fillRect(STAGE.x, floorY - 76, STAGE.w, 2);
     this.sheetView = this.add.image(0, 0, '__WHITE').setOrigin(0).setVisible(false);
     this.reference = this.add
-      .sprite(STAGE.x + 90, floorY, 'spr_test_dummy', 'idle_00')
+      .sprite(STAGE.x + 90, floorY, heroSprite(this), 'idle_00')
       .setOrigin(0.5, 1)
-      .play(animKey('spr_test_dummy', 'idle'));
+      .play(animKey(heroSprite(this), 'idle'));
     this.preview = this.add
       .sprite(STAGE.x + STAGE.w / 2 + 40, floorY, 'spr_test_dummy', 'idle_00')
       .setOrigin(0.5, 1);
