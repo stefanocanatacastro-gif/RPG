@@ -63,6 +63,25 @@ export interface EnemyDef {
   line?: StringKey;
   /** How much room they take in the ring: big ones need more, huge bosses half the ring. Default normal. */
   size?: 'normal' | 'big' | 'huge';
+  /** How they arrive: walking in from the side or dropping from the rafters, with their name in lights. Huge ones walk in unless set to none. */
+  entrance?: 'walk' | 'drop' | 'none';
+  /** A second phase: below some HP they change pattern and get stronger (bosses). */
+  phase2?: PhaseDef;
+}
+
+/** What changes when a boss enters its second phase. */
+export interface PhaseDef {
+  /** Starts the first time HP falls to this share of max HP or below (0–1). */
+  atHp: number;
+  attack?: number;
+  defence?: number;
+  /** HP restored when it starts. */
+  heal?: number;
+  /** The moves and pattern it uses from then on. */
+  moves: string[];
+  ai: AiRule[];
+  /** What it shouts when it starts. */
+  line?: StringKey;
 }
 
 export type MoveCategory = 'strike' | 'aerial' | 'grapple' | 'enemy' | 'partner';

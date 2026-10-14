@@ -170,5 +170,11 @@
   "hub.moves.desc": "Crea ataques y curaciones: poder, golpes, Garra, carrera o aéreo, un objetivo o todos, comando de acción, cargas. Enséñalos en el creador de luchadores.",
   "hub.gallery": "Galería de la comunidad",
   "hub.gallery.desc": "Todo lo que ha creado la gente del enlace, por creador: pruébalo, juégalo, dale me gusta o cópialo para remezclarlo.",
-  "battle.unstoppable": "¡NI SE MUEVE!"
+  "battle.unstoppable": "¡NI SE MUEVE!",
+  "enemy.agent_brick": "Agente Ladrillo",
+  "scout.agent_brick": "El matón del Subterráneo. Demasiado grande para aturdirlo: bloquea su Lazo a la Carrera. Bajo la mitad de vida se pone peor y lo lanza cada dos rondas.",
+  "title.agent_brick": "El Muro del Subterráneo",
+  "line.agent_brick": "Nadie sale caminando de mi ring, chico.",
+  "phase2.agent_brick": "Bueno. Ahora sí me enojé.",
+  "battle.phase2": "¡{name} SE PONE SERIO!"
 }

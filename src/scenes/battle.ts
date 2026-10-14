@@ -52,6 +52,8 @@ interface FighterView {
   aura?: Phaser.GameObjects.Ellipse;
   /** Half the width of its HP bar. */
   barHalf: number;
+  /** Red glow around a boss in its second phase. */
+  rage?: Phaser.GameObjects.Ellipse;
 }
 
 /** The hero uses the test wrestler until Kid Chispa's real sprite exists. */
@@ -181,6 +183,16 @@ export class BattleScene extends Phaser.Scene {
         ).setDepth(55);
       }
     });
+    // bosses with an entrance wait off stage until they make it
+    for (const f of this.engine.enemies()) {
+      const how = this.entranceOf(f);
+      if (how === 'none') continue;
+      const v = this.views.get(f.id)!;
+      if (how === 'walk') v.sprite.x = v.home.x + 560;
+      else v.sprite.y = v.home.y - 900;
+      v.bar?.setVisible(false);
+      v.shadow.setVisible(how === 'drop');
+    }
     // a tall boss: the wide shots look up to fit it
     const tallest = Math.max(...[...this.views.values()].map((v) => v.sprite.displayHeight));
     this.lookUp = Math.max(0, Math.round((tallest - 150) * 0.55));
@@ -355,6 +367,7 @@ export class BattleScene extends Phaser.Scene {
       v.shadow.x = v.sprite.x;
       if (v.bar) v.bar.x = Math.round(v.sprite.x - v.barHalf);
       if (v.aura) v.aura.setPosition(v.sprite.x, v.sprite.y - v.sprite.displayHeight / 2);
+      if (v.rage) v.rage.setPosition(v.sprite.x, v.sprite.y - v.sprite.displayHeight / 2);
       const lift = Math.max(0, STAGE.floorY - v.sprite.y);
       v.shadow.setScale(Math.max(0.5, 1 - lift / 240));
     }
@@ -367,6 +380,13 @@ export class BattleScene extends Phaser.Scene {
     // establishing shot: from the crowd and the lights down onto the ring
     this.director.to(this.shot('wide'), 2.2);
     await this.wait(900);
+    // bosses make their entrance (and say their piece) before the bell
+    const quoted = new Set<string>();
+    for (const f of e.enemies())
+      if (this.entranceOf(f) !== 'none') {
+        await this.bossEntrance(this.views.get(f.id)!);
+        quoted.add(f.id);
+      }
     if (this.start.firstStrike === 'player') {
       await this.banner(t('battle.first_strike'), UI.spark);
       const target = e.frontGround() ?? e.enemies()[0];
@@ -379,7 +399,7 @@ export class BattleScene extends Phaser.Scene {
       await this.banner(t('battle.start'), UI.ink);
     }
     // a made enemy with something to say says it before the bell
-    const talker = e.enemies().find((f) => Database.enemy(f.defId).line);
+    const talker = e.enemies().find((f) => Database.enemy(f.defId).line && !quoted.has(f.id));
     if (talker) {
       const d = Database.enemy(talker.defId);
       await this.quote(this.views.get(talker.id)!, t(d.name), t(d.line!));
@@ -401,6 +421,7 @@ export class BattleScene extends Phaser.Scene {
         for (const ev of events) await this.showRoundEvent(ev);
         if (e.hero.hp <= 0) await this.tryRevive();
         e.settle();
+        await this.showPhaseChanges();
         continue;
       }
       if (e.phase === 'command') {
@@ -410,6 +431,7 @@ export class BattleScene extends Phaser.Scene {
         const choice = await this.chooseAction();
         this.turnText.setText('');
         await this.perform(choice);
+        await this.showPhaseChanges();
       } else if (e.phase === 'enemy') {
         const plan = e.nextEnemyPlan();
         if (plan) {
@@ -424,6 +446,7 @@ export class BattleScene extends Phaser.Scene {
           // knocked out: Smelling Salts (or anything that revives) get Chispa back up by themselves
           if (e.hero.hp <= 0) await this.tryRevive();
         }
+        await this.showPhaseChanges();
         e.endEnemyAction();
       } else break;
     }
@@ -1067,6 +1090,110 @@ export class BattleScene extends Phaser.Scene {
     await this.popText(v, t('battle.staggered'), UI.good);
   }
 
+  /** How an opponent arrives: its own setting, or a walk-in for huge ones. */
+  private entranceOf(f: Fighter): 'walk' | 'drop' | 'none' {
+    const d = Database.enemy(f.defId);
+    return d.entrance ?? (f.size === 'huge' ? 'walk' : 'none');
+  }
+
+  /** A boss arrives: walks in shaking the ring (or drops from the rafters), its name in lights, then its line. */
+  private async bossEntrance(v: FighterView): Promise<void> {
+    const d = Database.enemy(v.f.defId);
+    const heavy = v.f.size !== 'normal';
+    this.director.track([v.sprite], heavy ? 1.05 : 1.25, heavy ? 30 : 12, 4);
+    this.engine.log.push(`entrance ${v.f.id}`);
+    if (this.entranceOf(v.f) === 'drop') {
+      v.sprite.y = v.home.y - 900;
+      await this.wait(300);
+      await this.tween({ targets: v.sprite, y: v.home.y, duration: 520, ease: 'Quad.easeIn' });
+      this.cameras.main.shake(320, heavy ? 0.02 : 0.01);
+      this.director.punchIn(0.2);
+      this.arena.cheer(2);
+      await this.tween({
+        targets: v.sprite,
+        scaleY: v.sprite.scaleY * 0.85,
+        scaleX: v.sprite.scaleX * 1.1,
+        duration: 90,
+        yoyo: true,
+      });
+    } else {
+      v.sprite.setFlipX(v.baseFlip);
+      this.playAnim(v, 'walk');
+      const steps = heavy ? 4 : 3;
+      const stomp = this.time.addEvent({
+        delay: 420,
+        repeat: steps - 1,
+        callback: () => {
+          this.cameras.main.shake(140, heavy ? 0.01 : 0.004);
+          this.arena.cheer(1);
+        },
+      });
+      await this.tween({ targets: v.sprite, x: v.home.x, duration: steps * 420, ease: 'Sine.easeOut' });
+      stomp.remove();
+      this.playAnim(v, 'idle');
+      this.arena.cheer(2);
+    }
+    v.shadow.setVisible(true);
+    v.bar?.setVisible(true);
+    // the name card
+    const name = t(d.name).toUpperCase();
+    const title = d.title ? t(d.title) : '';
+    const g = this.ui(this.add.graphics());
+    const w = Math.max(name.length * 32, title.length * 16) + 80;
+    drawPanel(g, W / 2 - w / 2, 300, w, title ? 104 : 72, { alpha: 0.95 });
+    const nameText = this.ui(pixelText(this, W / 2, 318, name, 32, css(UI.spark)));
+    const titleText = this.ui(pixelText(this, W / 2, 364, title ? `"${title}"` : '', 16, css(UI.ink)));
+    const parts = [g, nameText, titleText];
+    for (const o of parts) (o as unknown as { alpha: number }).alpha = 0;
+    await this.tween({ targets: parts, alpha: 1, duration: 200 });
+    await this.wait(1300);
+    await this.tween({ targets: parts, alpha: 0, duration: 200 });
+    for (const o of parts) o.destroy();
+    if (d.line) await this.quote(v, t(d.name), t(d.line));
+  }
+
+  /** A boss pushed past its threshold: it roars, glows red, gets stronger and says so. */
+  private async showPhaseChanges(): Promise<void> {
+    for (const id of this.engine.takePhaseChanges()) {
+      const v = this.views.get(id);
+      if (!v || v.f.hp <= 0) continue;
+      const d = Database.enemy(v.f.defId);
+      const p = d.phase2!;
+      this.director.track([v.sprite], 1.15, 20);
+      this.cameras.main.shake(420, 0.014);
+      this.arena.cheer(2);
+      for (let i = 0; i < 3; i++) {
+        v.sprite.setTintFill(0xff3040);
+        await this.wait(90);
+        v.sprite.clearTint();
+        await this.wait(70);
+      }
+      if (!v.rage) {
+        v.rage = this.add
+          .ellipse(
+            v.sprite.x,
+            v.sprite.y - v.sprite.displayHeight / 2,
+            v.sprite.displayWidth + 30,
+            v.sprite.displayHeight + 20,
+            0xd8314b,
+            0.28,
+          )
+          .setDepth(v.sprite.depth - 1)
+          .setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: v.rage, alpha: 0.1, duration: 380, yoyo: true, repeat: -1 });
+      }
+      await this.caption(tf('battle.phase2', { name: t(d.name).toUpperCase() }), UI.rope);
+      if (p.line) await this.quote(v, t(d.name), t(p.line));
+      v.bar?.setValue(v.f.hp, v.f.maxHp);
+      const ups = [
+        p.attack ? `ATK +${p.attack}` : '',
+        p.defence ? `DEF +${p.defence}` : '',
+        p.heal ? `+${p.heal} HP` : '',
+      ].filter(Boolean);
+      if (ups.length) await this.popText(v, ups.join(' '), UI.rope);
+    }
+  }
+
   /** Someone's line in a speech panel near the top, long enough to read. */
   private async quote(v: FighterView, name: string, text: string): Promise<void> {
     this.director.track([v.sprite], 1.3, 15);
@@ -1236,6 +1363,11 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     this.clearAura(v);
+    if (v.rage) {
+      this.tweens.killTweensOf(v.rage);
+      v.rage.destroy();
+      v.rage = undefined;
+    }
     // paper flip: spin flat, fade away
     this.tweens.killTweensOf(v.sprite);
     await this.tween({ targets: v.sprite, scaleX: 0, duration: 90, yoyo: true, repeat: 2 });

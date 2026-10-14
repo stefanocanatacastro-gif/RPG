@@ -59,6 +59,15 @@ const ANIM_LABEL: Record<PreviewAnim, string> = {
 };
 const MOTION_LABEL = ['still', 'calm', 'normal', 'lively'];
 const SIZES = ['normal', 'big', 'huge'] as const;
+const ENTRANCES = ['auto', 'walk', 'drop', 'none'] as const;
+const ENTRANCE_LABEL = {
+  auto: 'auto (huge ones walk in)',
+  walk: 'walks in, crowd roars',
+  drop: 'drops from the rafters',
+  none: 'already in the ring',
+};
+/** Phase 2 start points (0 = off). */
+const PHASE_AT = [0, 0.75, 0.5, 0.25];
 const SIZE_LABEL = {
   normal: 'normal',
   big: 'big (takes more room)',
@@ -144,6 +153,19 @@ function fromBuiltin(kind: 'hero' | 'enemy', id: string, newId: string): CustomF
     weights,
     lowHpMove: e.ai.find((r) => r.whenHpBelow)?.move,
     scout: t(e.scout),
+    ...(e.entrance ? { entrance: e.entrance } : {}),
+    ...(e.phase2
+      ? {
+          phase2: {
+            atHp: e.phase2.atHp,
+            attack: e.phase2.attack ?? 0,
+            defence: e.phase2.defence ?? 0,
+            heal: e.phase2.heal ?? 0,
+            moves: e.phase2.moves.slice(0, 3),
+            ...(e.phase2.line ? { line: t(e.phase2.line) } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -683,6 +705,17 @@ export class FighterMakerScene extends Phaser.Scene {
           this.changed();
         },
       });
+    if (f.kind === 'enemy')
+      rows.push({
+        label: '  Entrance',
+        value: () => ENTRANCE_LABEL[f.entrance ?? 'auto'],
+        step: (dir) => {
+          const i = ENTRANCES.indexOf(f.entrance ?? 'auto');
+          f.entrance = ENTRANCES[(i + dir + ENTRANCES.length) % ENTRANCES.length];
+          if (f.entrance === 'auto') delete f.entrance;
+          this.changed();
+        },
+      });
 
     rows.push({ label: 'STATS', value: () => '', head: true });
     rows.push(num('HP', 'hp', 1, 99), num('Attack', 'attack', 0, 20), num('Defence', 'defence', 0, 20));
@@ -722,8 +755,75 @@ export class FighterMakerScene extends Phaser.Scene {
           },
         });
     }
-    if (f.kind === 'enemy') this.ruleRows(f, rows);
+    if (f.kind === 'enemy') {
+      this.ruleRows(f, rows);
+      this.phaseRows(f, rows);
+    }
     return rows;
+  }
+
+  /** An enemy's second phase: when it starts, what it gains, and its new moves. */
+  private phaseRows(f: CustomFighter, rows: Row[]): void {
+    rows.push({ label: 'PHASE 2 (boss)', value: () => '', head: true });
+    rows.push({
+      label: '  Starts at',
+      value: () => (f.phase2 ? `${Math.round(f.phase2.atHp * 100)}% HP` : 'off'),
+      step: (dir) => {
+        const k = PHASE_AT.indexOf(f.phase2?.atHp ?? 0) + dir;
+        const at = PHASE_AT[(k + PHASE_AT.length) % PHASE_AT.length];
+        if (!at) delete f.phase2;
+        else f.phase2 = { ...(f.phase2 ?? { attack: 1, defence: 0, heal: 0, moves: [] }), atHp: at };
+        this.changed();
+      },
+    });
+    const p = f.phase2;
+    if (!p) return;
+    const stat = (label: string, key: 'attack' | 'defence' | 'heal', max: number): Row => ({
+      label,
+      value: () => (p[key] ? `+${p[key]}` : '—'),
+      step: (dir) => {
+        p[key] = Phaser.Math.Clamp(p[key] + dir, 0, max);
+        this.changed();
+      },
+    });
+    rows.push(stat('  Attack', 'attack', 5), stat('  Defence', 'defence', 5), stat('  Heals HP', 'heal', 50));
+    const pool = Database.data.moves.filter((m) => m.category === 'enemy');
+    const name = (id: string) => (pool.some((m) => m.id === id) ? t(Database.move(id).name) : '(gone)');
+    for (let i = 0; i < 3; i++) {
+      if (i > p.moves.length) break;
+      rows.push({
+        label: `  New move ${i + 1}`,
+        value: () => (p.moves[i] ? name(p.moves[i]) : i === 0 ? 'keep old moves' : '—'),
+        step: (dir) => {
+          // cycle through enemy moves; past either end clears the slot
+          const k = p.moves[i]
+            ? pool.findIndex((m) => m.id === p.moves[i]) + dir
+            : dir > 0
+              ? 0
+              : pool.length - 1;
+          if (k < 0 || k >= pool.length) p.moves.splice(i, 1);
+          else p.moves[i] = pool[k].id;
+          this.changed();
+        },
+      });
+    }
+    const at = rows.length;
+    rows.push({
+      label: '  Phase line',
+      value: () => p.line || '—',
+      edit: async () => {
+        const v = await editText(this, {
+          x: PROPS.x,
+          y: PROPS.y + (at - this.propScroll) * ROW,
+          w: PROPS.w,
+          value: p.line ?? '',
+          placeholder: 'What they shout when they get serious',
+        });
+        if (v === null) return;
+        p.line = v.trim().slice(0, 90) || undefined;
+        this.changed();
+      },
+    });
   }
 
   /** An enemy's special rules: up to 4, each a move and when to use it. */
@@ -866,6 +966,7 @@ export class FighterMakerScene extends Phaser.Scene {
         ...(f.size && f.size !== 'normal'
           ? [`${f.size.toUpperCase()}${f.size === 'huge' ? ' BOSS' : ''}`]
           : []),
+        ...(f.kind === 'enemy' && f.phase2 ? [`PHASE 2 at ${Math.round(f.phase2.atHp * 100)}% HP`] : []),
         ...f.moves.slice(0, 5).map((m) => `· ${t(Database.move(m).name)}`),
       ];
       lines.forEach((l, i) =>

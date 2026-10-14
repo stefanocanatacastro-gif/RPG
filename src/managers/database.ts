@@ -173,6 +173,23 @@ export function validateGameData(data: GameData, ctx: ValidationContext = {}): P
         if (!isNum(r.weight) || r.weight <= 0)
           add('enemies', e.id, `AI weight for "${r.move}" must be above 0`);
       }
+    if (e.title) checkString('enemies', e.id, 'title', e.title);
+    if (e.line) checkString('enemies', e.id, 'line', e.line);
+    if (e.size && !['normal', 'big', 'huge'].includes(e.size))
+      add('enemies', e.id, `unknown size "${e.size}"`);
+    if (e.entrance && !['walk', 'drop', 'none'].includes(e.entrance))
+      add('enemies', e.id, `unknown entrance "${e.entrance}"`);
+    const p2 = e.phase2;
+    if (p2) {
+      if (!isNum(p2.atHp) || p2.atHp <= 0 || p2.atHp >= 1)
+        add('enemies', e.id, 'phase 2 must start between 0 and 1 of max HP');
+      checkMoveRefs('enemies', e.id, p2.moves);
+      if (!p2.ai.length) add('enemies', e.id, 'phase 2 needs at least one AI rule');
+      for (const r of p2.ai)
+        if (!p2.moves.includes(r.move))
+          add('enemies', e.id, `phase 2 AI uses "${r.move}", which isn't in its moves`);
+      if (p2.line) checkString('enemies', e.id, 'phase 2 line', p2.line);
+    }
   }
 
   for (const it of data.items as ItemDef[]) {
@@ -376,6 +393,12 @@ export const Database = {
       e.moves = e.moves.filter(known);
       e.ai = e.ai.filter((r) => known(r.move));
       if (!e.ai.length && e.moves[0]) e.ai = [{ move: e.moves[0], weight: 1 }];
+      if (e.phase2) {
+        e.phase2.moves = e.phase2.moves.filter(known);
+        e.phase2.ai = e.phase2.ai.filter((r) => known(r.move));
+        if (!e.phase2.moves.length) delete e.phase2;
+        else if (!e.phase2.ai.length) e.phase2.ai = e.phase2.moves.map((m) => ({ move: m, weight: 1 }));
+      }
       DATA.enemies.push(e);
       maps.enemies.set(e.id, e);
     }

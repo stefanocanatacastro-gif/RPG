@@ -135,5 +135,55 @@
       }
     ],
     "scout": "scout.corner_medic"
+  },
+  {
+    "id": "agent_brick",
+    "name": "enemy.agent_brick",
+    "sprite": "spr_c0_agent_brick",
+    "level": 3,
+    "hp": 24,
+    "attack": 2,
+    "defence": 1,
+    "xp": 20,
+    "coins": 15,
+    "props": [],
+    "moves": ["goon_shove", "running_lariat"],
+    "ai": [
+      {
+        "move": "running_lariat",
+        "weight": 1,
+        "priority": 1,
+        "fromRound": 2,
+        "everyRounds": 3
+      },
+      {
+        "move": "goon_shove",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.agent_brick",
+    "title": "title.agent_brick",
+    "line": "line.agent_brick",
+    "size": "huge",
+    "entrance": "walk",
+    "phase2": {
+      "atHp": 0.5,
+      "attack": 1,
+      "moves": ["goon_shove", "running_lariat"],
+      "ai": [
+        {
+          "move": "running_lariat",
+          "weight": 1,
+          "priority": 1,
+          "fromRound": 1,
+          "everyRounds": 2
+        },
+        {
+          "move": "goon_shove",
+          "weight": 1
+        }
+      ],
+      "line": "phase2.agent_brick"
+    }
   }
 ]

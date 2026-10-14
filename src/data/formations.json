@@ -58,5 +58,19 @@
       }
     ],
     "stage": "arena"
+  },
+  {
+    "id": "test_boss",
+    "enemies": [
+      {
+        "enemy": "agent_brick",
+        "slot": "front"
+      },
+      {
+        "enemy": "dock_goon",
+        "slot": "back"
+      }
+    ],
+    "stage": "underground"
   }
 ]

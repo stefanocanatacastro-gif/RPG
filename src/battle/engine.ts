@@ -4,6 +4,7 @@
 // be simulated in unit tests.
 
 import type {
+  AiRule,
   BattleConditions,
   CharacterDef,
   EnemyDef,
@@ -43,6 +44,10 @@ export interface Fighter {
   charging?: { move: string; turnsLeft: number };
   /** How much room it takes; huge ones (bosses) can't be staggered out of a wind-up. */
   size: 'normal' | 'big' | 'huge';
+  /** Which phase a boss is in (1, or 2 once it's been pushed below its threshold). */
+  phase: number;
+  /** Its pattern when it differs from its definition's (second phase). */
+  ai?: AiRule[];
   xp: number;
   coins: number;
 }
@@ -159,6 +164,8 @@ export class BattleEngine {
   endReason: 'survived' | 'timeup' | null = null;
   /** Round-start happenings not yet shown by the scene. */
   private events: RoundEvent[] = [];
+  /** Bosses that just entered their second phase, not yet shown by the scene. */
+  private phaseChanges: string[] = [];
 
   constructor(
     private db: Lookup,
@@ -193,6 +200,7 @@ export class BattleEngine {
       spiky: false,
       guard: 0,
       size: 'normal',
+      phase: 1,
       xp: 0,
       coins: 0,
     });
@@ -222,6 +230,7 @@ export class BattleEngine {
           spiky: def.props.includes('spiky'),
           guard: 0,
           size: def.size ?? 'normal',
+          phase: 1,
           xp: def.xp,
           coins: def.coins,
         });
@@ -512,6 +521,7 @@ export class BattleEngine {
       // no damage taken, and the attacker gets hit back
       const counter = rules.reversalDamage;
       a.hp = Math.max(0, a.hp - counter);
+      this.checkPhase(a);
       if (t.side === 'hero') this.gainHype('reversal');
       this.log.push(`guard ${t.id} reversal`);
       this.log.push(`${t.id} reversal ${a.id} -${counter}${a.hp === 0 ? ' KO' : ''}`);
@@ -530,6 +540,7 @@ export class BattleEngine {
       },
     );
     t.hp = Math.max(0, t.hp - damage);
+    this.checkPhase(t);
     if (guard === 'block') {
       this.log.push(`guard ${t.id} block`);
       if (t.side === 'hero') this.gainHype('block');
@@ -549,6 +560,7 @@ export class BattleEngine {
     const t = this.get(targetId);
     const damage = Math.max(0, amount - t.guard);
     t.hp = Math.max(0, t.hp - damage);
+    this.checkPhase(t);
     this.log.push(`dmg ${t.id} -${damage}`);
     return { target: t.id, damage, ko: t.hp === 0, guarded: t.guard > 0 };
   }
@@ -689,17 +701,39 @@ export class BattleEngine {
 
   /** Among the rules that apply, the highest priority wins; weights pick between equals. */
   chooseEnemyMove(e: Fighter): string {
-    const def = this.db.enemy(e.defId);
-    const ok = def.ai.filter((r) => this.ruleApplies(e, r));
+    const rules = e.ai ?? this.db.enemy(e.defId).ai;
+    const ok = rules.filter((r) => this.ruleApplies(e, r));
     if (ok.length === 0) {
       // fall back to the first plain attack
-      const plain = def.ai.find((r) => !this.db.move(r.move).heal && !this.db.move(r.move).charge);
-      return (plain ?? def.ai[0]).move;
+      const plain = rules.find((r) => !this.db.move(r.move).heal && !this.db.move(r.move).charge);
+      return (plain ?? rules[0]).move;
     }
     const top = Math.max(...ok.map((r) => r.priority ?? 0));
     return this.rng.weighted(
       ok.filter((r) => (r.priority ?? 0) === top).map((r) => ({ value: r.move, weight: r.weight })),
     );
+  }
+
+  /** A boss pushed below its threshold (and still standing) starts its second phase. */
+  private checkPhase(f: Fighter): void {
+    if (f.side !== 'enemy' || f.phase !== 1 || f.hp <= 0) return;
+    const p = this.db.enemy(f.defId).phase2;
+    if (!p || f.hp > Math.ceil(f.maxHp * p.atHp)) return;
+    f.phase = 2;
+    f.attack += p.attack ?? 0;
+    f.defence += p.defence ?? 0;
+    if (p.heal) f.hp = Math.min(f.maxHp, f.hp + p.heal);
+    if (p.moves.length) f.moves = [...p.moves];
+    if (p.ai.length) f.ai = p.ai;
+    this.phaseChanges.push(f.id);
+    this.log.push(`phase ${f.id} 2`);
+  }
+
+  /** Hands over (and clears) the bosses that just changed phase, for the scene to show. */
+  takePhaseChanges(): string[] {
+    const out = this.phaseChanges;
+    this.phaseChanges = [];
+    return out;
   }
 
   /** A charging enemy hit hard enough loses its wind-up. Returns whether a charge was broken. */

@@ -170,5 +170,11 @@
   "hub.moves.desc": "Make attacks and heals: power, hits, Grit, run-in or aerial, one target or everyone, action command, wind-ups. Teach them in the fighter maker.",
   "hub.gallery": "Community gallery",
   "hub.gallery.desc": "Everything everyone in the game link has made, by maker: try it, play it, like it, or copy it to remix.",
-  "battle.unstoppable": "WON'T BUDGE!"
+  "battle.unstoppable": "WON'T BUDGE!",
+  "enemy.agent_brick": "Agent Brick",
+  "scout.agent_brick": "The Underground's enforcer. Too big to stagger: block his Running Lariat instead. Below half HP he gets meaner and swings it every other round.",
+  "title.agent_brick": "The Wall of the Underground",
+  "line.agent_brick": "Nobody walks out of my ring, kid.",
+  "phase2.agent_brick": "Okay. Now I'm angry.",
+  "battle.phase2": "{name} GETS SERIOUS!"
 }

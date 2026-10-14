@@ -984,6 +984,24 @@ with sync_playwright() as p:
         # return the hub cursor to the top for the next loop
         page.evaluate("window.__game.scene.getScene('dev_hub').children.list.find(o => o.setCursor)?.setCursor(0)")
 
+    # ── Boss: walks in with a name card, gets serious at half HP ──
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('dev_hub'); g.scene.start('battle', { formation: 'test_boss', firstStrike: null, returnTo: 'dev_hub' }); })()")
+    wait_scene(page, "battle")
+    page.wait_for_timeout(3500)
+    page.screenshot(path=f"{out}/19_boss_entrance.png")
+    wait_battle_input(page, "menu", 30000)
+    log = battle_eval(page, "return s.engine.log.slice(0, 4);")
+    check(log[:2] == ["entrance e0", "quote e0"], f"the huge boss walks in and says its line ({log[:2]})")
+    battle_eval(page, "const b = s.engine.get('e0'); s.engine.damage('e0', Math.ceil(b.maxHp / 2)); return 0;")
+    page.wait_for_timeout(200)
+    seen = battle_eval(page, "return [s.engine.get('e0').attack, s.engine.get('e0').ai === null];")
+    battle_eval(page, "s.showPhaseChanges(); return 0;")
+    page.wait_for_timeout(900)
+    page.screenshot(path=f"{out}/19b_boss_phase2.png")
+    check(seen[0] == 3, f"at half HP the boss enters phase 2 and hits harder ({seen})")
+    page.evaluate("(() => { const g = window.__game; g.scene.stop('battle'); g.scene.start('dev_hub'); })()")
+    wait_scene(page, "dev_hub")
+
     # crash screen
     page.wait_for_timeout(600)
     press(page, "x")

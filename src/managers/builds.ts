@@ -17,6 +17,7 @@ import type {
   ItemDef,
   MoveDef,
   MoveStep,
+  PhaseDef,
 } from '../types/data';
 import { Database } from './database';
 import { addStrings, t } from './strings';
@@ -116,6 +117,48 @@ export interface CustomFighter {
   line?: string;
   /** Heroes: a short story. */
   bio?: string;
+  /** Enemies: how they come in ('auto' = walk in when huge). */
+  entrance?: 'auto' | 'walk' | 'drop' | 'none';
+  /** Enemies: a second phase once HP falls to a share of the maximum. */
+  phase2?: CustomPhase;
+}
+
+/** A made enemy's second phase. */
+export interface CustomPhase {
+  /** Starts at this share of max HP (0.25 / 0.5 / 0.75). */
+  atHp: number;
+  attack: number;
+  defence: number;
+  heal: number;
+  /** New moves (empty = keep the old ones). */
+  moves: string[];
+  line?: string;
+}
+
+/**
+ * Turns a made phase into engine data. New moves are picked evenly, with the
+ * first one every other round; with no new moves the old moves and pattern stay.
+ */
+export function toPhaseDef(gid: string, p: CustomPhase, oldMoves: string[], oldAi: AiRule[]): PhaseDef {
+  let moves: string[];
+  let ai: AiRule[];
+  if (p.moves.length) {
+    moves = [...new Set(p.moves)];
+    ai = moves.map((m) => ({ move: m, weight: 1 }));
+    ai.push({ move: moves[0], weight: 1, priority: 1, fromRound: 1, everyRounds: 2 });
+  } else {
+    moves = [...oldMoves];
+    ai = oldAi.map((r) => ({ ...r }));
+  }
+  const out: PhaseDef = { atHp: Math.max(0.1, Math.min(0.9, p.atHp)), moves, ai };
+  if (p.attack) out.attack = p.attack;
+  if (p.defence) out.defence = p.defence;
+  if (p.heal) out.heal = p.heal;
+  if (p.line) {
+    out.line = `${gid}.phase2`;
+    addStrings({ [out.line]: p.line });
+  }
+  return out;
 }
 
 /** A saved fight: a sandbox setup with a title. */
@@ -318,6 +361,8 @@ export function toDefs(owner: string, f: CustomFighter): { char?: CharacterDef; 
       scout,
       ...extra,
       ...(f.size && f.size !== 'normal' ? { size: f.size } : {}),
+      ...(f.entrance && f.entrance !== 'auto' ? { entrance: f.entrance } : {}),
+      ...(f.phase2 ? { phase2: toPhaseDef(gid, f.phase2, f.moves, ai) } : {}),
     },
   };
 }
