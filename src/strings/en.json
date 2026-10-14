@@ -176,5 +176,14 @@
   "title.agent_brick": "The Wall of the Underground",
   "line.agent_brick": "Nobody walks out of my ring, kid.",
   "phase2.agent_brick": "Okay. Now I'm angry.",
-  "battle.phase2": "{name} GETS SERIOUS!"
+  "battle.phase2": "{name} GETS SERIOUS!",
+  "enemy.tugboat_tony": "Tugboat Tony",
+  "title.tugboat_tony": "The Pride of Pier 9",
+  "line.tugboat_tony": "I've hauled bigger things than you before breakfast.",
+  "scout.tugboat_tony": "A big dock worker. Hard to push around, and when he's hurt he leans on the Running Lariat. Block it and he runs out of steam.",
+  "enemy.rafter_king": "The Rafter King",
+  "title.rafter_king": "Lord of the Lighting Rig",
+  "line.rafter_king": "You're in MY kingdom now!",
+  "phase2.rafter_king": "Enough games. The King rules this ring!",
+  "scout.rafter_king": "He drops in from the lighting rig and opens with a Spike Charge. Below half HP he patches himself up and starts throwing lariats every other round."
 }

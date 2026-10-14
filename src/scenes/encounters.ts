@@ -13,6 +13,7 @@ import { tinyText } from '../ui/tiny_font';
 import { UI, css } from '../ui/theme';
 import { editText, textFieldOpen } from '../ui/text_field';
 import { SceneLoader, type BattleEnd } from '../managers/scene_loader';
+import { SCENARIOS } from '../data/scenarios';
 import { Database } from '../managers/database';
 import { hasGame, newGame } from '../managers/game_state';
 import { t } from '../managers/strings';
@@ -40,9 +41,12 @@ interface Entry {
   key: string;
   title: string;
   setup: BattleSetup;
-  from: 'mine' | 'community' | 'builtin';
+  from: 'mine' | 'community' | 'showcase' | 'builtin';
   /** Yours: the encounter's id in your set. */
   id?: string;
+  /** Showcase fights: how hard, and what makes it different. */
+  difficulty?: string;
+  desc?: string;
 }
 
 interface PlayRecord {
@@ -165,6 +169,15 @@ export class EncountersScene extends Phaser.Scene {
         setup: o.encounter.setup,
         from: 'community',
       });
+    for (const sc of SCENARIOS)
+      out.push({
+        key: `show:${sc.id}`,
+        title: sc.title,
+        setup: sc.setup,
+        from: 'showcase',
+        difficulty: sc.difficulty,
+        desc: sc.desc,
+      });
     for (const f of Database.data.formations)
       out.push({
         key: `test:${f.id}`,
@@ -190,6 +203,7 @@ export class EncountersScene extends Phaser.Scene {
       });
       if (!any && empty) out.push({ label: empty });
     };
+    section('showcase', 'SHOWCASE FIGHTS');
     section('mine', 'YOURS', '(save one from the sandbox)');
     if (es.some((e) => e.from === 'community')) section('community', 'COMMUNITY');
     section('builtin', 'TEST LINE-UPS');
@@ -394,13 +408,28 @@ export class EncountersScene extends Phaser.Scene {
         this,
         CARD.x + 12,
         y - 4,
-        e.from === 'mine' ? 'YOURS' : e.from === 'community' ? 'FROM THE COMMUNITY' : 'BUILT-IN TEST LINE-UP',
+        e.from === 'mine'
+          ? 'YOURS'
+          : e.from === 'community'
+            ? 'FROM THE COMMUNITY'
+            : e.from === 'showcase'
+              ? `SHOWCASE FIGHT · ${e.difficulty!.toUpperCase()}`
+              : 'BUILT-IN TEST LINE-UP',
         css(UI.inkDim),
       )
         .setOrigin(0)
         .setScale(2),
     );
     y += 22;
+    if (e.desc) {
+      const d = add(
+        pixelText(this, CARD.x + 12, y, e.desc, 8, css(UI.ink))
+          .setOrigin(0, 0)
+          .setWordWrapWidth(CARD.w - 24)
+          .setLineSpacing(4),
+      ) as Phaser.GameObjects.Text;
+      y += d.height + 12;
+    }
     const s = e.setup;
     const problems = setupProblems(s);
     const charName = (id: string) =>

@@ -774,7 +774,11 @@ with sync_playwright() as p:
     ids = page.evaluate("window.__game.scene.getScene('field').objects.map(o => o.def.id)")
     check(obj["id"] in ids, f"PLAY walks into the edited room ({obj['id']} is there)")
     page.screenshot(path=f"{out}/22_editor_play.png")
-    press(page, "F2", 300)
+    # F2 is ignored while the room is still fading in: try again until the editor opens
+    for _ in range(10):
+        press(page, "F2", 600)
+        if active(page, "room_editor"):
+            break
     wait_scene(page, "room_editor", 10000)
     page.keyboard.press("Control+s")
     page.wait_for_timeout(400)

@@ -36,6 +36,16 @@
       "key": "spr_c0_corner_medic",
       "w": 60,
       "h": 90
+    },
+    {
+      "key": "spr_c0_tugboat_tony",
+      "w": 90,
+      "h": 114
+    },
+    {
+      "key": "spr_c0_rafter_king",
+      "w": 84,
+      "h": 120
     }
   ],
   "audio": []

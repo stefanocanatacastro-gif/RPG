@@ -176,5 +176,14 @@
   "title.agent_brick": "El Muro del Subterráneo",
   "line.agent_brick": "Nadie sale caminando de mi ring, chico.",
   "phase2.agent_brick": "Bueno. Ahora sí me enojé.",
-  "battle.phase2": "¡{name} SE PONE SERIO!"
+  "battle.phase2": "¡{name} SE PONE SERIO!",
+  "enemy.tugboat_tony": "Tony Remolcador",
+  "title.tugboat_tony": "El Orgullo del Muelle 9",
+  "line.tugboat_tony": "He cargado cosas más grandes que tú antes del desayuno.",
+  "scout.tugboat_tony": "Un estibador grandote. Cuesta moverlo, y cuando está herido recurre al Lazo a la Carrera. Bloquéalo y se queda sin aire.",
+  "enemy.rafter_king": "El Rey de las Vigas",
+  "title.rafter_king": "Señor de las Luces",
+  "line.rafter_king": "¡Ahora estás en MI reino!",
+  "phase2.rafter_king": "Se acabó el juego. ¡El Rey manda en este ring!",
+  "scout.rafter_king": "Cae desde las luces y abre con una Carga de Púas. Bajo la mitad de vida se cura un poco y lanza lazos cada dos rondas."
 }

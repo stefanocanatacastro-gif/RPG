@@ -185,5 +185,98 @@
       ],
       "line": "phase2.agent_brick"
     }
+  },
+  {
+    "id": "tugboat_tony",
+    "name": "enemy.tugboat_tony",
+    "sprite": "spr_c0_tugboat_tony",
+    "level": 3,
+    "hp": 14,
+    "attack": 2,
+    "defence": 0,
+    "xp": 10,
+    "coins": 8,
+    "props": [],
+    "moves": ["goon_shove", "running_lariat"],
+    "ai": [
+      {
+        "move": "running_lariat",
+        "weight": 1,
+        "priority": 1,
+        "whenHpBelow": 0.5
+      },
+      {
+        "move": "goon_shove",
+        "weight": 3
+      },
+      {
+        "move": "running_lariat",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.tugboat_tony",
+    "title": "title.tugboat_tony",
+    "line": "line.tugboat_tony",
+    "size": "big"
+  },
+  {
+    "id": "rafter_king",
+    "name": "enemy.rafter_king",
+    "sprite": "spr_c0_rafter_king",
+    "level": 4,
+    "hp": 22,
+    "attack": 3,
+    "defence": 0,
+    "xp": 16,
+    "coins": 12,
+    "props": [],
+    "moves": ["goon_shove", "spike_charge"],
+    "ai": [
+      {
+        "move": "spike_charge",
+        "weight": 1,
+        "priority": 2,
+        "fromRound": 1,
+        "everyRounds": 9999
+      },
+      {
+        "move": "goon_shove",
+        "weight": 2
+      },
+      {
+        "move": "spike_charge",
+        "weight": 1
+      }
+    ],
+    "scout": "scout.rafter_king",
+    "title": "title.rafter_king",
+    "line": "line.rafter_king",
+    "size": "big",
+    "entrance": "drop",
+    "phase2": {
+      "atHp": 0.5,
+      "attack": 1,
+      "defence": 1,
+      "heal": 4,
+      "moves": ["running_lariat", "spike_charge"],
+      "ai": [
+        {
+          "move": "running_lariat",
+          "weight": 1,
+          "priority": 1,
+          "fromRound": 1,
+          "everyRounds": 2
+        },
+        {
+          "move": "spike_charge",
+          "weight": 1
+        },
+        {
+          "move": "running_lariat",
+          "weight": 1
+        }
+      ],
+      "line": "phase2.rafter_king"
+    }
   }
 ]
