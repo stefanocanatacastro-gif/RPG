@@ -11,6 +11,7 @@ import { drawPanel } from '../ui/components';
 import { pixelText } from '../ui/pixel_text';
 import { UI, css } from '../ui/theme';
 import { editText, textFieldOpen } from '../ui/text_field';
+import { exportBattle, importFromPicker, listenForBattleFiles, type ShareResult } from '../ui/share';
 import { input } from '../systems/input';
 import { animKey } from '../systems/anim_builder';
 import { SceneLoader, type BattleEnd } from '../managers/scene_loader';
@@ -62,6 +63,8 @@ export interface Draft {
   encounterId?: string;
   clearedHash?: string;
   published?: string;
+  /** Came from a battle file (its maker keeps the credit). */
+  imported?: Encounter['imported'];
 }
 
 /** Kid Chispa's numbers at three points of the story (as in the showcase fights). */
@@ -161,6 +164,8 @@ export class BattleMakerScene extends Phaser.Scene {
   create(data?: {
     edit?: string;
     remix?: { title: string; setup: BattleSetup };
+    /** A line for the status bar once it opens. */
+    notice?: { text: string; ok: boolean };
     fresh?: boolean;
     keep?: boolean;
   }): void {
@@ -175,6 +180,7 @@ export class BattleMakerScene extends Phaser.Scene {
           encounterId: e.id,
           clearedHash: e.clearedHash,
           published: e.published,
+          imported: e.imported,
         };
     } else if (data?.remix)
       bench = { title: `${data.remix.title} (remix)`, desc: '', setup: structuredClone(data.remix.setup) };
@@ -187,6 +193,7 @@ export class BattleMakerScene extends Phaser.Scene {
         : 'Click an opponent to change it, or + to add one. PLAY-TEST it, beat it, then UPLOAD.';
       this.statusColor = UI.inkDim;
     }
+    if (data?.notice) this.say(data.notice.text, data.notice.ok ? UI.good : UI.rope);
     this.testing = false;
     this.cameras.main.setBackgroundColor(UI.void);
     this.buildStage();
@@ -201,6 +208,8 @@ export class BattleMakerScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, sortCameras);
     this.input.on(Phaser.Input.Events.POINTER_DOWN, (p: Phaser.Input.Pointer) => this.click(p));
     this.input.mouse?.disableContextMenu();
+    // a battle file dropped or pasted here opens in the maker
+    listenForBattleFiles(this, (r) => this.afterImport(r));
     this.input.on(
       Phaser.Input.Events.POINTER_WHEEL,
       (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
@@ -371,6 +380,7 @@ export class BattleMakerScene extends Phaser.Scene {
       setup: structuredClone(d.setup),
       savedAt: new Date().toISOString(),
       ...(d.desc ? { desc: d.desc } : {}),
+      ...(d.imported ? { imported: d.imported } : {}),
       ...(cleared ? { clearedHash: d.clearedHash } : {}),
       ...(publish
         ? { published: new Date().toISOString() }
@@ -436,6 +446,35 @@ export class BattleMakerScene extends Phaser.Scene {
       this.say(`"${this.draft.title}" is in the Battle World!`, UI.good);
       this.refresh();
     }
+  }
+
+  /** Saves the battle on the bench as a file to send to anyone. */
+  async share(): Promise<void> {
+    const d = this.draft;
+    const r = await exportBattle(this, { title: d.title, desc: d.desc, setup: d.setup }, this.cleared());
+    this.say(
+      r.ok && !this.cleared() ? `${r.message} (Not cleared yet: tell them!)` : r.message,
+      r.ok ? UI.good : UI.rope,
+    );
+    this.refresh();
+  }
+
+  async importFile(): Promise<void> {
+    const r = await importFromPicker();
+    if (r) this.afterImport(r);
+  }
+
+  /** An imported battle opens on the bench (it's in YOURS too). */
+  private afterImport(r: ShareResult): void {
+    if (!r.ok || !r.id) {
+      this.say(r.message, UI.rope);
+      return this.refresh();
+    }
+    saveBench();
+    this.scene.restart({
+      edit: r.id,
+      notice: { text: `${r.message} It's in YOURS; play it from PLAY.`, ok: true },
+    });
   }
 
   newBattle(): void {
@@ -626,21 +665,23 @@ export class BattleMakerScene extends Phaser.Scene {
     this.txt(12, 10, 'MAKE', UI.spark, 24);
     // the battle's name: click to rename
     const fit = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-    g.fillStyle(UI.panelHi).fillRect(108, 9, 250, 26);
-    this.txt(116, 18, fit(d.title, 28), 0x9fd8ff);
-    this.hits.push({ x: 108, y: 9, w: 250, h: 26, act: () => void this.rename() });
+    g.fillStyle(UI.panelHi).fillRect(108, 9, 180, 26);
+    this.txt(116, 18, fit(d.title, 20), 0x9fd8ff);
+    this.hits.push({ x: 108, y: 9, w: 180, h: 26, act: () => void this.rename() });
     // where it stands: draft / cleared / uploaded
     const cleared = this.cleared();
     const badge = d.published && cleared ? 'UPLOADED' : cleared ? 'CLEARED' : 'NOT CLEARED';
     const bc = d.published && cleared ? UI.grit : cleared ? UI.good : UI.border;
-    g.fillStyle(bc, 0.9).fillRect(368, 14, badge.length * 8 + 12, 16);
-    this.txt(374, 18, badge, 0x0b0910);
+    g.fillStyle(bc, 0.9).fillRect(296, 14, badge.length * 8 + 12, 16);
+    this.txt(302, 18, badge, 0x0b0910);
     let x = W - 8;
     const defs: [string, () => void, { hot?: boolean; color?: number }][] = [
       ['NEW', () => this.newBattle(), {}],
       ['SAVE', () => void this.saveDraft(), {}],
       ['PLAY-TEST', () => this.playTest(), { color: 0x2a4a20 }],
       ['UPLOAD', () => void this.upload(), { hot: cleared && !d.published }],
+      ['SHARE', () => void this.share(), {}],
+      ['IMPORT', () => void this.importFile(), {}],
       ['BACK', () => void SceneLoader.goto(this, 'title'), {}],
     ];
     const widths = defs.map(([l]) => l.length * 8 + 18);

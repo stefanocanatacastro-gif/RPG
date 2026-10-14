@@ -30,6 +30,7 @@ import { SCENARIOS } from '../data/scenarios';
 import { fighterTexture } from '../systems/custom_looks';
 import { heroSprite } from '../systems/hero_art';
 import type { BattleScene } from './battle';
+import { exportBattle, importFromPicker, listenForBattleFiles, type ShareResult } from '../ui/share';
 
 type Tab = 'showcase' | 'world' | 'mine';
 type Sort = 'featured' | 'popular' | 'new';
@@ -51,6 +52,8 @@ export interface PlayEntry {
   published?: string;
   /** Yours, not uploaded yet. */
   draft?: boolean;
+  /** From a battle file: its maker, and whether they beat it. */
+  imported?: { maker: string; cleared: boolean };
   encounterId?: string;
 }
 
@@ -87,6 +90,8 @@ export class PlayScene extends Phaser.Scene {
   private dyn: Phaser.GameObjects.GameObject[] = [];
   private hits: { x: number; y: number; w: number; h: number; act: () => void }[] = [];
   private fighting = false;
+  /** How the last share or import went. */
+  notice: { text: string; ok: boolean } | null = null;
   /** Where buttons are drawn while a panel is open. */
   private btnG: Phaser.GameObjects.Graphics | null = null;
 
@@ -108,6 +113,9 @@ export class PlayScene extends Phaser.Scene {
       (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => this.turnPage(dy > 0 ? 1 : -1),
     );
     this.events.on(Phaser.Scenes.Events.WAKE, (_s: unknown, end: BattleEnd) => this.afterFight(end));
+    this.notice = null;
+    // a battle file dropped on the game, or pasted, is imported
+    listenForBattleFiles(this, (r) => this.afterImport(r));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.events.off(Phaser.Scenes.Events.WAKE));
     this.refresh();
     // likes, plays and makers' names arrive from the game link
@@ -122,7 +130,8 @@ export class PlayScene extends Phaser.Scene {
 
   // ── What's on the shelves ───────────────────────────────────────────
 
-  private makerName(owner?: string): string {
+  private makerName(owner?: string, e?: PlayEntry): string {
+    if (e?.imported) return e.imported.maker;
     if (!owner) return 'Showcase';
     if (owner === myOwnerId()) return 'You';
     return this.names[owner] || 'A maker';
@@ -149,8 +158,9 @@ export class PlayScene extends Phaser.Scene {
       from,
       owner,
       published: e.published,
-      draft: !e.published,
+      draft: !e.published && !e.imported,
       encounterId: e.id,
+      ...(e.imported ? { imported: { maker: e.imported.maker, cleared: e.imported.cleared } } : {}),
     });
     if (this.tab === 'mine')
       return Builds.myEncounters()
@@ -288,6 +298,40 @@ export class PlayScene extends Phaser.Scene {
     );
   }
 
+  /** Saves a battle as a file to send to anyone. */
+  async share(e: PlayEntry): Promise<void> {
+    const credit = e.imported
+      ? e.imported.maker
+      : e.from === 'showcase'
+        ? 'Showcase'
+        : e.owner && e.owner !== myOwnerId()
+          ? this.makerName(e.owner)
+          : undefined;
+    const cleared =
+      e.from === 'showcase' || !!e.published || !!e.imported?.cleared || !!Plays.mine(e.key)?.wins;
+    const r = await exportBattle(this, { title: e.title, desc: e.desc, setup: e.setup }, cleared, credit);
+    this.notice = { text: r.message, ok: r.ok };
+    this.refresh();
+  }
+
+  async importFile(): Promise<void> {
+    const r = await importFromPicker();
+    if (r) this.afterImport(r);
+  }
+
+  /** An imported battle shows up in YOURS, opened and ready to fight. */
+  afterImport(r: ShareResult): void {
+    this.notice = { text: r.message, ok: r.ok };
+    if (r.ok && r.id) {
+      this.tab = 'mine';
+      this.page = 0;
+      const e = this.entries().find((x) => x.encounterId === r.id);
+      this.result = null;
+      this.open = e ?? null;
+    }
+    this.refresh();
+  }
+
   private async like(e: PlayEntry): Promise<void> {
     await Likes.toggle(e.likeKey);
     this.refresh();
@@ -346,6 +390,13 @@ export class PlayScene extends Phaser.Scene {
     txt(16, 12, 'BATTLE WORLD', UI.spark, 24);
     button(W - 84, 10, 'BACK', () => void SceneLoader.goto(this, 'title'));
     button(W - 186, 10, 'MAKE', () => void SceneLoader.goto(this, 'battle_maker'), { color: 0x2a4a20 });
+    button(W - 296, 10, 'IMPORT', () => void this.importFile());
+    if (this.notice)
+      add(
+        pixelText(this, 16, H - 26, this.notice.text, 8, css(this.notice.ok ? UI.good : UI.rope))
+          .setOrigin(0, 0)
+          .setWordWrapWidth(W / 2 - 150),
+      );
 
     // tabs
     let x = 16;
@@ -474,7 +525,7 @@ export class PlayScene extends Phaser.Scene {
     if (focus) g.lineStyle(2, UI.spark).strokeRect(x - 1, y - 1, CW + 2, CH + 2);
     const fit = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
     txt(x + 10, y + 10, fit(e.title.toUpperCase(), 17), UI.spark, 16);
-    txt(x + 10, y + 32, fit(`by ${this.makerName(e.owner)}`, 34), UI.inkDim);
+    txt(x + 10, y + 32, fit(`by ${this.makerName(e.owner, e)}${e.imported ? ' (file)' : ''}`, 34), UI.inkDim);
     // badge: designer's rating, the earned difficulty, or DRAFT
     const diff = e.draft ? 'DRAFT' : (e.rated ?? Plays.difficulty(e.key) ?? 'new').toUpperCase();
     const bc = e.draft ? UI.border : (DIFF_COLOR[diff.toLowerCase()] ?? UI.borderHi);
@@ -594,7 +645,12 @@ export class PlayScene extends Phaser.Scene {
       : e.rated
         ? `designer says ${e.rated}`
         : (Plays.difficulty(e.key) ?? 'new: not enough plays to rate');
-    txt(x + 20, y + 52, `by ${this.makerName(e.owner)} · ${rated}`, UI.inkDim);
+    txt(
+      x + 20,
+      y + 52,
+      `by ${this.makerName(e.owner, e)} · ${e.imported ? (e.imported.cleared ? 'imported · its maker beat it' : 'imported · not cleared by its maker') : rated}`,
+      UI.inkDim,
+    );
     let ly = y + 76;
     if (e.desc) {
       const d = add(
@@ -675,7 +731,11 @@ export class PlayScene extends Phaser.Scene {
         button(bx, by + 5, Likes.mine(e.likeKey) ? 'LIKED' : 'LIKE', () => void this.like(e), {
           color: Likes.mine(e.likeKey) ? 0x5a1a24 : undefined,
         }) + 8;
-    if (!e.draft) button(bx, by + 5, e.owner === myOwnerId() ? 'EDIT' : 'REMIX', () => this.toMaker(e));
+    if (!e.draft)
+      bx +=
+        button(bx, by + 5, e.owner === myOwnerId() && !e.imported ? 'EDIT' : 'REMIX', () => this.toMaker(e)) +
+        8;
+    button(bx, by + 5, 'SHARE', () => void this.share(e));
     button(x + w - 90, by + 5, 'CLOSE', () => this.close());
   }
 

@@ -1,11 +1,11 @@
 // The browser's file picker, for uploads in the makers.
 
-/** Asks the browser for a picture file (must be called from a click). */
-export function pickFile(): Promise<File | null> {
+/** Asks the browser for a file, a picture unless `accept` says otherwise (must be called from a click). */
+export function pickFile(accept = 'image/png,image/jpeg,image/gif,image/webp'): Promise<File | null> {
   return new Promise((resolve) => {
     const el = document.createElement('input');
     el.type = 'file';
-    el.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    el.accept = accept;
     el.style.display = 'none';
     document.body.appendChild(el);
     el.addEventListener('change', () => {

@@ -191,6 +191,7 @@ with sync_playwright() as p:
     shelf = pl("return s.entries().map(e => e.key);")
     check(len(shelf) == 7 and shelf[0] == "show:dock_rumble", f"PLAY opens on the 7 showcase fights ({len(shelf)})")
     page.screenshot(path=f"{out}/02_play.png")
+    page.wait_for_timeout(800)  # keys are ignored while the curtain is still opening
     press(page, "Enter", 300)  # the focused card's details
     check(pl("return s.open && s.open.key;") == "show:dock_rumble", "Enter opens the focused fight's details")
     page.screenshot(path=f"{out}/02b_details.png")
@@ -205,7 +206,9 @@ with sync_playwright() as p:
     page.screenshot(path=f"{out}/05_battle_target.png")
     press(page, "Enter", 450)
     page.screenshot(path=f"{out}/05b_battle_hit.png")
+    page.evaluate("window.__debug.set('god', true)")  # this checks the flow; the goons can win on a bad run
     result = fight(page, out, "05c")
+    page.evaluate("window.__debug.set('god', false)")
     check(result == "victory", f"a real fight against three goons is won ({result})")
     gs = page.evaluate("(() => { const s = window.__game.scene.getScene('battle').engine; return s.log; })()")
     check(any("hero chop" in l for l in gs) and any("goon_shove hero" in l for l in gs), "both sides attacked during the fight")
@@ -894,6 +897,43 @@ with sync_playwright() as p:
     pl("s.setTab('mine'); return 0;")
     mine = pl("return s.entries().map(e => [e.title, !!e.draft]);")
     check(["Smoke Bout", False] in mine, f"YOURS keeps the uploaded battle after a reload ({mine})")
+
+    # ── Sharing: export a battle as a file, import one dropped on the game ──
+    page.evaluate("localStorage.setItem('kid-chispa.maker_name', 'Smoke Tester')")
+    with page.expect_download() as dl:
+        pl("s.share(s.entries().find(e => e.title === 'Smoke Bout')); return 0;")
+    path = dl.value.path()
+    name = dl.value.suggested_filename
+    text = open(path).read()
+    data = json.loads(text)
+    check(name == "smoke-bout.chispa.json" and data["format"] == "kid-chispa-battle" and data["maker"] == "Smoke Tester", f"SHARE saves the battle as a file ({name}, {len(text) // 1024} KB)")
+    page.wait_for_timeout(400)
+    check("Saved smoke-bout" in pl("return s.notice.text;"), "the Battle World says the file was saved")
+    # someone sends you a battle: here, the same one renamed (a different battle to the game)
+    data["battle"]["title"] = "Sent To Me"
+    data["maker"] = "A Friend"
+    page.evaluate(
+        "(t) => { const dt = new DataTransfer(); dt.items.add(new File([t], 'sent.chispa.json', { type: 'application/json' })); window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, cancelable: true })); }",
+        json.dumps(data),
+    )
+    page.wait_for_function("(() => { const s = window.__game.scene.getScene('play'); return s.open && s.open.title === 'Sent To Me'; })()", timeout=8000)
+    page.wait_for_timeout(300)
+    page.screenshot(path=f"{out}/36_imported.png")
+    got = pl("return [s.tab, s.open.imported, s.open.draft];")
+    check(got == ["mine", {"maker": "A Friend", "cleared": True}, False], f"a dropped battle file lands in YOURS, credited and ready to fight ({got})")
+    page.evaluate(
+        "(t) => { const dt = new DataTransfer(); dt.items.add(new File([t], 'sent.chispa.json', { type: 'application/json' })); window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, cancelable: true })); }",
+        json.dumps(data),
+    )
+    page.wait_for_timeout(800)
+    check("already have" in pl("return s.notice.text;"), "importing the same battle twice adds it once")
+    pl("s.playOpen(); return 0;")
+    wait_scene(page, "battle")
+    page.evaluate("window.__debug.set('god', true)")
+    phase = fight(page, out, "37_imported")
+    page.evaluate("window.__debug.set('god', false)")
+    check(phase == "victory", f"the imported battle plays ({phase})")
+    wait_scene(page, "play", 10000)
     real = [e for e in errors if "fonts.g" not in e and "ERR_" not in e and "Test crash" not in e]
     check(not real, f"no errors on desktop {real[:3]}")
     ctx.close()

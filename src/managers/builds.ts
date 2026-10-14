@@ -216,6 +216,8 @@ export interface Encounter {
   clearedHash?: string;
   /** When it was uploaded to the Battle World (missing: a draft only its maker sees). */
   published?: string;
+  /** Came in from a battle file: who made it, and the file's fingerprint (so it isn't added twice). */
+  imported?: { maker: string; key: string; cleared: boolean; at: string };
 }
 
 /** An item made in the item maker. One kind of effect each. */
@@ -826,6 +828,30 @@ export const Builds = {
     list.push({ ...structuredClone(thing as Encounter), id, savedAt: new Date().toISOString() });
     await Builds.saveMine({ encounters: list });
     return id;
+  },
+
+  /** A made fighter, move or item by its id across everyone's sets (for battle files). */
+  findMade(
+    gid: string,
+  ):
+    | { kind: 'fighter'; owner: string; thing: CustomFighter }
+    | { kind: 'move'; owner: string; thing: CustomMove }
+    | { kind: 'item'; owner: string; thing: CustomItem }
+    | null {
+    for (const [owner, set] of sets) {
+      const f = set.fighters.find((x) => globalId(owner, x.id) === gid);
+      if (f) return { kind: 'fighter', owner, thing: structuredClone(f) };
+      const m = (set.moves ?? []).find((x) => globalId(owner, x.id) === gid);
+      if (m) return { kind: 'move', owner, thing: structuredClone(m) };
+      const i = (set.items ?? []).find((x) => globalId(owner, x.id) === gid);
+      if (i) return { kind: 'item', owner, thing: structuredClone(i) };
+    }
+    return null;
+  },
+
+  /** This person's own whole set (to add imported things to it). */
+  mySet(): BuildSet {
+    return structuredClone(sets.get(myOwnerId()) ?? { fighters: [] });
   },
 
   /** This person's skins for built-in fighters, by fighter id. */

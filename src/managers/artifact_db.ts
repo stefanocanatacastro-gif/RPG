@@ -87,3 +87,32 @@ export async function storeImage(blob: Blob, timeoutMs = 4000): Promise<string |
     return null;
   }
 }
+
+interface DownloadsLike {
+  save(r: { filename: string; data: string | Blob }): Promise<unknown>;
+}
+
+/**
+ * Offers the viewer a file. Inside the game link the viewer confirms it (they
+ * may say no: resolves false); anywhere else the browser downloads it.
+ */
+export async function saveFile(filename: string, text: string, timeoutMs = 4000): Promise<boolean> {
+  const dl = (await use('downloads', timeoutMs)) as DownloadsLike | null;
+  if (dl) {
+    try {
+      await dl.save({ filename, data: text });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return true;
+}
