@@ -115,7 +115,10 @@ describe('battle files', () => {
     expect(() => readBattleFile(JSON.stringify(bad))).toThrow(/damaged picture/);
     const unknown = {
       ...ok,
-      battle: { ...ok.battle, setup: { ...ok.battle.setup, enemies: [{ id: 'mega_goon', slot: 'front' as const }] } },
+      battle: {
+        ...ok.battle,
+        setup: { ...ok.battle.setup, enemies: [{ id: 'mega_goon', slot: 'front' as const }] },
+      },
     };
     expect(missingBuiltIns(unknown)).toEqual(['mega_goon']);
     await expect(importBattle(unknown)).rejects.toThrow(/update to play it/);

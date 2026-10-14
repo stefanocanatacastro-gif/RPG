@@ -183,7 +183,9 @@ async function storeLook(look: FighterLook): Promise<FighterLook> {
 export async function importBattle(f: BattleFile): Promise<{ id: string; again: boolean }> {
   const missing = missingBuiltIns(f);
   if (missing.length)
-    throw new Error(`That battle needs things this version of the game doesn't have (${missing.join(', ')}): update to play it.`);
+    throw new Error(
+      `That battle needs things this version of the game doesn't have (${missing.join(', ')}): update to play it.`,
+    );
   const key = fileKey(f);
   const set = Builds.mySet();
   const encounters = set.encounters ?? [];
