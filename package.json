@@ -1,6 +1,6 @@
 {
   "name": "wrestling-rpg",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "description": "Kid Chispa: Battle Maker \u2014 make and play turn-based wrestling battles with action commands (Phaser 3 + TypeScript)",
   "scripts": {
     "dev": "vite",

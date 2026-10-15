@@ -1,5 +1,5 @@
-// The built-in opponents' finished art: frame-by-frame sprite sheets drawn by
-// tools/art/opponents.py (one row per animation, like Kid Chispa's). They
+// The built-in fighters' finished art (the opponents and Pip, the partner): frame-by-frame sprite sheets drawn by
+// tools/art/opponents.py and tools/art/pip.py (one row per animation, like Kid Chispa's). They
 // replace the placeholder boxes wherever an opponent appears, unless you gave
 // it a skin.
 
@@ -16,6 +16,7 @@ import cornerMedic from '../assets/opponents/corner_medic.png';
 import agentBrick from '../assets/opponents/agent_brick.png';
 import tugboatTony from '../assets/opponents/tugboat_tony.png';
 import rafterKing from '../assets/opponents/rafter_king.png';
+import pip from '../assets/opponents/pip.png';
 
 /** The usual rows: idle 4, walk 8, attack 6, hurt 3, knocked out 4, victory 4. */
 function look(url: string, frame: number, fps: Partial<Record<'idle' | 'walk' | 'chop', number>> = {}): SheetLook {
@@ -46,6 +47,7 @@ export const OPPONENT_ART: Record<string, SheetLook> = {
   agent_brick: look(agentBrick, 240, { idle: 4, walk: 8, chop: 9 }),
   tugboat_tony: look(tugboatTony, 144, { idle: 4, walk: 10, chop: 10 }),
   rafter_king: look(rafterKing, 144),
+  pip: look(pip, 120, { idle: 5, walk: 12, chop: 10 }),
 };
 
 export const artKey = (id: string) => `spr_art_${id}`;

@@ -59,7 +59,7 @@ Everything to fill in on itch.io's "Create a new project" form, in the form's or
 >
 > Your battles live in this browser on this device: SHARE the ones you want to keep as a backup.
 >
-> Early build: Kid Chispa and every opponent have their finished art; his partner Pip is still a placeholder.
+> Early build: the whole built-in cast has its finished art; more fighters, rings and modes are on the way.
 
 | Field | Value |
 |---|---|
