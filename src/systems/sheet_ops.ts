@@ -67,11 +67,58 @@ export function frameSizes(side: number, min = 16, max = 512): number[] {
   return out;
 }
 
+/** Whether a pixel is drawn. */
+function solid(p: Pixels, x: number, y: number): boolean {
+  return p.data[(y * p.w + x) * 4 + 3] >= ALPHA_MIN;
+}
+
 /**
- * Finds the frame grid of a sheet. Templates use square frames, so when the
- * sheet can be cut into squares of the size found across, that wins.
+ * How much a square grid of `d` cuts through drawn things: the share of
+ * pixel pairs across its cut lines that are drawn on both sides. A grid that
+ * runs between the figures scores near 0 even when feet stand on the cell's
+ * bottom row or a knocked-out figure pokes over the edge; one that slices
+ * through the figures scores high.
+ */
+function cutCost(p: Pixels, d: number): number {
+  let pairs = 0;
+  let cut = 0;
+  for (let x = d; x < p.w; x += d)
+    for (let y = 0; y < p.h; y++) {
+      pairs++;
+      if (solid(p, x - 1, y) && solid(p, x, y)) cut++;
+    }
+  for (let y = d; y < p.h; y += d)
+    for (let x = 0; x < p.w; x++) {
+      pairs++;
+      if (solid(p, x, y - 1) && solid(p, x, y)) cut++;
+    }
+  return pairs ? cut / pairs : 1;
+}
+
+/** Most a square grid may cut through drawn pixels and still be the sheet's grid. */
+const CUT_TOLERANCE = 0.02;
+
+/**
+ * The sheet's square frame size: the smallest square that splits it evenly
+ * into at least two cells without cutting through the figures. Null when no
+ * square grid fits (frames that aren't square, or figures that touch).
+ */
+function squareGrid(p: Pixels, min: number): number | null {
+  for (let d = min; d <= Math.min(p.w, p.h, 512); d++) {
+    if (p.w % d || p.h % d || (p.w / d) * (p.h / d) < 2) continue;
+    if (cutCost(p, d) <= CUT_TOLERANCE) return d;
+  }
+  return null;
+}
+
+/**
+ * Finds the frame grid of a sheet. Templates use square frames, so a square
+ * grid that runs between the figures wins; otherwise frames are found from
+ * the empty rows and columns between them.
  */
 export function detectGrid(p: Pixels, min = 16): Grid {
+  const sq = squareGrid(p, min);
+  if (sq) return { frameW: sq, frameH: sq, cols: p.w / sq, rows: p.h / sq };
   const cols = emptyLines(p, true);
   const rows = emptyLines(p, false);
   let frameW = pitch(cols, min);

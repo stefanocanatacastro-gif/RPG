@@ -1,6 +1,7 @@
 // Kid Chispa's finished art: a frame-by-frame sprite sheet (96x96 frames, one
-// row per animation), drawn by tools/art/kid_chispa.py. It replaces the test
-// wrestler wherever Kid Chispa appears, unless you gave him a skin.
+// row per animation; art/sprites/kid_chispa.png). It replaces the test wrestler
+// wherever Kid Chispa appears, unless you gave him a skin. His first look, drawn
+// by tools/art/kid_chispa.py, is kept as art/sprites/kid_chispa_v1.png.
 
 import type Phaser from 'phaser';
 import sheetUrl from '../assets/kid_chispa.png';
@@ -17,12 +18,12 @@ export const HERO_SHEET: SheetLook = {
   frameW: 96,
   frameH: 96,
   anims: {
-    idle: { start: 0, count: 4, fps: 5 },
+    idle: { start: 0, count: 6, fps: 6 },
     walk: { start: 8, count: 8, fps: 12 },
-    chop: { start: 16, count: 6, fps: 14 },
-    hurt: { start: 24, count: 3, fps: 10 },
-    ko: { start: 32, count: 4, fps: 9 },
-    win: { start: 40, count: 4, fps: 8 },
+    chop: { start: 16, count: 8, fps: 16 },
+    hurt: { start: 24, count: 4, fps: 12 },
+    ko: { start: 32, count: 6, fps: 10 },
+    win: { start: 40, count: 6, fps: 8 },
   },
 };
 

@@ -36,6 +36,22 @@ describe('sprite sheets', () => {
     expect([strip.frameW, strip.frameH, strip.cols]).toEqual([64, 64, 6]);
   });
 
+  it('finds the grid when feet stand on the bottom row and a figure pokes over the edge', () => {
+    // feet on each cell's bottom row, so no empty line of pixels separates one row of frames from the next
+    const w = 768;
+    const h = 576;
+    const data = new Uint8ClampedArray(w * h * 4);
+    const fill = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) data.set([40, 160, 150, 255], (y * w + x) * 4);
+    };
+    for (let r = 0; r < 6; r++)
+      for (let c = 0; c < 6; c++) fill(c * 96 + 28, r * 96 + 3, c * 96 + 68, r * 96 + 96);
+    // a knocked-out figure lying across two cells
+    fill(4 * 96 + 50, 4 * 96 + 80, 5 * 96 + 30, 4 * 96 + 96);
+    expect(detectGrid({ data, w, h })).toEqual({ frameW: 96, frameH: 96, cols: 8, rows: 6 });
+  });
+
   it('a strip whose figures touch: square frames as tall as the strip', () => {
     const p = sheet(5, 1, 80, 80, [[0, 1, 2, 3, 4]], 0);
     expect(detectGrid(p)).toMatchObject({ frameW: 80, frameH: 80, cols: 5 });

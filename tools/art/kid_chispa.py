@@ -462,7 +462,7 @@ def victory():
 ROWS = [idle, walk, attack, hurt, knocked_out, victory]
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "art/sprites/kid_chispa.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "art/sprites/kid_chispa_v1.png"
     sheet = Image.new("RGBA", (COLS * S, len(ROWS) * S), (0, 0, 0, 0))
     for r, fn in enumerate(ROWS):
         for c, (parts, opts) in enumerate(fn()):
