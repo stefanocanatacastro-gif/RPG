@@ -274,19 +274,31 @@ with sync_playwright() as p:
 
     # double jump: Elbow Drop, pressed just before each landing -> two hits
     hp0 = battle_eval(page, "return s.engine.enemies()[0].hp;")
+    # the presses are scheduled from inside the page, on every game frame, so a slow
+    # screenshot or a busy test machine can't make the test miss the second landing
+    page.evaluate(
+        """(() => {
+          const s = window.__game.scene.getScene('battle');
+          const seen = new Set();
+          window.__stompWatch = setInterval(() => {
+            const st = s.commands.state;
+            if (st && st.kind === 'stomp' && st.keyAt > 0 && !seen.has(st)) {
+              seen.add(st);
+              window.__debug.press('confirm', st.keyAt - 80, st.keyAt - 30);
+            }
+          }, 5);
+        })()"""
+    )
     choose_move(page, 1)
-    for n in range(2):
-        try:
-            wait_command(page, "stomp")
-        except Exception:
-            print("    log:", battle_eval(page, "return s.engine.log.slice(-6);"), battle_eval(page, "return s.commands.state;"))
-            raise
-        key_at(page, lead_ms=80)
-        if n == 0:
-            page.wait_for_timeout(120)
-            page.screenshot(path=f"{out}/21_cmd_stomp.png")
-        page.wait_for_function("!window.__game.scene.getScene('battle').commands.state", timeout=4000)
+    try:
+        wait_command(page, "stomp")
+    except Exception:
+        print("    log:", battle_eval(page, "return s.engine.log.slice(-6);"), battle_eval(page, "return s.commands.state;"))
+        raise
+    page.wait_for_timeout(120)
+    page.screenshot(path=f"{out}/21_cmd_stomp.png")
     wait_turn_over(page)
+    page.evaluate("clearInterval(window.__stompWatch)")
     r = last_cmds(page, "elbow_drop")
     hp1 = battle_eval(page, "return s.engine.enemies()[0].hp;")
     check(len(r) == 2 and all(x.split(' ')[2] in ("great", "good") for x in r) and hp0 - hp1 == 4,

@@ -1,7 +1,8 @@
 // Kid Chispa's finished art: a frame-by-frame sprite sheet (96x96 frames, one
-// row per animation; art/sprites/kid_chispa.png). It replaces the test wrestler
-// wherever Kid Chispa appears, unless you gave him a skin. His first look, drawn
-// by tools/art/kid_chispa.py, is kept as art/sprites/kid_chispa_v1.png.
+// row per animation; art/sprites/kid_chispa.png, re-cut from the painted sheet
+// art/sprites/kid_chispa_v3_source.png by tools/art/recut_kid_chispa.py). It
+// replaces the test wrestler wherever Kid Chispa appears, unless you gave him a
+// skin. Earlier looks are kept as art/sprites/kid_chispa_v1.png and _v2.png.
 
 import type Phaser from 'phaser';
 import sheetUrl from '../assets/kid_chispa.png';
