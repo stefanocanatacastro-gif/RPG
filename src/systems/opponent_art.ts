@@ -1,5 +1,6 @@
 // The built-in fighters' finished art (the opponents and Pip, the partner): frame-by-frame sprite sheets drawn by
-// tools/art/opponents.py and tools/art/pip.py (one row per animation, like Kid Chispa's). They
+// tools/art/opponents.py, and Pip's painted sheet re-cut by tools/art/recut_painted.py from
+// art/sprites/pip_v2_source.png (one row per animation, like Kid Chispa's). They
 // replace the placeholder boxes wherever an opponent appears, unless you gave
 // it a skin.
 
@@ -19,7 +20,11 @@ import rafterKing from '../assets/opponents/rafter_king.png';
 import pip from '../assets/opponents/pip.png';
 
 /** The usual rows: idle 4, walk 8, attack 6, hurt 3, knocked out 4, victory 4. */
-function look(url: string, frame: number, fps: Partial<Record<'idle' | 'walk' | 'chop', number>> = {}): SheetLook {
+function look(
+  url: string,
+  frame: number,
+  fps: Partial<Record<'idle' | 'walk' | 'chop', number>> = {},
+): SheetLook {
   return {
     url,
     w: frame * 8,
@@ -47,7 +52,21 @@ export const OPPONENT_ART: Record<string, SheetLook> = {
   agent_brick: look(agentBrick, 240, { idle: 4, walk: 8, chop: 9 }),
   tugboat_tony: look(tugboatTony, 144, { idle: 4, walk: 10, chop: 10 }),
   rafter_king: look(rafterKing, 144),
-  pip: look(pip, 120, { idle: 5, walk: 12, chop: 10 }),
+  pip: {
+    url: pip,
+    w: 768,
+    h: 576,
+    frameW: 96,
+    frameH: 96,
+    anims: {
+      idle: { start: 0, count: 6, fps: 6 },
+      walk: { start: 8, count: 8, fps: 12 },
+      chop: { start: 16, count: 8, fps: 16 },
+      hurt: { start: 24, count: 4, fps: 12 },
+      ko: { start: 32, count: 6, fps: 10 },
+      win: { start: 40, count: 6, fps: 8 },
+    },
+  },
 };
 
 export const artKey = (id: string) => `spr_art_${id}`;

@@ -2,7 +2,8 @@
 bowtie and a vest. Finished-style sheet on the shared rig (120-pixel frames,
 facing right like Kid Chispa).
 
-Usage: python3 tools/art/pip.py   (writes src/assets/opponents/pip.png)
+Usage: python3 tools/art/pip.py   (writes art/sprites/pip_v1.png, Pip's first look; the game now uses
+the painted sheet re-cut by tools/art/recut_painted.py, see art/sprites/pip_v2_source.png)
 """
 import math, os
 from rig import Part, capsule, ellipse, eye, ik, local, poly_at, ramp, rot, sheet, FLOOR
@@ -173,7 +174,7 @@ def rows():
 
 if __name__ == "__main__":
     img = sheet(rows(), PAL, 1.25)  # a touch bigger than the 96-pixel grid, drawn with more pixels
-    out = os.path.join(os.path.dirname(__file__), "..", "..", "src", "assets", "opponents", "pip.png")
+    out = os.path.join(os.path.dirname(__file__), "..", "..", "art", "sprites", "pip_v1.png")
     img.save(out)
     big = img.resize((img.width * 3, img.height * 3), 0)
     print("wrote pip", img.size)

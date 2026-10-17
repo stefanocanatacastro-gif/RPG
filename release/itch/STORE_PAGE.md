@@ -66,7 +66,7 @@ Everything to fill in on itch.io's "Create a new project" form, in the form's or
 |---|---|
 | Genre | Role Playing |
 | Tags | turn-based, wrestling, level-editor, pixel-art, retro, singleplayer, sandbox, 2d |
-| AI generation disclosure | itch asks whether the project uses generative AI. The code and the sprites of Pip and the opponents were made with Claude; Kid Chispa's sprite is the one you supplied. Answer for code and graphics accordingly. |
+| AI generation disclosure | itch asks whether the project uses generative AI. The code and the opponents' sprites were made with Claude; Kid Chispa's and Pip's sprites are the ones you supplied. Answer for code and graphics accordingly. |
 | Custom noun | battle maker |
 | Inputs | Keyboard, Mouse, Touchscreen |
 | Accessibility | (leave empty) |
