@@ -49,6 +49,7 @@ Everything to fill in on itch.io's "Create a new project" form, in the form's or
 > **MAKE**
 > - Build on the ring itself: put opponents where they'll stand, set the hero, the ring, the crowd, the rules and the bag.
 > - Make your own fighters, moves and items, with your own sprite sheets.
+> - Bring your own art: one picture per pose, or a full sprite sheet. The Sprite Studio's **HELP** has the rules and blank templates, and the [creator guide](https://claude.ai/artifact/SerREK4GUZ4vo85WDTnxUJ) has the details.
 > - Play-test in one click. You have to beat your battle before you can upload it.
 >
 > **SHARE**
@@ -70,6 +71,8 @@ Everything to fill in on itch.io's "Create a new project" form, in the form's or
 | Inputs | Keyboard, Mouse, Touchscreen |
 | Accessibility | (leave empty) |
 | Languages | English |
+
+Before going public, open the creator guide link's Share menu and make it viewable by anyone with the link, or players won't be able to open it.
 
 ## Media
 

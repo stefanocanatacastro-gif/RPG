@@ -35,8 +35,20 @@ import {
 } from '../managers/builds';
 import { decodePicture, decodedPicture } from '../systems/pictures';
 import { drawSheetLook, importSheet, sheetPixels } from '../systems/sheets';
-import { heroSprite } from '../systems/hero_art';
+import { HERO_ART, heroSprite } from '../systems/hero_art';
 import { detectGrid, fitRuns, frameSizes, guessAnims } from '../systems/sheet_ops';
+import { saveFile } from '../managers/artifact_db';
+import templateNormal from '../assets/templates/template_normal_96.png';
+import templateBig from '../assets/templates/template_big_144.png';
+import templateHuge from '../assets/templates/template_huge_240.png';
+
+/** Blank sheets to draw on: the grid, the row names, the floor, the centre line and Kid Chispa's height. */
+const TEMPLATES = [
+  { label: 'NORMAL 96', file: 'template_normal_96.png', url: templateNormal },
+  { label: 'BIG 144', file: 'template_big_144.png', url: templateBig },
+  { label: 'HUGE 240', file: 'template_huge_240.png', url: templateHuge },
+] as const;
+const TEMPLATE_TEX = 'spr_studio_template';
 
 const TOP = 40;
 const LIST = { x: 6, y: TOP + 6, w: 176, h: H - TOP - 40 };
@@ -44,6 +56,8 @@ const SHEET = { x: LIST.x + LIST.w + 8, y: TOP + 6, w: 470, h: 262 };
 const STAGE = { x: SHEET.x, y: SHEET.y + SHEET.h + 8, w: SHEET.w, h: H - 40 - (SHEET.y + SHEET.h + 8) };
 const PROPS = { x: SHEET.x + SHEET.w + 8, y: TOP + 6, w: W - (SHEET.x + SHEET.w + 8) - 6, h: H - TOP - 40 };
 const ROW = 18;
+/** The help panel. */
+const HELP = { x: 24, y: TOP + 10, w: W - 48, h: H - TOP - 52 };
 const SHEET_TEX = 'spr_studio_sheet';
 const PREVIEW_TEX = 'spr_studio_preview';
 
@@ -75,6 +89,9 @@ export class SpriteStudioScene extends Phaser.Scene {
   clearBackground = true;
   zoom = 2;
   compare = true;
+  /** The HOW TO panel is open. */
+  help = false;
+  private helpButtons: { x: number; y: number; w: number; h: number; act: () => void }[] = [];
   private pendingStart: number | null = null;
   private listScroll = 0;
   private propScroll = 0;
@@ -105,6 +122,7 @@ export class SpriteStudioScene extends Phaser.Scene {
     this.shownSheet = '';
     this.target = data?.target ?? { kind: 'skin', id: 'chispa' };
     this.sel = 'idle';
+    this.help = false;
     this.cameras.main.setBackgroundColor(UI.void);
     const frame = this.add.graphics();
     for (const r of [LIST, SHEET, STAGE, PROPS])
@@ -136,7 +154,10 @@ export class SpriteStudioScene extends Phaser.Scene {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void this.save();
-      } else if (e.key === 'Escape') this.leave();
+      } else if (e.key === 'Escape') {
+        if (this.help) this.toggleHelp(false);
+        else this.leave();
+      }
     };
     // a sheet dropped on the page, or pasted, goes to the fighter on screen
     const onDrag = (e: DragEvent) => e.preventDefault();
@@ -160,7 +181,16 @@ export class SpriteStudioScene extends Phaser.Scene {
       window.removeEventListener('drop', onDrop);
       window.removeEventListener('paste', onPaste);
     });
-    this.setStatus('Pick a fighter, then upload (or drop, or paste) a sprite sheet: one row per animation.');
+    this.setStatus(
+      'Pick a fighter, then upload (or drop, or paste) a sprite sheet. New to sprite sheets? Press HELP.',
+    );
+    // the normal template, shown small in the help panel
+    void decodePicture(templateNormal)
+      .then((img) => {
+        if (!this.textures.exists(TEMPLATE_TEX)) this.textures.addImage(TEMPLATE_TEX, img);
+        if (this.help && this.scene.isActive()) this.refresh();
+      })
+      .catch(() => undefined);
     this.refresh();
   }
 
@@ -323,6 +353,28 @@ export class SpriteStudioScene extends Phaser.Scene {
     SceneLoader.goto(this, 'battle_sandbox', hero ? { hero: id } : { enemy: id });
   }
 
+  /** Opens or closes the HOW TO panel. */
+  toggleHelp(open = !this.help): void {
+    this.help = open;
+    this.refresh();
+  }
+
+  /** Offers a blank template to save. */
+  async saveTemplate(i: number): Promise<void> {
+    const tpl = TEMPLATES[i];
+    try {
+      const blob = await (await fetch(tpl.url)).blob();
+      const ok = await saveFile(tpl.file, blob);
+      this.setStatus(
+        ok ? `${tpl.file} saved. Draw on a layer above it.` : 'The template was not saved.',
+        ok ? UI.good : UI.inkDim,
+      );
+    } catch {
+      this.setStatus('The template could not be saved here.', UI.rope);
+    }
+    this.refresh();
+  }
+
   private leave(): void {
     SceneLoader.goto(this, this.backTo, this.backTo === 'dev_hub' ? { cursor: 8 } : {});
   }
@@ -331,6 +383,7 @@ export class SpriteStudioScene extends Phaser.Scene {
 
   private topButtons(): { label: string; x: number; act: () => void }[] {
     const defs: [string, () => void][] = [
+      ['HELP', () => this.toggleHelp()],
       ['UPLOAD', () => void this.upload()],
       ['SAVE', () => void this.save()],
       ['TRY', () => void this.tryIt()],
@@ -369,6 +422,11 @@ export class SpriteStudioScene extends Phaser.Scene {
     if (p.y < TOP) {
       for (const b of this.topButtons())
         if (p.x >= b.x && p.x < b.x + b.label.length * 8 + 16) return b.act();
+      return;
+    }
+    if (this.help) {
+      for (const b of this.helpButtons)
+        if (p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h) return b.act();
       return;
     }
     if (p.x < LIST.x + LIST.w) {
@@ -410,6 +468,7 @@ export class SpriteStudioScene extends Phaser.Scene {
   }
 
   private onWheel(p: Phaser.Input.Pointer, dy: number): void {
+    if (this.help) return;
     const d = dy > 0 ? 3 : -3;
     if (p.x < LIST.x + LIST.w)
       this.listScroll = Phaser.Math.Clamp(
@@ -567,7 +626,7 @@ export class SpriteStudioScene extends Phaser.Scene {
     txt(12, 12, 'SPRITE STUDIO', UI.spark, 16);
     txt(250, 16, fit(this.targetName().toUpperCase(), 26), UI.ink);
     for (const b of this.topButtons()) {
-      const hot = b.label === 'SAVE' && this.dirty;
+      const hot = (b.label === 'SAVE' && this.dirty) || (b.label === 'HELP' && this.help);
       bar.fillStyle(hot ? 0x5a3a10 : UI.panelHi).fillRect(b.x, 8, b.label.length * 8 + 16, 24);
       txt(b.x + 8, 16, b.label, hot ? UI.spark : UI.ink);
     }
@@ -616,6 +675,145 @@ export class SpriteStudioScene extends Phaser.Scene {
         css(this.dirty ? UI.spark : UI.border),
       ).setOrigin(1, 1),
     );
+    if (this.help) this.drawHelp(add);
+  }
+
+  /** The HOW TO panel: the sheet rules, the steps, and the templates to save. */
+  private drawHelp(add: <T extends Phaser.GameObjects.GameObject>(o: T) => T): void {
+    const D = 1000;
+    const txt = (x: number, y: number, s: string, color: number = UI.ink, size: 8 | 16 = 8) =>
+      add(
+        pixelText(this, x, y, s, size, css(color))
+          .setOrigin(0, 0)
+          .setDepth(D + 1),
+      );
+    const g = add(this.add.graphics().setDepth(D));
+    g.fillStyle(UI.void, 0.75).fillRect(0, TOP, W, H - TOP);
+    drawPanel(g, HELP.x, HELP.y, HELP.w, HELP.h, { alpha: 1 });
+    const x0 = HELP.x + 18;
+    let y = HELP.y + 16;
+    txt(x0, y, 'HOW TO MAKE A SPRITE SHEET', UI.spark, 16);
+    y += 30;
+    const rules: [string, string][] = [
+      [
+        'ROWS',
+        'One row per animation, top to bottom: IDLE, WALK, ATTACK, HURT, KNOCKED OUT, VICTORY. Only IDLE is needed; missing moves are made from it.',
+      ],
+      ['FRAMES', 'Left to right, up to 8 per row. A row ends at its first empty cell.'],
+      [
+        'SIZE',
+        'Square frames: 96 for normal fighters, 144 for big, 240 for huge. Kid Chispa is 87 px tall in a 96 frame.',
+      ],
+      [
+        'POSE',
+        'Feet on the bottom row of each frame, body on the centre line, nothing touching the cell edges. Facing right.',
+      ],
+      [
+        'FILE',
+        'PNG with a see-through background, drawn at 100% with no smoothing. Up to 4096 px each way (about 440 KB in the downloadable game).',
+      ],
+    ];
+    const textW = 470;
+    for (const [k, v] of rules) {
+      txt(x0, y, k, UI.spark);
+      const t = add(
+        pixelText(this, x0 + 92, y, v, 8, css(UI.ink))
+          .setOrigin(0, 0)
+          .setDepth(D + 1)
+          .setWordWrapWidth(textW)
+          .setLineSpacing(4),
+      );
+      y += t.height + 10;
+    }
+    y += 4;
+    txt(x0, y, 'THEN', UI.spark);
+    const steps = add(
+      pixelText(
+        this,
+        x0 + 92,
+        y,
+        'UPLOAD (or drop / paste) > check the grid lines > to fix an animation, pick it and click its first cell, then its last > SAVE > TRY.',
+        8,
+        css(UI.inkDim),
+      )
+        .setOrigin(0, 0)
+        .setDepth(D + 1)
+        .setWordWrapWidth(textW)
+        .setLineSpacing(4),
+    );
+    y += steps.height + 18;
+
+    // templates
+    txt(x0, y, 'TEMPLATES', UI.spark);
+    add(
+      pixelText(
+        this,
+        x0 + 92,
+        y,
+        'Blank sheets with the grid and guide lines. Draw on a layer above, then hide the template before exporting.',
+        8,
+        css(UI.inkDim),
+      )
+        .setOrigin(0, 0)
+        .setDepth(D + 1)
+        .setWordWrapWidth(textW)
+        .setLineSpacing(4),
+    );
+    y += 34;
+    this.helpButtons = [];
+    let bx = x0 + 92;
+    TEMPLATES.forEach((tpl, i) => {
+      const label = `SAVE ${tpl.label}`;
+      const w = label.length * 8 + 16;
+      g.fillStyle(UI.panelHi).fillRect(bx, y, w, 24);
+      g.lineStyle(1, UI.spark, 0.8).strokeRect(bx + 0.5, y + 0.5, w - 1, 23);
+      txt(bx + 8, y + 8, label, UI.ink);
+      this.helpButtons.push({ x: bx, y, w, h: 24, act: () => void this.saveTemplate(i) });
+      bx += w + 10;
+    });
+    // close
+    const cw = 'CLOSE'.length * 8 + 16;
+    const cx = HELP.x + HELP.w - cw - 16;
+    const cy = HELP.y + HELP.h - 36;
+    g.fillStyle(UI.panelHi).fillRect(cx, cy, cw, 24);
+    txt(cx + 8, cy + 8, 'CLOSE', UI.ink);
+    this.helpButtons.push({ x: cx, y: cy, w: cw, h: 24, act: () => this.toggleHelp(false) });
+
+    // an example: Kid Chispa's own sheet, small, one labelled row per animation
+    if (this.textures.exists(HERO_ART)) {
+      const k = 0.375;
+      const cell = 96 * k;
+      const tx = HELP.x + HELP.w - 18 - 8 * cell;
+      const ty = HELP.y + 50;
+      g.fillStyle(UI.void, 1).fillRect(tx, ty, 8 * cell, 6 * cell);
+      add(
+        this.add
+          .image(tx, ty, HERO_ART, '__BASE')
+          .setOrigin(0)
+          .setScale(k)
+          .setCrop(0, 0, 768, 576)
+          .setDepth(D + 1),
+      );
+      const lines = add(this.add.graphics().setDepth(D + 2));
+      lines.lineStyle(1, UI.border, 0.9);
+      for (let c = 0; c <= 8; c++) lines.lineBetween(tx + c * cell, ty, tx + c * cell, ty + 6 * cell);
+      for (let r = 0; r <= 6; r++) lines.lineBetween(tx, ty + r * cell, tx + 8 * cell, ty + r * cell);
+      SHEET_ANIMS.forEach((a, r) =>
+        add(
+          tinyText(
+            this,
+            tx + 8 * cell - 3,
+            ty + r * cell + 3,
+            SHEET_ANIM_LABEL[a].toUpperCase(),
+            css(UI.spark),
+          )
+            .setOrigin(1, 0)
+            .setDepth(D + 3),
+        ),
+      );
+      txt(tx, ty + 6 * cell + 8, "EXAMPLE: KID CHISPA'S SHEET", UI.inkDim);
+    }
+    txt(x0, HELP.y + HELP.h - 28, 'Esc closes this panel.', UI.inkDim);
   }
 
   /** The sheet, with its frame grid, each animation's cells marked and the selected one lit. */
@@ -639,6 +837,8 @@ export class SpriteStudioScene extends Phaser.Scene {
         '',
         'Missing walk, attack or hurt rows are made',
         'from the first idle frame, paper-cutout style.',
+        '',
+        'HELP has the full rules and blank templates.',
       ];
       lines.forEach((l, i) => txt(SHEET.x + 16, SHEET.y + 16 + i * 18, l, i === 0 ? UI.spark : UI.inkDim));
       return;

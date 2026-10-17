@@ -96,17 +96,18 @@ interface DownloadsLike {
  * Offers the viewer a file. Inside the game link the viewer confirms it (they
  * may say no: resolves false); anywhere else the browser downloads it.
  */
-export async function saveFile(filename: string, text: string, timeoutMs = 4000): Promise<boolean> {
+export async function saveFile(filename: string, data: string | Blob, timeoutMs = 4000): Promise<boolean> {
   const dl = (await use('downloads', timeoutMs)) as DownloadsLike | null;
   if (dl) {
     try {
-      await dl.save({ filename, data: text });
+      await dl.save({ filename, data });
       return true;
     } catch {
       return false;
     }
   }
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const blob = typeof data === 'string' ? new Blob([data], { type: 'application/json' }) : data;
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;

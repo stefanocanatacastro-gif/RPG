@@ -775,6 +775,8 @@ with sync_playwright() as p:
     win = studio("return s.sheet().anims.win;")
     check(win and win["start"] == 0 and win["count"] == 2, f"clicking cells sets an animation ({win})")
     page.screenshot(path=f"{out}/18_sprite_studio.png")
+    helped = studio("s.toggleHelp(true); const n = s.helpButtons.length; const open = s.help; s.toggleHelp(false); return [open, n, s.help];")
+    check(helped == [True, 4, False], f"HELP opens the how-to panel with three templates to save, and closes ({helped})")
     check(studio("return await s.save();"), "the skin saves")
     page.evaluate("(() => { const g = window.__game; g.scene.stop('sprite_studio'); g.scene.start('battle', { formation: 'test_goons', firstStrike: null, returnTo: 'dev_hub' }); })()")
     wait_battle_input(page, "menu", 30000)
